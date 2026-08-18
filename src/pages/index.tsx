@@ -36,7 +36,7 @@ const PRINCIPLES = [
   },
 ];
 
-export default function Home(): JSX.Element {
+export default function Home(): React.JSX.Element {
   return (
     <Layout
       title="AI Foundations to Advanced Agentic AI"

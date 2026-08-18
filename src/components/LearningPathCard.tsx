@@ -16,7 +16,7 @@ export default function LearningPathCard({
   route,
   href,
   accent = 'teal',
-}: LearningPathCardProps): JSX.Element {
+}: LearningPathCardProps): React.JSX.Element {
   return (
     <Link to={href} className={`${styles.card} ${styles[accent]}`}>
       <p className={styles.audience}>{audience}</p>

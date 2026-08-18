@@ -19,7 +19,7 @@ interface ComparisonTableProps {
  * The Content Standard's mandatory "Comparison & Related Concepts" table
  * (Section 2, item 4) — contrasts a concept with 2-4 adjacent ones.
  */
-export default function ComparisonTable({columns, rows, caption}: ComparisonTableProps): JSX.Element {
+export default function ComparisonTable({columns, rows, caption}: ComparisonTableProps): React.JSX.Element {
   return (
     <figure className={styles.figure}>
       <table className={styles.table}>

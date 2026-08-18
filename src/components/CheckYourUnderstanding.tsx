@@ -17,7 +17,7 @@ export default function CheckYourUnderstanding({
   questions,
   exerciseUrl,
   exerciseLabel,
-}: CheckYourUnderstandingProps): JSX.Element {
+}: CheckYourUnderstandingProps): React.JSX.Element {
   const [open, setOpen] = useState<Record<number, boolean>>({});
 
   return (

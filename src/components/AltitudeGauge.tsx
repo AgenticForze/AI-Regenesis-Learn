@@ -9,7 +9,7 @@ import styles from './AltitudeGauge.module.css';
  * with the two altitude bands (teal = HL cruise, amber = deep-dive) as
  * the only color statement on the page.
  */
-export default function AltitudeGauge(): JSX.Element {
+export default function AltitudeGauge(): React.JSX.Element {
   const totalPhases = 19;
   const ticks = Array.from({length: totalPhases}, (_, i) => i);
 

@@ -18,7 +18,7 @@ interface ArchitectureDiagramProps {
  * 5): a labeled diagram plus an explicit component-responsibility list, so
  * the diagram never has to stand alone without prose explaining each box.
  */
-export default function ArchitectureDiagram({mermaid, components, title}: ArchitectureDiagramProps): JSX.Element {
+export default function ArchitectureDiagram({mermaid, components, title}: ArchitectureDiagramProps): React.JSX.Element {
   return (
     <div className={styles.wrapper}>
       {title ? <p className={styles.title}>{title}</p> : null}

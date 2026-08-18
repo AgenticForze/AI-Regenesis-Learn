@@ -7,7 +7,7 @@ interface PrincipleCardProps {
   description: string;
 }
 
-export default function PrincipleCard({number, name, description}: PrincipleCardProps): JSX.Element {
+export default function PrincipleCard({number, name, description}: PrincipleCardProps): React.JSX.Element {
   return (
     <div className={styles.card}>
       <span className={styles.number}>{number}</span>

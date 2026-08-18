@@ -89,7 +89,7 @@ const STATUS_LABEL: Record<Status, string> = {
   planned: 'Planned',
 };
 
-export default function Roadmap(): JSX.Element {
+export default function Roadmap(): React.JSX.Element {
   return (
     <Layout
       title="Roadmap"

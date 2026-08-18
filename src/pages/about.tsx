@@ -31,7 +31,7 @@ const PRINCIPLES = [
   },
 ];
 
-export default function About(): JSX.Element {
+export default function About(): React.JSX.Element {
   return (
     <Layout
       title="About"

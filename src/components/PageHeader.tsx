@@ -7,7 +7,7 @@ interface PageHeaderProps {
   subtitle?: string;
 }
 
-export default function PageHeader({eyebrow, title, subtitle}: PageHeaderProps): JSX.Element {
+export default function PageHeader({eyebrow, title, subtitle}: PageHeaderProps): React.JSX.Element {
   return (
     <header className={styles.header}>
       <p className={styles.eyebrow}>{eyebrow}</p>

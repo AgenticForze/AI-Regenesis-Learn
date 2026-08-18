@@ -25,7 +25,7 @@ const DOMAINS: {key: keyof UseCaseGridProps; label: string; icon: string}[] = [
  * Finance / Healthcare / Telecom) as a tabbed grid so a chapter page
  * doesn't turn into an unreadable wall of 12 stacked cards.
  */
-export default function UseCaseGrid({finance, healthcare, telecom}: UseCaseGridProps): JSX.Element {
+export default function UseCaseGrid({finance, healthcare, telecom}: UseCaseGridProps): React.JSX.Element {
   const data: UseCaseGridProps = {finance, healthcare, telecom};
   const [active, setActive] = useState<keyof UseCaseGridProps>('finance');
 

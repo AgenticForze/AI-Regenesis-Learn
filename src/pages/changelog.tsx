@@ -45,7 +45,7 @@ const ENTRIES: Entry[] = [
   },
 ];
 
-export default function Changelog(): JSX.Element {
+export default function Changelog(): React.JSX.Element {
   return (
     <Layout title="Changelog" description="Curriculum revision history — v3, v4, and v5 review passes.">
       <div className={styles.container}>
