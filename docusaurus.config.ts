@@ -16,12 +16,11 @@ const config: Config = {
   },
   themes: ['@docusaurus/theme-mermaid'],
 
-  // TODO: replace with the org's real GitHub Pages URL before first deploy
-  url: 'https://regai-training.github.io',
-  baseUrl: '/regai-training/',
+  url: 'https://agenticforze.github.io',
+  baseUrl: '/AI-Regenesis-Learn/',
 
-  organizationName: 'regai-training',
-  projectName: 'regai-training',
+  organizationName: 'AgenticForze',
+  projectName: 'AI-Regenesis-Learn',
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
@@ -39,7 +38,7 @@ const config: Config = {
           path: 'docs',
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/regai-training/regai-training/tree/main/',
+          editUrl: 'https://github.com/AgenticForze/AI-Regenesis-Learn/tree/main/',
           showLastUpdateTime: true,
         },
         blog: false,
@@ -83,7 +82,7 @@ const config: Config = {
         {to: '/changelog', label: 'Changelog', position: 'left'},
         {to: '/about', label: 'About', position: 'right'},
         {
-          href: 'https://github.com/regai-training/regai-training',
+          href: 'https://github.com/AgenticForze/AI-Regenesis-Learn',
           label: 'GitHub',
           position: 'right',
         },
@@ -115,7 +114,7 @@ const config: Config = {
             {label: 'Roadmap', to: '/roadmap'},
             {label: 'Changelog', to: '/changelog'},
             {label: 'Contribution Guide', to: '/docs/capstones-and-contributing'},
-            {label: 'GitHub', href: 'https://github.com/regai-training/regai-training'},
+            {label: 'GitHub', href: 'https://github.com/AgenticForze/AI-Regenesis-Learn'},
           ],
         },
       ],
