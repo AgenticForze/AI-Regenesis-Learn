@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-9a909cfd-1a5d-4660-9231-839ecae56577/styles.css">
+<script src="_ds/nocturne-9a909cfd-1a5d-4660-9231-839ecae56577/_ds_bundle.js"></script>
+<script src="./image-slot.js"></script>
+<style>
+  body { margin:0; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body); }
+  a { color:var(--color-accent-300); text-decoration:none; }
+  a:hover { color:var(--color-accent-200); text-decoration:underline; }
+  ::selection { background:var(--color-accent-800); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
+  @media print { .no-print { display:none !important; } }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:var(--color-bg)">
+
+<div class="no-print" style="position:sticky;top:0;z-index:40;background:color-mix(in srgb, var(--color-bg) 88%, transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--color-divider)">
+  <div style="max-width:1280px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:20px">
+    <button onClick="{{ goHome }}" style="display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;padding:0;color:var(--color-text)">
+      <svg width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" fill="none" stroke="var(--color-neutral-800)"></circle>
+        <path d="M31 20a11 11 0 1 1-11-11" fill="none" stroke="var(--color-accent-400)" stroke-width="2.2" stroke-linecap="round"></path>
+        <path d="M12.5 20a7.5 7.5 0 1 0 7.5 7.5" fill="none" stroke="var(--color-neutral-500)" stroke-width="2.2" stroke-linecap="round"></path>
+        <circle cx="20" cy="20" r="2.4" fill="var(--color-accent-400)"></circle>
+      </svg>
+      <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1">
+        <span style="font-size:16px;font-weight:600;letter-spacing:-0.01em">Re-genesis Learn</span>
+        <span style="font-size:9.5px;letter-spacing:0.11em;text-transform:uppercase;color:var(--color-neutral-500);margin-top:3px">Evolving Intelligence · Engineered to Lead</span>
+      </span>
+    </button>
+    <div style="display:flex;gap:2px;margin-left:6px">
+      <button onClick="{{ goCatalog }}" class="btn btn-ghost" style="font-size:13.5px">Curriculum</button>
+      <button onClick="{{ goRoles }}" class="btn btn-ghost" style="font-size:13.5px">Roles</button>
+      <button onClick="{{ goCohorts }}" class="btn btn-ghost" style="font-size:13.5px">Cohorts</button>
+      <button onClick="{{ goDash }}" class="btn btn-ghost" style="font-size:13.5px">Dashboard</button>
+    </div>
+    <div style="flex:1"></div>
+    <button onClick="{{ openSearch }}" class="btn btn-secondary" style="font-size:13px;gap:7px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.5-4.5"></path></svg>
+      Search
+      <span style="font-size:11px;color:var(--color-neutral-500)">⌘K</span>
+    </button>
+    <button onClick="{{ goPlan }}" class="btn btn-primary" style="font-size:13px;gap:8px">
+      My Curriculum
+      <span style="display:inline-flex;min-width:19px;height:19px;align-items:center;justify-content:center;border-radius:999px;background:var(--color-accent-800);color:var(--color-accent-200);font-size:11.5px;font-weight:600;padding:0 5px">{{ cartCount }}</span>
+    </button>
+  </div>
+</div>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div>
+  <div style="max-width:1280px;margin:0 auto;padding:72px 24px 40px;display:grid;grid-template-columns:1.08fr 0.92fr;gap:52px;align-items:center">
+    <div>
+      <span class="tag tag-accent" style="margin-bottom:20px;display:inline-block">19 phases · 157 chapters · 15 market roles</span>
+      <h1 style="font-size:58px;line-height:1.04;letter-spacing:-0.025em;margin-bottom:18px;text-wrap:pretty">Build the curriculum your next role actually needs.</h1>
+      <p style="font-size:17.5px;line-height:1.62;color:var(--color-neutral-300);max-width:34em;margin:0 0 26px">Select phases and chapters across the full AI and agentic curriculum. Re-genesis Learn assembles them into a week-by-week schedule, flags the prerequisites you skipped, and scores how much of a real job role you cover.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button onClick="{{ goCatalog }}" class="btn btn-primary" style="font-size:15px;padding:11px 22px">Browse the curriculum</button>
+        <button onClick="{{ goRoles }}" class="btn btn-secondary" style="font-size:15px;padding:11px 22px">Start from a role</button>
+      </div>
+      <div style="display:flex;gap:34px;margin-top:40px;flex-wrap:wrap">
+        <div><div style="font-size:27px;font-weight:500">{{ statChapters }}</div><div style="font-size:11.5px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-top:4px">Chapters</div></div>
+        <div><div style="font-size:27px;font-weight:500">{{ statHours }}</div><div style="font-size:11.5px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-top:4px">Est. study hours</div></div>
+        <div><div style="font-size:27px;font-weight:500">{{ statRoles }}</div><div style="font-size:11.5px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-top:4px">Roles mapped</div></div>
+        <div><div style="font-size:27px;font-weight:500">3</div><div style="font-size:11.5px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-top:4px">Guided tracks</div></div>
+      </div>
+    </div>
+    <div style="position:relative">
+      <div class="lighten" style="border-radius:var(--radius-lg);overflow:hidden">
+        <image-slot id="rgl-hero" shape="rounded" radius="14" style="width:100%;height:400px" placeholder="Drop a hero photograph (dark background works best)"></image-slot>
+      </div>
+      <div class="card elev-md" style="position:absolute;bottom:-26px;left:-26px;width:274px;padding:14px 16px;background:var(--color-surface)">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Role coverage</div>
+        <div style="font-size:17px;font-weight:500;margin:6px 0 10px">{{ heroRoleTitle }}</div>
+        <div style="height:6px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ heroRolePct }}"></div></div>
+        <div style="font-size:12.5px;color:var(--color-neutral-400);margin-top:8px">{{ heroRoleLabel }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1280px;margin:0 auto;padding:64px 24px 8px">
+    <h2 style="font-size:30px;margin-bottom:6px">Three ways in</h2>
+    <p style="color:var(--color-neutral-400);font-size:15.5px;margin:0 0 24px">Start from where you are, from the job you want, or from a single chapter.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <sc-for list="{{ tracks }}" as="tr" hint-placeholder-count="3">
+        <div class="card elev-sm" style="padding:22px 20px;display:flex;flex-direction:column;gap:10px">
+          <div style="width:32px;height:32px;border-radius:999px;border:1px solid var(--color-accent-700);color:var(--color-accent-300);display:flex;align-items:center;justify-content:center;font-size:13px">{{ tr.step }}</div>
+          <div class="card-kicker">{{ tr.for }}</div>
+          <div class="card-title" style="font-size:20px">{{ tr.name }}</div>
+          <div class="card-body" style="flex:1">{{ tr.blurb }}</div>
+          <div style="font-size:12.5px;color:var(--color-neutral-500)">{{ tr.phaseLabel }}</div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button onClick="{{ tr.load }}" class="btn btn-primary" style="font-size:13px">Load this track</button>
+            <button onClick="{{ tr.view }}" class="btn btn-ghost" style="font-size:13px">View phases</button>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="max-width:1280px;margin:0 auto;padding:60px 24px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:20px">
+      <div>
+        <h2 style="font-size:30px;margin-bottom:6px">Every chapter knows which job needs it</h2>
+        <p style="color:var(--color-neutral-400);font-size:15.5px;margin:0">Fifteen roles from the 2026 market, each with a core path and the certifications worth pursuing.</p>
+      </div>
+      <button onClick="{{ goRoles }}" class="btn btn-secondary" style="flex:none;font-size:13px">All 15 roles</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <sc-for list="{{ featuredRoles }}" as="r" hint-placeholder-count="6">
+        <button onClick="{{ r.open }}" class="card" style="padding:18px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:7px" style-hover="box-shadow:var(--shadow-md)">
+          <div class="card-kicker">{{ r.family }}</div>
+          <div style="font-size:16.5px;font-weight:500;line-height:1.25">{{ r.title }}</div>
+          <div style="font-size:13.5px;color:var(--color-neutral-400);line-height:1.5">{{ r.shortDoes }}</div>
+          <div style="font-size:12.5px;color:var(--color-accent-300);margin-top:2px">{{ r.coreLabel }}</div>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="background:linear-gradient(180deg, var(--color-surface), var(--color-bg));border-top:1px solid var(--color-divider);padding:62px 24px">
+    <div style="max-width:1280px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:52px;align-items:center">
+      <div>
+        <h2 style="font-size:30px;margin-bottom:12px">For teams, the same map</h2>
+        <p style="font-size:16.5px;line-height:1.65;color:var(--color-neutral-300);margin:0 0 20px">Assemble one plan, assign it to a cohort with a start date and a weekly cadence, then watch coverage fill in per person against the role they were hired into.</p>
+        <div style="display:flex;gap:9px">
+          <button onClick="{{ goCohorts }}" class="btn btn-primary" style="font-size:13.5px">See live cohorts</button>
+          <button onClick="{{ goTeam }}" class="btn btn-ghost" style="font-size:13.5px">Team dashboard</button>
+        </div>
+      </div>
+      <div class="card elev-md" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">Next cohorts</div>
+        <sc-for list="{{ homeCohorts }}" as="c" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--color-divider)">
+            <div style="width:40px;height:40px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none">
+              <span style="font-size:14px;font-weight:600">{{ c.day }}</span>
+              <span style="font-size:9px;text-transform:uppercase;color:var(--color-neutral-500);margin-top:2px">{{ c.mon }}</span>
+            </div>
+            <div style="flex:1">
+              <div style="font-weight:500;font-size:14px">{{ c.title }}</div>
+              <div style="font-size:12.5px;color:var(--color-neutral-500)">{{ c.meta }}</div>
+            </div>
+            <span class="tag tag-outline" style="flex:none">{{ c.seatsLabel }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1280px;margin:0 auto;padding:32px 24px 80px;display:grid;grid-template-columns:250px 1fr;gap:32px;align-items:start">
+  <div style="position:sticky;top:88px;display:flex;flex-direction:column;gap:18px">
+    <div>
+      <h1 style="font-size:30px;margin-bottom:4px">Curriculum</h1>
+      <p style="font-size:13.5px;color:var(--color-neutral-400);margin:0">Add whole phases or single chapters.</p>
+    </div>
+    <div class="field">
+      <label>Find a chapter</label>
+      <input class="input" value="{{ q }}" onInput="{{ setQ }}" placeholder="tokenizer, MCP, RAG…">
+    </div>
+    <div class="field">
+      <label>Level</label>
+      <select class="input" value="{{ level }}" onChange="{{ setLevel }}">
+        <sc-for list="{{ levelOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o }}">{{ o }}</option></sc-for>
+      </select>
+    </div>
+    <div class="field">
+      <label>Needed by role</label>
+      <select class="input" value="{{ roleFilter }}" onChange="{{ setRoleFilter }}">
+        <sc-for list="{{ roleFilterOptions }}" as="o" hint-placeholder-count="6"><option value="{{ o.id }}">{{ o.label }}</option></sc-for>
+      </select>
+    </div>
+    <div style="border-top:1px solid var(--color-divider);padding-top:16px">
+      <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">In your curriculum</div>
+      <div style="font-size:23px;font-weight:500;margin:5px 0 2px">{{ cartCountLabel }}</div>
+      <div style="font-size:13px;color:var(--color-neutral-400)">{{ cartHoursLabel }} · {{ cartWeeksLabel }}</div>
+      <button onClick="{{ goPlan }}" class="btn btn-primary btn-block" style="margin-top:12px">Review curriculum</button>
+      <button onClick="{{ clearCart }}" class="btn btn-ghost btn-block" style="margin-top:5px;font-size:12.5px">Clear all</button>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13.5px;color:var(--color-neutral-400)">{{ resultLabel }}</div>
+      <button onClick="{{ toggleAllOpen }}" class="btn btn-ghost" style="font-size:12.5px">{{ expandLabel }}</button>
+    </div>
+    <sc-for list="{{ rows }}" as="p" hint-placeholder-count="8">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="display:flex;gap:16px;padding:16px 18px;align-items:flex-start">
+          <div style="width:44px;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none">
+            <span style="font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-500)">Phase</span>
+            <span style="font-size:16px;font-weight:600;margin-top:2px">{{ p.num }}</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <button onClick="{{ p.toggleOpen }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:18.5px;font-weight:500;color:var(--color-text);text-align:left">{{ p.name }}</button>
+              <span class="tag tag-neutral">{{ p.level }}</span>
+              <span class="tag tag-outline">{{ p.kind }}</span>
+            </div>
+            <p style="font-size:13.5px;line-height:1.55;color:var(--color-neutral-400);margin:6px 0 0;max-width:66em">{{ p.intro }}</p>
+            <div style="display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--color-neutral-500);flex-wrap:wrap">
+              <span>{{ p.chapLabel }}</span>
+              <span>{{ p.hoursLabel }}</span>
+              <span>{{ p.prereqLabel }}</span>
+              <span style="color:var(--color-accent-300)">{{ p.selectedLabel }}</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:none;align-items:stretch">
+            <button onClick="{{ p.togglePhase }}" class="{{ p.btnClass }}" style="font-size:12.5px;white-space:nowrap">{{ p.btnLabel }}</button>
+            <button onClick="{{ p.toggleOpen }}" class="btn btn-ghost" style="font-size:12px">{{ p.openLabel }}</button>
+          </div>
+        </div>
+        <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+        <div style="background:color-mix(in srgb, var(--color-bg) 60%, transparent);border-top:1px solid var(--color-divider);padding:4px 18px 10px">
+          <sc-for list="{{ p.chapters }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--color-divider)">
+              <span style="font-size:12.5px;color:var(--color-accent-300);width:38px;flex:none">{{ c.id }}</span>
+              <div style="flex:1;min-width:0">
+                <button onClick="{{ c.open }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:14.5px;font-weight:500;color:var(--color-text);text-align:left" style-hover="color:var(--color-accent-300)">{{ c.title }}</button>
+                <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ c.rolesLabel }}</div>
+              </div>
+              <span class="tag tag-neutral" style="flex:none">{{ c.hoursLabel }}</span>
+              <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="flex:none;font-size:12px;min-width:98px">{{ c.btnLabel }}</button>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isRoles }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1280px;margin:0 auto;padding:36px 24px 80px">
+  <h1 style="font-size:40px;margin-bottom:8px">AI roles in the market</h1>
+  <p style="font-size:16.5px;color:var(--color-neutral-300);max-width:54em;margin:0 0 30px">Fifteen roles as of 2026 — what they do day to day, the phases they should treat as required reading, and the certifications worth pursuing. Load any core path straight into your curriculum.</p>
+  <sc-for list="{{ roleFamilies }}" as="f" hint-placeholder-count="5">
+    <div style="margin-bottom:34px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <h2 style="font-size:22px;margin:0">{{ f.name }}</h2>
+        <div style="flex:1;height:1px;background:linear-gradient(90deg, var(--color-neutral-800), transparent)"></div>
+        <span style="font-size:12.5px;color:var(--color-neutral-500)">{{ f.countLabel }}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+        <sc-for list="{{ f.roles }}" as="r" hint-placeholder-count="3">
+          <div class="card elev-sm" style="padding:18px;display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:17px;font-weight:500;line-height:1.25">{{ r.title }}</div>
+            <div style="font-size:13.5px;color:var(--color-neutral-400);line-height:1.5;flex:1">{{ r.does }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px">
+              <sc-for list="{{ r.chips }}" as="chip" hint-placeholder-count="4"><span class="tag tag-accent">{{ chip }}</span></sc-for>
+            </div>
+            <div style="height:5px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden;margin-top:2px"><div style="height:100%;background:var(--color-accent-400);width:{{ r.pctWidth }}"></div></div>
+            <div style="font-size:12px;color:var(--color-neutral-500)">{{ r.pctLabel }}</div>
+            <div style="display:flex;gap:7px;margin-top:4px">
+              <button onClick="{{ r.load }}" class="btn btn-primary" style="font-size:12.5px">Load path</button>
+              <button onClick="{{ r.open }}" class="btn btn-ghost" style="font-size:12.5px">Details</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isRole }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1140px;margin:0 auto;padding:28px 24px 80px">
+  <button onClick="{{ goRoles }}" class="btn btn-ghost" style="font-size:12.5px;margin-bottom:16px">← All roles</button>
+  <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:40px;align-items:start">
+    <div>
+      <span class="tag tag-accent" style="margin-bottom:12px;display:inline-block">{{ role.family }}</span>
+      <h1 style="font-size:38px;line-height:1.06;margin-bottom:6px">{{ role.title }}</h1>
+      <p style="font-size:13.5px;color:var(--color-neutral-500);margin:0 0 14px">{{ role.note }}</p>
+      <p style="font-size:17.5px;line-height:1.6;color:var(--color-neutral-300);margin:0 0 24px">{{ role.does }}</p>
+      <h2 style="font-size:22px;margin-bottom:8px">Core curriculum path</h2>
+      <p style="font-size:13.5px;color:var(--color-neutral-400);margin:0 0 14px">Required reading for this role. Everything else in the curriculum is optional depth.</p>
+      <div class="card" style="padding:4px 16px 8px">
+        <sc-for list="{{ role.path }}" as="c" hint-placeholder-count="10">
+          <div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--color-divider)">
+            <span style="font-size:12.5px;color:var(--color-accent-300);width:38px;flex:none">{{ c.id }}</span>
+            <div style="flex:1;min-width:0">
+              <button onClick="{{ c.open }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:14.5px;font-weight:500;color:var(--color-text);text-align:left" style-hover="color:var(--color-accent-300)">{{ c.title }}</button>
+              <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ c.phaseLabel }} · {{ c.hoursLabel }}</div>
+            </div>
+            <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="flex:none;font-size:12px;min-width:98px">{{ c.btnLabel }}</button>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:88px">
+      <div class="card elev-md" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Your coverage</div>
+        <div style="font-size:34px;font-weight:500;margin:4px 0 8px">{{ role.pctLabel }}</div>
+        <div style="height:6px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ role.pctWidth }}"></div></div>
+        <div style="font-size:13px;color:var(--color-neutral-400);margin-top:8px">{{ role.coverLabel }}</div>
+        <button onClick="{{ role.load }}" class="btn btn-primary btn-block" style="margin-top:14px">Load full path</button>
+        <button onClick="{{ role.addMissing }}" class="btn btn-secondary btn-block" style="margin-top:6px">Add what's missing</button>
+        <button onClick="{{ role.setTarget }}" class="btn btn-ghost btn-block" style="margin-top:6px;font-size:12.5px">{{ role.targetLabel }}</button>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">Certifications worth pursuing</div>
+        <sc-for list="{{ role.certs }}" as="ct" hint-placeholder-count="3">
+          <div style="display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--color-divider);font-size:13.5px;line-height:1.5">
+            <span style="color:var(--color-accent-400);flex:none">◆</span>
+            <span>{{ ct }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">Adjacent roles</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <sc-for list="{{ role.adjacent }}" as="a" hint-placeholder-count="3">
+            <button onClick="{{ a.open }}" class="tag tag-outline" style="cursor:pointer">{{ a.title }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isReader }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1140px;margin:0 auto;padding:28px 24px 80px">
+  <button onClick="{{ goCatalog }}" class="btn btn-ghost" style="font-size:12.5px;margin-bottom:16px">← Curriculum</button>
+  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:start">
+    <div>
+      <div style="font-size:12px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">{{ chap.crumb }}</div>
+      <h1 style="font-size:34px;line-height:1.1;margin-bottom:12px;text-wrap:pretty">{{ chap.title }}</h1>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+        <span class="tag tag-neutral">{{ chap.hoursLabel }}</span>
+        <span class="tag tag-outline">{{ chap.levelLabel }}</span>
+        <sc-for list="{{ chap.tags }}" as="t" hint-placeholder-count="1"><span class="tag tag-accent">{{ t }}</span></sc-for>
+      </div>
+      <div class="card" style="padding:16px 18px;border-left:2px solid var(--color-accent-600);margin-bottom:22px">
+        <div style="font-weight:600;font-size:14px;margin-bottom:5px">{{ chap.statusTitle }}</div>
+        <div style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-300)">{{ chap.statusBody }}</div>
+      </div>
+      <h2 style="font-size:21px;margin-bottom:8px">What this chapter covers</h2>
+      <p style="font-size:15.5px;line-height:1.7;color:var(--color-neutral-300);margin:0 0 20px">{{ chap.summary }}</p>
+      <h2 style="font-size:21px;margin-bottom:8px">Where it sits</h2>
+      <p style="font-size:15.5px;line-height:1.7;color:var(--color-neutral-300);margin:0">{{ chap.placement }}</p>
+      <div style="display:flex;gap:8px;margin-top:24px;flex-wrap:wrap">
+        <button onClick="{{ chap.prev }}" class="btn btn-secondary" style="font-size:13px">{{ chap.prevLabel }}</button>
+        <button onClick="{{ chap.next }}" class="btn btn-secondary" style="font-size:13px">{{ chap.nextLabel }}</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:88px">
+      <div class="card elev-md" style="padding:16px">
+        <button onClick="{{ chap.toggle }}" class="{{ chap.btnClass }} btn-block">{{ chap.btnLabel }}</button>
+        <button onClick="{{ chap.markDone }}" class="btn btn-ghost btn-block" style="margin-top:6px;font-size:12.5px">{{ chap.doneLabel }}</button>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Roles that need this chapter</div>
+        <sc-for list="{{ chap.roles }}" as="r" hint-placeholder-count="3">
+          <button onClick="{{ r.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--color-divider);padding:9px 0;cursor:pointer;color:var(--color-text)" style-hover="color:var(--color-accent-300)">
+            <div style="font-size:14px;font-weight:500">{{ r.title }}</div>
+            <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ r.family }}</div>
+          </button>
+        </sc-for>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:8px">{{ chap.rolesEmpty }}</div>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Prerequisite phases</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <sc-for list="{{ chap.prereqs }}" as="pq" hint-placeholder-count="2">
+            <button onClick="{{ pq.add }}" class="tag tag-outline" style="cursor:pointer">{{ pq.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:6px">Rest of this phase</div>
+        <sc-for list="{{ chap.siblings }}" as="s" hint-placeholder-count="5">
+          <button onClick="{{ s.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 0;cursor:pointer;color:var(--color-neutral-400);font-size:13.5px" style-hover="color:var(--color-accent-300)">{{ s.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isPlan }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1280px;margin:0 auto;padding:32px 24px 80px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:24px">
+    <div>
+      <h1 style="font-size:38px;margin-bottom:6px">My curriculum</h1>
+      <p style="font-size:15.5px;color:var(--color-neutral-400);margin:0">{{ planSummary }}</p>
+    </div>
+    <div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onClick="{{ goCatalog }}" class="btn btn-secondary" style="font-size:13px">Add more</button>
+      <button onClick="{{ share }}" class="btn btn-secondary" style="font-size:13px">Copy share link</button>
+      <button onClick="{{ printPlan }}" class="btn btn-primary" style="font-size:13px">Print syllabus</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ planEmpty }}" hint-placeholder-val="{{ false }}">
+  <div class="card" style="padding:40px;text-align:center">
+    <h2 style="font-size:24px;margin-bottom:8px">Nothing picked yet</h2>
+    <p style="font-size:15px;color:var(--color-neutral-400);margin:0 auto 16px;max-width:36em">Start from a role's core path, from one of the three tracks, or browse the nineteen phases and add chapters one at a time.</p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button onClick="{{ goRoles }}" class="btn btn-primary">Start from a role</button>
+      <button onClick="{{ goCatalog }}" class="btn btn-secondary">Browse curriculum</button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ planFilled }}" hint-placeholder-val="{{ false }}">
+  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:30px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <div>
+        <h2 style="font-size:23px;margin-bottom:12px">Selected chapters</h2>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ planGroups }}" as="g" hint-placeholder-count="3">
+            <div class="card" style="padding:14px 16px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-size:16.5px;font-weight:500">{{ g.name }}</span>
+                <span class="tag tag-neutral">{{ g.countLabel }}</span>
+                <span class="tag tag-outline">{{ g.hoursLabel }}</span>
+                <div style="flex:1"></div>
+                <button onClick="{{ g.remove }}" class="btn btn-ghost no-print" style="font-size:12px">Remove phase</button>
+              </div>
+              <div style="margin-top:8px">
+                <sc-for list="{{ g.items }}" as="c" hint-placeholder-count="4">
+                  <div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--color-divider)">
+                    <span style="font-size:12.5px;color:var(--color-accent-300);width:36px;flex:none">{{ c.id }}</span>
+                    <button onClick="{{ c.open }}" style="flex:1;text-align:left;background:none;border:none;padding:0;cursor:pointer;font-size:14px;color:var(--color-text)" style-hover="color:var(--color-accent-300)">{{ c.title }}</button>
+                    <span style="font-size:12px;color:var(--color-neutral-500);flex:none">{{ c.hoursLabel }}</span>
+                    <button onClick="{{ c.remove }}" class="btn btn-icon no-print" style="flex:none" aria-label="Remove chapter">×</button>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+          <h2 style="font-size:23px;margin:0">Week by week</h2>
+          <div class="no-print" style="display:flex;align-items:center;gap:8px">
+            <label for="hpw" style="font-size:13px;color:var(--color-neutral-400)">Hours per week</label>
+            <input id="hpw" class="input" type="number" min="2" max="30" value="{{ hpw }}" onInput="{{ setHpw }}" style="width:74px">
+          </div>
+        </div>
+        <div class="card" style="padding:4px 16px 8px">
+          <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="4">
+            <div style="display:flex;gap:16px;padding:11px 0;border-bottom:1px solid var(--color-divider)">
+              <div style="width:84px;flex:none">
+                <div style="font-size:15px;font-weight:500">{{ w.label }}</div>
+                <div style="font-size:12px;color:var(--color-neutral-500)">{{ w.hoursLabel }}</div>
+              </div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+                <sc-for list="{{ w.items }}" as="i" hint-placeholder-count="2">
+                  <div style="font-size:13.5px"><span style="color:var(--color-accent-300)">{{ i.id }}</span> {{ i.title }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:88px">
+      <div class="card elev-md" style="padding:18px">
+        <div style="display:flex;justify-content:space-between;gap:14px;margin-bottom:10px">
+          <div>
+            <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Total effort</div>
+            <div style="font-size:26px;font-weight:500;margin-top:3px">{{ cartHoursLabel }}</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Duration</div>
+            <div style="font-size:26px;font-weight:500;margin-top:3px">{{ cartWeeksLabel }}</div>
+          </div>
+        </div>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);line-height:1.5">Estimates assume {{ hpw }} focused hours a week, reading and exercises together.</div>
+      </div>
+
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Coverage vs target role</div>
+        <select class="input no-print" value="{{ target }}" onChange="{{ setTarget }}" style="margin-bottom:12px">
+          <sc-for list="{{ targetOptions }}" as="o" hint-placeholder-count="6"><option value="{{ o.id }}">{{ o.label }}</option></sc-for>
+        </select>
+        <div style="font-size:28px;font-weight:500;margin-bottom:8px">{{ coverage.pctLabel }}</div>
+        <div style="height:6px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ coverage.pctWidth }}"></div></div>
+        <div style="font-size:13px;color:var(--color-neutral-400);margin:8px 0 10px">{{ coverage.label }}</div>
+        <sc-for list="{{ coverage.missing }}" as="m" hint-placeholder-count="3">
+          <div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--color-divider)">
+            <span style="font-size:12px;color:var(--color-accent-300);width:34px;flex:none">{{ m.id }}</span>
+            <span style="flex:1;font-size:13px;color:var(--color-neutral-300)">{{ m.title }}</span>
+            <button onClick="{{ m.add }}" class="btn btn-ghost no-print" style="flex:none;font-size:11.5px">Add</button>
+          </div>
+        </sc-for>
+        <button onClick="{{ coverage.addAll }}" class="btn btn-secondary btn-block no-print" style="margin-top:10px;font-size:12.5px">{{ coverage.addAllLabel }}</button>
+      </div>
+
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Prerequisite gaps</div>
+        <sc-for list="{{ gaps }}" as="g" hint-placeholder-count="2">
+          <div style="padding:8px 0;border-bottom:1px solid var(--color-divider)">
+            <div style="font-size:14px;font-weight:500">{{ g.name }}</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-400);margin:3px 0 6px;line-height:1.5">{{ g.reason }}</div>
+            <button onClick="{{ g.add }}" class="btn btn-secondary no-print" style="font-size:11.5px">Add phase</button>
+          </div>
+        </sc-for>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:6px">{{ gapsEmpty }}</div>
+      </div>
+
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Certifications this plan sets up</div>
+        <sc-for list="{{ planCerts }}" as="ct" hint-placeholder-count="3">
+          <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--color-divider);font-size:13px;line-height:1.5">
+            <span style="color:var(--color-accent-400);flex:none">◆</span>
+            <span>{{ ct }}</span>
+          </div>
+        </sc-for>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:6px">{{ certsEmpty }}</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDash }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1280px;margin:0 auto;padding:32px 24px 80px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:24px">
+    <div>
+      <h1 style="font-size:38px;margin-bottom:6px">{{ dash.greeting }}</h1>
+      <p style="font-size:15.5px;color:var(--color-neutral-400);margin:0">{{ dash.summary }}</p>
+    </div>
+    <div class="seg">
+      <button onClick="{{ dash.showMe }}" class="{{ dash.meClass }}">My learning</button>
+      <button onClick="{{ dash.showTeam }}" class="{{ dash.teamClass }}">Team</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ dash.isMe }}" hint-placeholder-val="{{ true }}">
+  <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:26px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="card elev-md" style="padding:20px;display:flex;gap:20px;align-items:center">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Continue where you left off</div>
+          <div style="font-size:20px;font-weight:500;margin:6px 0 4px">{{ dash.nextTitle }}</div>
+          <div style="font-size:13px;color:var(--color-neutral-400)">{{ dash.nextMeta }}</div>
+        </div>
+        <button onClick="{{ dash.openNext }}" class="btn btn-primary" style="flex:none">{{ dash.nextCta }}</button>
+      </div>
+
+      <div>
+        <h2 style="font-size:22px;margin-bottom:12px">Progress by phase</h2>
+        <div class="card" style="padding:6px 16px 10px">
+          <sc-for list="{{ dash.phases }}" as="p" hint-placeholder-count="4">
+            <div style="display:flex;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--color-divider)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14.5px;font-weight:500">{{ p.name }}</div>
+                <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ p.label }}</div>
+              </div>
+              <div style="width:150px;height:5px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden;flex:none"><div style="height:100%;background:var(--color-accent-400);width:{{ p.pctWidth }}"></div></div>
+              <span style="font-size:12.5px;color:var(--color-neutral-400);width:38px;text-align:right;flex:none">{{ p.pctLabel }}</span>
+            </div>
+          </sc-for>
+          <div style="font-size:12.5px;color:var(--color-neutral-500);padding:10px 0">{{ dash.phasesEmpty }}</div>
+        </div>
+      </div>
+
+      <div>
+        <h2 style="font-size:22px;margin-bottom:12px">Recently completed</h2>
+        <div class="card" style="padding:6px 16px 10px">
+          <sc-for list="{{ dash.done }}" as="d" hint-placeholder-count="3">
+            <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--color-divider)">
+              <span style="color:var(--color-accent-400);flex:none">✓</span>
+              <span style="font-size:12.5px;color:var(--color-accent-300);width:36px;flex:none">{{ d.id }}</span>
+              <button onClick="{{ d.open }}" style="flex:1;text-align:left;background:none;border:none;padding:0;cursor:pointer;font-size:13.5px;color:var(--color-neutral-300)" style-hover="color:var(--color-accent-300)">{{ d.title }}</button>
+              <button onClick="{{ d.undo }}" class="btn btn-ghost" style="flex:none;font-size:11.5px">Undo</button>
+            </div>
+          </sc-for>
+          <div style="font-size:12.5px;color:var(--color-neutral-500);padding:10px 0">{{ dash.doneEmpty }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card elev-md" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Plan completion</div>
+        <div style="font-size:34px;font-weight:500;margin:4px 0 8px">{{ dash.pctLabel }}</div>
+        <div style="height:6px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ dash.pctWidth }}"></div></div>
+        <div style="font-size:13px;color:var(--color-neutral-400);margin-top:8px">{{ dash.hoursLabel }}</div>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Target role</div>
+        <div style="font-size:16px;font-weight:500;margin-bottom:8px">{{ coverage.roleTitle }}</div>
+        <div style="height:6px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ coverage.pctWidth }}"></div></div>
+        <div style="font-size:13px;color:var(--color-neutral-400);margin-top:8px">{{ coverage.label }}</div>
+        <button onClick="{{ dash.openTarget }}" class="btn btn-ghost btn-block" style="margin-top:10px;font-size:12.5px">Open role page</button>
+      </div>
+      <div class="card" style="padding:18px">
+        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Your cohorts</div>
+        <sc-for list="{{ dash.cohorts }}" as="c" hint-placeholder-count="1">
+          <div style="padding:8px 0;border-bottom:1px solid var(--color-divider)">
+            <div style="font-size:14px;font-weight:500">{{ c.title }}</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:2px">{{ c.meta }}</div>
+          </div>
+        </sc-for>
+        <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:6px">{{ dash.cohortsEmpty }}</div>
+        <button onClick="{{ goCohorts }}" class="btn btn-secondary btn-block" style="margin-top:10px;font-size:12.5px">Browse cohorts</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ dash.isTeam }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+      <sc-for list="{{ team.stats }}" as="s" hint-placeholder-count="4">
+        <div class="card" style="padding:16px">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">{{ s.label }}</div>
+          <div style="font-size:26px;font-weight:500;margin-top:4px">{{ s.value }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div class="card" style="padding:6px 16px 10px">
+      <sc-for list="{{ team.members }}" as="m" hint-placeholder-count="4">
+        <div style="display:flex;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--color-divider)">
+          <div style="width:34px;height:34px;border-radius:999px;border:1px solid var(--color-neutral-800);display:flex;align-items:center;justify-content:center;font-size:12.5px;color:var(--color-neutral-300);flex:none">{{ m.initials }}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14.5px;font-weight:500">{{ m.name }}</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:2px">{{ m.role }}</div>
+          </div>
+          <span style="font-size:12.5px;color:var(--color-neutral-400);flex:none">{{ m.hoursLabel }}</span>
+          <div style="width:160px;height:5px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden;flex:none"><div style="height:100%;background:var(--color-accent-400);width:{{ m.pctWidth }}"></div></div>
+          <span style="font-size:12.5px;color:var(--color-neutral-300);width:38px;text-align:right;flex:none">{{ m.pctLabel }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="card" style="padding:18px">
+      <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Assign your current plan</div>
+      <div style="font-size:13.5px;color:var(--color-neutral-400);line-height:1.6;max-width:60em">{{ team.assignBody }}</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button onClick="{{ team.assign }}" class="btn btn-primary" style="font-size:13px">Assign to team</button>
+        <button onClick="{{ goCohorts }}" class="btn btn-ghost" style="font-size:13px">Schedule as cohort</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCohorts }}" hint-placeholder-val="{{ false }}">
+<div style="max-width:1280px;margin:0 auto;padding:32px 24px 80px">
+  <h1 style="font-size:38px;margin-bottom:6px">Cohorts</h1>
+  <p style="font-size:15.5px;color:var(--color-neutral-400);max-width:52em;margin:0 0 26px">Scheduled runs of a fixed set of phases, with a live cadence and a seat cap. Enrolling adds the cohort's phases to your curriculum.</p>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+    <sc-for list="{{ cohorts }}" as="c" hint-placeholder-count="4">
+      <div class="card elev-sm" style="padding:20px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div class="card-kicker">{{ c.lead }}</div>
+            <div style="font-size:19px;font-weight:500;margin-top:4px">{{ c.title }}</div>
+          </div>
+          <span class="tag tag-outline" style="flex:none">{{ c.seatsLabel }}</span>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--color-neutral-400)">
+          <span>{{ c.dateLabel }}</span>
+          <span>{{ c.weeksLabel }}</span>
+          <span>{{ c.cadence }}</span>
+        </div>
+        <div style="font-size:13px;color:var(--color-neutral-300);line-height:1.55">{{ c.phasesLabel }}</div>
+        <div style="height:5px;border-radius:999px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;background:var(--color-accent-400);width:{{ c.fillWidth }}"></div></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="font-size:13px">{{ c.btnLabel }}</button>
+          <button onClick="{{ c.view }}" class="btn btn-ghost" style="font-size:13px">View phases</button>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+<div class="dialog-backdrop no-print" style="align-items:flex-start;padding-top:80px">
+  <div class="dialog" style="width:min(680px, 92vw);padding:0;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--color-divider);display:flex;gap:10px;align-items:center">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-500)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4.5-4.5"></path></svg>
+      <input class="input" value="{{ sq }}" onInput="{{ setSq }}" placeholder="Search chapters, phases and roles" style="border:none;background:none;flex:1;padding:4px 0">
+      <button onClick="{{ closeSearch }}" class="btn btn-ghost" style="font-size:12px">Esc</button>
+    </div>
+    <div style="max-height:56vh;overflow:auto;padding:6px 8px 10px">
+      <sc-for list="{{ searchGroups }}" as="g" hint-placeholder-count="2">
+        <div style="padding:8px 8px 2px">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:4px">{{ g.label }}</div>
+          <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="4">
+            <button onClick="{{ i.open }}" style="display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:none;padding:8px;cursor:pointer;color:var(--color-text);border-radius:var(--radius-sm)" style-hover="background:var(--color-neutral-900)">
+              <span style="font-size:12px;color:var(--color-accent-300);width:38px;flex:none">{{ i.id }}</span>
+              <span style="flex:1;font-size:14px">{{ i.title }}</span>
+              <span style="font-size:12px;color:var(--color-neutral-500);flex:none">{{ i.meta }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+      <div style="font-size:13px;color:var(--color-neutral-500);padding:14px 16px">{{ searchEmpty }}</div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div class="no-print" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:60;background:var(--color-surface);box-shadow:var(--shadow-md);border-radius:999px;padding:10px 20px;font-size:13.5px">{{ toast }}</div>
+</sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1360,&quot;height&quot;:900}}">
+const LS = 'rgl.nocturne.v1';
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TEAM = [
+  { name: 'Aarti Rao', role: 'AI Agent Developer / Agentic AI Engineer', pct: 72, hours: 38 },
+  { name: 'Dan Whitfield', role: 'MLOps / LLMOps / AgentOps Engineer', pct: 45, hours: 22 },
+  { name: 'Ivy Chen', role: 'AI Product Manager', pct: 88, hours: 31 },
+  { name: 'Marco Pereira', role: 'AI Solutions / Enterprise Architect', pct: 26, hours: 14 }
+];
+
+class Component extends DCLogic {
+  state = {
+    route: 'home', roleId: null, chapId: null, data: null,
+    cart: [], progress: [], enrolled: [], hpw: 6, target: 'agent-developer',
+    q: '', level: 'All', roleFilter: 'All', open: {},
+    searchOpen: false, sq: '', toast: '', teamView: false
+  };
+
+  componentDidMount() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS) || 'null');
+      if (s && Array.isArray(s.cart)) this.setState({
+        cart: s.cart, progress: s.progress || [], enrolled: s.enrolled || [],
+        hpw: s.hpw || 6, target: s.target || 'agent-developer'
+      });
+    } catch (e) {}
+    import('./data/curriculum.js').then(m => this.setState({
+      data: { PHASES: m.PHASES, ROLES: m.ROLES, TRACKS: m.TRACKS, COHORTS: m.COHORTS }
+    }));
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); }
+
+  onKey = (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault(); this.setState(s => ({ searchOpen: !s.searchOpen, sq: '' }));
+    } else if (e.key === 'Escape' && this.state.searchOpen) this.setState({ searchOpen: false });
+  };
+
+  persist = () => {
+    const { cart, progress, enrolled, hpw, target } = this.state;
+    try { localStorage.setItem(LS, JSON.stringify({ cart, progress, enrolled, hpw, target })); } catch (e) {}
+  };
+  set = (patch) => this.setState(patch, this.persist);
+  go = (route, extra) => {
+    this.setState(Object.assign({ route, searchOpen: false }, extra || {}));
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  };
+  say = (msg) => {
+    this.setState({ toast: msg });
+    clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: '' }), 2400);
+  };
+
+  day(str) { const p = String(str).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  P() { return this.state.data ? this.state.data.PHASES : []; }
+  R() { return this.state.data ? this.state.data.ROLES : []; }
+
+  flat() {
+    const out = [];
+    this.P().forEach(p => p.chapters.forEach(c => out.push({ c, p })));
+    return out;
+  }
+  find(id) { return this.flat().find(x => x.c.id === id) || null; }
+  phaseChapterIds(p) { return p.chapters.map(c => c.id); }
+  expand(core) {
+    const ids = [];
+    (core || []).forEach(tok => {
+      if (tok[0] === 'P') {
+        const p = this.P().find(ph => String(ph.num) === tok.slice(1));
+        if (p) ids.push.apply(ids, this.phaseChapterIds(p));
+      } else if (this.find(tok)) ids.push(tok);
+    });
+    return ids.filter((v, i, a) => a.indexOf(v) === i);
+  }
+  rolesFor(id) { return this.R().filter(r => this.expand(r.core).indexOf(id) >= 0); }
+  has(id) { return this.state.cart.indexOf(id) >= 0; }
+  add = (ids, msg) => {
+    const set = this.state.cart.slice();
+    ids.forEach(i => { if (set.indexOf(i) < 0) set.push(i); });
+    this.set({ cart: set });
+    if (msg) this.say(msg);
+  };
+  remove = (ids) => this.set({ cart: this.state.cart.filter(i => ids.indexOf(i) < 0) });
+  toggleChap = (id) => this.has(id) ? this.remove([id]) : this.add([id]);
+  orderedCart() {
+    const cart = this.state.cart;
+    return this.flat().filter(x => cart.indexOf(x.c.id) >= 0);
+  }
+  hoursOf(list) { return list.reduce((s, x) => s + x.c.hours, 0); }
+  weeksCount(hours) { return Math.max(1, Math.ceil(hours / Math.max(2, this.state.hpw))); }
+
+  coverageFor(role) {
+    const ids = this.expand(role.core);
+    const covered = ids.filter(i => this.has(i));
+    const pct = ids.length ? Math.round(covered.length / ids.length * 100) : 0;
+    return { ids, covered, pct };
+  }
+
+  renderVals() {
+    const S = this.state;
+    const phases = this.P(), roles = this.R();
+    const data = S.data;
+    const cartList = this.orderedCart();
+    const cartHours = this.hoursOf(cartList);
+    const weeksN = this.weeksCount(cartHours);
+    const totalHours = this.flat().reduce((s, x) => s + x.c.hours, 0);
+
+    const openChap = (id) => () => this.go('reader', { chapId: id });
+    const openRole = (id) => () => this.go('role', { roleId: id });
+
+    const v = {
+      isHome: S.route === 'home', isCatalog: S.route === 'catalog', isRoles: S.route === 'roles',
+      isRole: S.route === 'role', isReader: S.route === 'reader', isPlan: S.route === 'plan',
+      isDash: S.route === 'dashboard', isCohorts: S.route === 'cohorts',
+      goHome: () => this.go('home'), goCatalog: () => this.go('catalog'), goRoles: () => this.go('roles'),
+      goPlan: () => this.go('plan'), goDash: () => this.go('dashboard', { teamView: false }),
+      goCohorts: () => this.go('cohorts'), goTeam: () => this.go('dashboard', { teamView: true }),
+      openSearch: () => this.setState({ searchOpen: true, sq: '' }),
+      closeSearch: () => this.setState({ searchOpen: false }),
+      searchOpen: S.searchOpen, sq: S.sq, setSq: (e) => this.setState({ sq: e.target.value }),
+      toast: S.toast, hasToast: !!S.toast,
+      cartCount: S.cart.length,
+      cartCountLabel: S.cart.length + (S.cart.length === 1 ? ' chapter' : ' chapters'),
+      cartHoursLabel: cartHours + ' hrs',
+      cartWeeksLabel: weeksN + (weeksN === 1 ? ' week' : ' weeks'),
+      statChapters: this.flat().length, statHours: totalHours, statRoles: roles.length,
+      hpw: S.hpw, target: S.target,
+      setHpw: (e) => this.set({ hpw: Math.max(2, Math.min(30, Number(e.target.value) || 6)) }),
+      setTarget: (e) => this.set({ target: e.target.value }),
+      q: S.q, level: S.level, roleFilter: S.roleFilter,
+      setQ: (e) => this.setState({ q: e.target.value }),
+      setLevel: (e) => this.setState({ level: e.target.value }),
+      setRoleFilter: (e) => this.setState({ roleFilter: e.target.value }),
+      clearCart: () => { this.set({ cart: [] }); this.say('Curriculum cleared'); },
+      share: () => {
+        const url = location.origin + location.pathname + '#plan=' + S.cart.join(',');
+        if (navigator.clipboard) navigator.clipboard.writeText(url);
+        this.say('Share link copied');
+      },
+      printPlan: () => window.print(),
+      planEmpty: !!data && S.cart.length === 0,
+      planFilled: S.cart.length > 0,
+      heroRoleTitle: 'Your target role', heroRolePct: '0%', heroRoleLabel: 'Loading the curriculum…',
+      planSummary: S.cart.length
+        ? cartList.length + ' chapters across ' + new Set(cartList.map(x => x.p.num)).size + ' phases · ' + cartHours + ' hrs · ' + weeksN + ' weeks at ' + S.hpw + ' hrs/week'
+        : 'Empty for now.'
+    };
+
+    if (!data) return v;
+
+    // ── Home ──────────────────────────────────────────────────────────────
+    v.tracks = data.TRACKS.map((t, i) => ({
+      step: i + 1, name: t.name, for: t.for, blurb: t.blurb,
+      phaseLabel: 'Phases ' + t.phases.join(' → '),
+      load: () => {
+        const ids = [];
+        t.phases.forEach(n => { const p = phases.find(ph => ph.num === n); if (p) ids.push.apply(ids, this.phaseChapterIds(p)); });
+        this.add(ids, t.name + ' loaded — ' + ids.length + ' chapters');
+        this.go('plan');
+      },
+      view: () => this.go('catalog')
+    }));
+    v.featuredRoles = roles.slice(0, 6).map(r => ({
+      family: r.family, title: r.title,
+      shortDoes: r.does.length > 96 ? r.does.slice(0, 93) + '…' : r.does,
+      coreLabel: this.expand(r.core).length + ' core chapters · ' + this.hoursOf(this.expand(r.core).map(i => this.find(i)).filter(Boolean)) + ' hrs',
+      open: openRole(r.id)
+    }));
+    const heroRole = roles.find(r => r.id === S.target) || roles[0];
+    const heroCov = this.coverageFor(heroRole);
+    v.heroRoleTitle = heroRole.title;
+    v.heroRolePct = heroCov.pct + '%';
+    v.heroRoleLabel = heroCov.covered.length + ' of ' + heroCov.ids.length + ' core chapters in your plan';
+    v.homeCohorts = data.COHORTS.slice(0, 3).map(c => {
+      const d = this.day(c.starts);
+      return {
+        day: d.getDate(), mon: MONTHS[d.getMonth()], title: c.title,
+        meta: c.weeks + ' weeks · ' + c.cadence,
+        seatsLabel: (c.seats - c.taken) + ' seats left'
+      };
+    });
+
+    // ── Catalog ───────────────────────────────────────────────────────────
+    v.levelOptions = ['All'].concat(phases.map(p => p.level).filter((x, i, a) => a.indexOf(x) === i));
+    v.roleFilterOptions = [{ id: 'All', label: 'Any role' }].concat(roles.map(r => ({ id: r.id, label: r.title })));
+    const filterRole = roles.find(r => r.id === S.roleFilter);
+    const roleIds = filterRole ? this.expand(filterRole.core) : null;
+    const q = S.q.trim().toLowerCase();
+    const matchPhase = (p) => {
+      if (S.level !== 'All' && p.level !== S.level) return false;
+      if (roleIds && !p.chapters.some(c => roleIds.indexOf(c.id) >= 0)) return false;
+      if (q && !(p.name.toLowerCase().indexOf(q) >= 0 || (p.intro || '').toLowerCase().indexOf(q) >= 0 || p.chapters.some(c => c.title.toLowerCase().indexOf(q) >= 0))) return false;
+      return true;
+    };
+    const shown = phases.filter(matchPhase);
+    v.resultLabel = shown.length + ' of ' + phases.length + ' phases' + (q ? ' matching “' + S.q + '”' : '');
+    const allOpen = shown.length > 0 && shown.every(p => S.open[p.num]);
+    v.expandLabel = allOpen ? 'Collapse all' : 'Expand all';
+    v.toggleAllOpen = () => {
+      const open = {};
+      if (!allOpen) shown.forEach(p => { open[p.num] = true; });
+      this.setState({ open });
+    };
+    v.rows = shown.map(p => {
+      const ids = this.phaseChapterIds(p);
+      const inCart = ids.filter(i => this.has(i));
+      const all = inCart.length === ids.length;
+      const chapters = p.chapters.filter(c => !q || c.title.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0 || (p.intro || '').toLowerCase().indexOf(q) >= 0);
+      return {
+        num: p.num, name: p.name, intro: p.intro, level: p.level, kind: p.kind,
+        chapLabel: ids.length + ' chapters',
+        hoursLabel: this.hoursOf(p.chapters.map(c => ({ c }))) + ' hrs',
+        prereqLabel: p.prereq.length ? 'After phase ' + p.prereq.join(', ') : 'No prerequisites',
+        selectedLabel: inCart.length ? inCart.length + ' selected' : '',
+        open: !!S.open[p.num] || (!!q && chapters.length > 0),
+        openLabel: S.open[p.num] ? 'Hide chapters' : 'Show chapters',
+        toggleOpen: () => this.setState(s => ({ open: Object.assign({}, s.open, { [p.num]: !s.open[p.num] }) })),
+        btnClass: all ? 'btn btn-secondary' : 'btn btn-primary',
+        btnLabel: all ? 'Remove phase' : 'Add whole phase',
+        togglePhase: () => all ? this.remove(ids) : this.add(ids, 'Phase ' + p.num + ' added'),
+        chapters: chapters.map(c => {
+          const rs = this.rolesFor(c.id);
+          return {
+            id: c.id, title: c.title, hoursLabel: c.hours + ' hrs',
+            rolesLabel: rs.length ? 'Core for ' + rs.slice(0, 2).map(r => r.title).join(', ') + (rs.length > 2 ? ' +' + (rs.length - 2) + ' more' : '') : 'Optional depth for every role',
+            btnClass: this.has(c.id) ? 'btn btn-secondary' : 'btn btn-ghost',
+            btnLabel: this.has(c.id) ? '✓ In plan' : 'Add chapter',
+            toggle: () => this.toggleChap(c.id),
+            open: openChap(c.id)
+          };
+        })
+      };
+    });
+
+    // ── Roles ─────────────────────────────────────────────────────────────
+    const fams = roles.map(r => r.family).filter((x, i, a) => a.indexOf(x) === i);
+    v.roleFamilies = fams.map(f => {
+      const list = roles.filter(r => r.family === f);
+      return {
+        name: f, countLabel: list.length + ' roles',
+        roles: list.map(r => {
+          const cov = this.coverageFor(r);
+          return {
+            title: r.title, does: r.does,
+            chips: r.core.slice(0, 4).map(t => t[0] === 'P' ? 'Phase ' + t.slice(1) : t),
+            pctWidth: cov.pct + '%', pctLabel: cov.pct + '% of core path in your plan',
+            load: () => { this.add(cov.ids, r.title + ' path loaded'); this.set({ target: r.id }); },
+            open: openRole(r.id)
+          };
+        })
+      };
+    });
+
+    // ── Role detail ───────────────────────────────────────────────────────
+    if (S.route === 'role') {
+      const r = roles.find(x => x.id === S.roleId) || roles[0];
+      const cov = this.coverageFor(r);
+      v.role = {
+        family: r.family, title: r.title, does: r.does,
+        note: r.note ? '(' + r.note + ')' : '',
+        path: cov.ids.map(id => {
+          const x = this.find(id);
+          return {
+            id: id, title: x.c.title, phaseLabel: 'Phase ' + x.p.num + ' — ' + x.p.name,
+            hoursLabel: x.c.hours + ' hrs',
+            btnClass: this.has(id) ? 'btn btn-secondary' : 'btn btn-ghost',
+            btnLabel: this.has(id) ? '✓ In plan' : 'Add chapter',
+            toggle: () => this.toggleChap(id), open: openChap(id)
+          };
+        }),
+        pctLabel: cov.pct + '%', pctWidth: cov.pct + '%',
+        coverLabel: cov.covered.length + ' of ' + cov.ids.length + ' core chapters · ' + this.hoursOf(cov.ids.map(i => this.find(i)).filter(Boolean)) + ' hrs for the full path',
+        load: () => this.add(cov.ids, r.title + ' path loaded'),
+        addMissing: () => this.add(cov.ids.filter(i => !this.has(i)), 'Missing chapters added'),
+        setTarget: () => { this.set({ target: r.id }); this.say(r.title + ' set as target role'); },
+        targetLabel: S.target === r.id ? '✓ Your target role' : 'Set as target role',
+        certs: r.certs,
+        adjacent: roles.filter(x => x.family === r.family && x.id !== r.id).map(x => ({ title: x.title, open: openRole(x.id) }))
+      };
+    }
+
+    // ── Reader ────────────────────────────────────────────────────────────
+    if (S.route === 'reader') {
+      const flat = this.flat();
+      const idx = Math.max(0, flat.findIndex(x => x.c.id === S.chapId));
+      const cur = flat[idx] || flat[0];
+      const prev = flat[idx - 1], next = flat[idx + 1];
+      const rs = this.rolesFor(cur.c.id);
+      v.chap = {
+        crumb: 'Phase ' + cur.p.num + ' · ' + cur.p.name + ' · Chapter ' + cur.c.id,
+        title: cur.c.title, tags: cur.c.tags,
+        hoursLabel: cur.c.hours + ' hrs', levelLabel: cur.p.level,
+        phaseName: cur.p.name,
+        statusTitle: 'Chapter shell — content in progress',
+        statusBody: 'This chapter is planned and tracked, but not yet written. Content ships incrementally; the structure, prerequisites and role mapping below are final.',
+        summary: cur.p.intro,
+        placement: (cur.p.prereq.length ? 'Sits after phase ' + cur.p.prereq.join(' and ') + '. ' : 'Has no prerequisite phases. ') + (rs.length ? rs.length + ' of the fifteen market roles treat it as required reading.' : 'No role treats it as required reading — it is optional depth.'),
+        prevLabel: prev ? '← ' + prev.c.id + ' ' + prev.c.title.slice(0, 34) : '← Start of curriculum',
+        nextLabel: next ? next.c.id + ' ' + next.c.title.slice(0, 34) + ' →' : 'End of curriculum →',
+        prev: prev ? openChap(prev.c.id) : () => {},
+        next: next ? openChap(next.c.id) : () => {},
+        btnClass: this.has(cur.c.id) ? 'btn btn-secondary' : 'btn btn-primary',
+        btnLabel: this.has(cur.c.id) ? '✓ In my curriculum' : 'Add to my curriculum',
+        toggle: () => this.toggleChap(cur.c.id),
+        doneLabel: S.progress.indexOf(cur.c.id) >= 0 ? '✓ Completed — mark unread' : 'Mark as complete',
+        markDone: () => {
+          const done = S.progress.indexOf(cur.c.id) >= 0 ? S.progress.filter(i => i !== cur.c.id) : S.progress.concat([cur.c.id]);
+          this.set({ progress: done });
+        },
+        roles: rs.map(r => ({ title: r.title, family: r.family, open: openRole(r.id) })),
+        rolesEmpty: rs.length ? '' : 'No role treats this chapter as core — it is optional depth.',
+        prereqs: cur.p.prereq.map(n => {
+          const p = phases.find(ph => ph.num === n);
+          return { label: 'Phase ' + n + ' — ' + (p ? p.name : ''), add: () => this.add(this.phaseChapterIds(p), 'Phase ' + n + ' added') };
+        }),
+        siblings: cur.p.chapters.filter(c => c.id !== cur.c.id).map(c => ({ label: c.id + '  ' + c.title, open: openChap(c.id) }))
+      };
+    }
+
+    // ── Plan ──────────────────────────────────────────────────────────────
+    const groups = [];
+    cartList.forEach(x => {
+      let g = groups.find(gg => gg.num === x.p.num);
+      if (!g) { g = { num: x.p.num, p: x.p, items: [] }; groups.push(g); }
+      g.items.push(x.c);
+    });
+    v.planGroups = groups.map(g => ({
+      name: 'Phase ' + g.num + ' — ' + g.p.name,
+      countLabel: g.items.length + ' of ' + g.p.chapters.length + ' chapters',
+      hoursLabel: g.items.reduce((s, c) => s + c.hours, 0) + ' hrs',
+      remove: () => this.remove(g.items.map(c => c.id)),
+      items: g.items.map(c => ({
+        id: c.id, title: c.title, hoursLabel: c.hours + ' hrs',
+        remove: () => this.remove([c.id]), open: openChap(c.id)
+      }))
+    }));
+    const weeks = [];
+    let cw = { items: [], hours: 0 };
+    cartList.forEach(x => {
+      if (cw.hours && cw.hours + x.c.hours > S.hpw) { weeks.push(cw); cw = { items: [], hours: 0 }; }
+      cw.items.push({ id: x.c.id, title: x.c.title }); cw.hours += x.c.hours;
+    });
+    if (cw.items.length) weeks.push(cw);
+    v.weeks = weeks.map((w, i) => ({ label: 'Week ' + (i + 1), hoursLabel: w.hours + ' hrs', items: w.items }));
+
+    const targetRole = roles.find(r => r.id === S.target) || roles[0];
+    const tcov = this.coverageFor(targetRole);
+    const missing = tcov.ids.filter(i => !this.has(i));
+    v.targetOptions = roles.map(r => ({ id: r.id, label: r.title }));
+    v.coverage = {
+      roleTitle: targetRole.title, pctLabel: tcov.pct + '%', pctWidth: tcov.pct + '%',
+      label: tcov.covered.length + ' of ' + tcov.ids.length + ' core chapters for ' + targetRole.title,
+      missing: missing.slice(0, 6).map(id => {
+        const x = this.find(id);
+        return { id: id, title: x.c.title, add: () => this.add([id]) };
+      }),
+      addAll: () => this.add(missing, 'Added ' + missing.length + ' chapters'),
+      addAllLabel: missing.length ? 'Add all ' + missing.length + ' missing chapters' : 'Full core path covered'
+    };
+    const selectedPhases = groups.map(g => g.num);
+    const gaps = [];
+    groups.forEach(g => g.p.prereq.forEach(n => {
+      if (selectedPhases.indexOf(n) < 0 && !gaps.some(x => x.num === n)) {
+        const p = phases.find(ph => ph.num === n);
+        if (p) gaps.push({
+          num: n, name: 'Phase ' + n + ' — ' + p.name,
+          reason: 'Phase ' + g.num + ' assumes it. Nothing from it is in your plan.',
+          add: () => this.add(this.phaseChapterIds(p), 'Phase ' + n + ' added')
+        });
+      }
+    }));
+    v.gaps = gaps;
+    v.gapsEmpty = gaps.length ? '' : (S.cart.length ? 'No gaps — every prerequisite phase is represented.' : 'Add chapters to see prerequisite gaps.');
+    const ranked = roles.map(r => ({ r, cov: this.coverageFor(r) })).filter(x => x.cov.pct >= 40).sort((a, b) => b.cov.pct - a.cov.pct).slice(0, 2);
+    const certs = [];
+    ranked.forEach(x => x.r.certs.forEach(c => { if (certs.indexOf(c) < 0) certs.push(c); }));
+    v.planCerts = certs.slice(0, 6);
+    v.certsEmpty = certs.length ? '' : 'Cover at least 40% of a role\u2019s core path to see its certifications here.';
+
+    // ── Dashboard ─────────────────────────────────────────────────────────
+    const doneInPlan = cartList.filter(x => S.progress.indexOf(x.c.id) >= 0);
+    const donePct = cartList.length ? Math.round(doneInPlan.length / cartList.length * 100) : 0;
+    const nextUp = cartList.find(x => S.progress.indexOf(x.c.id) < 0);
+    v.dash = {
+      isMe: !S.teamView, isTeam: S.teamView,
+      showMe: () => this.setState({ teamView: false }), showTeam: () => this.setState({ teamView: true }),
+      meClass: S.teamView ? 'seg-opt' : 'seg-opt is-active',
+      teamClass: S.teamView ? 'seg-opt is-active' : 'seg-opt',
+      greeting: 'Your learning',
+      summary: cartList.length
+        ? doneInPlan.length + ' of ' + cartList.length + ' chapters complete · ' + this.hoursOf(doneInPlan) + ' of ' + cartHours + ' hrs'
+        : 'No curriculum yet — build one to start tracking progress.',
+      nextTitle: nextUp ? nextUp.c.id + '  ' + nextUp.c.title : (cartList.length ? 'Everything in your plan is complete' : 'Nothing scheduled'),
+      nextMeta: nextUp ? 'Phase ' + nextUp.p.num + ' — ' + nextUp.p.name + ' · ' + nextUp.c.hours + ' hrs' : 'Add more chapters to keep going',
+      nextCta: nextUp ? 'Open chapter' : 'Browse curriculum',
+      openNext: nextUp ? openChap(nextUp.c.id) : () => this.go('catalog'),
+      pctLabel: donePct + '%', pctWidth: donePct + '%',
+      hoursLabel: this.hoursOf(doneInPlan) + ' of ' + cartHours + ' hrs done',
+      phases: groups.map(g => {
+        const done = g.items.filter(c => S.progress.indexOf(c.id) >= 0).length;
+        const pct = Math.round(done / g.items.length * 100);
+        return {
+          name: 'Phase ' + g.num + ' — ' + g.p.name,
+          label: done + ' of ' + g.items.length + ' chapters · ' + g.items.reduce((s, c) => s + c.hours, 0) + ' hrs',
+          pctWidth: pct + '%', pctLabel: pct + '%'
+        };
+      }),
+      phasesEmpty: groups.length ? '' : 'Nothing in your curriculum yet.',
+      done: S.progress.map(id => this.find(id)).filter(Boolean).slice(-6).reverse().map(x => ({
+        id: x.c.id, title: x.c.title, open: openChap(x.c.id),
+        undo: () => this.set({ progress: S.progress.filter(i => i !== x.c.id) })
+      })),
+      doneEmpty: S.progress.length ? '' : 'Mark a chapter complete and it shows up here.',
+      openTarget: openRole(targetRole.id),
+      cohorts: data.COHORTS.filter(c => S.enrolled.indexOf(c.id) >= 0).map(c => ({
+        title: c.title, meta: this.day(c.starts).toDateString().slice(4) + ' · ' + c.cadence
+      })),
+      cohortsEmpty: S.enrolled.length ? '' : 'Not enrolled in a cohort.'
+    };
+    v.team = {
+      stats: [
+        { label: 'Seats in use', value: TEAM.length + ' / 12' },
+        { label: 'Avg. coverage', value: Math.round(TEAM.reduce((s, m) => s + m.pct, 0) / TEAM.length) + '%' },
+        { label: 'Hours logged', value: TEAM.reduce((s, m) => s + m.hours, 0) },
+        { label: 'Active cohorts', value: data.COHORTS.length }
+      ],
+      members: TEAM.map(m => ({
+        name: m.name, role: m.role,
+        initials: m.name.split(' ').map(n => n[0]).join(''),
+        hoursLabel: m.hours + ' hrs', pctWidth: m.pct + '%', pctLabel: m.pct + '%'
+      })),
+      assignBody: cartList.length
+        ? 'Your current plan is ' + cartList.length + ' chapters and ' + cartHours + ' hours. Assigning it sets it as the baseline path for everyone on the team, keeping each person\u2019s existing progress.'
+        : 'Build a curriculum first — then assign it as the baseline path for the team.',
+      assign: () => this.say(cartList.length ? 'Plan assigned to 4 team members' : 'Nothing to assign yet')
+    };
+
+    // ── Cohorts ───────────────────────────────────────────────────────────
+    v.cohorts = data.COHORTS.map(c => {
+      const ids = [];
+      c.phases.forEach(n => { const p = phases.find(ph => ph.num === n); if (p) ids.push.apply(ids, this.phaseChapterIds(p)); });
+      const on = S.enrolled.indexOf(c.id) >= 0;
+      const d = this.day(c.starts);
+      return {
+        title: c.title, lead: c.lead, cadence: c.cadence,
+        dateLabel: 'Starts ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(),
+        weeksLabel: c.weeks + ' weeks',
+        seatsLabel: (c.seats - c.taken) + ' of ' + c.seats + ' seats left',
+        fillWidth: Math.round(c.taken / c.seats * 100) + '%',
+        phasesLabel: c.phases.map(n => { const p = phases.find(ph => ph.num === n); return 'Phase ' + n + ' — ' + (p ? p.name : ''); }).join(' · '),
+        btnClass: on ? 'btn btn-secondary' : 'btn btn-primary',
+        btnLabel: on ? 'Leave cohort' : 'Enrol and add phases',
+        toggle: () => {
+          if (on) { this.set({ enrolled: S.enrolled.filter(i => i !== c.id) }); this.say('Left ' + c.title); }
+          else { this.set({ enrolled: S.enrolled.concat([c.id]) }); this.add(ids, 'Enrolled — ' + ids.length + ' chapters added'); }
+        },
+        view: () => this.go('catalog')
+      };
+    });
+
+    // ── Search ────────────────────────────────────────────────────────────
+    const sq = S.sq.trim().toLowerCase();
+    const groupsOut = [];
+    if (sq) {
+      const ch = this.flat().filter(x => x.c.title.toLowerCase().indexOf(sq) >= 0 || x.c.id.indexOf(sq) === 0).slice(0, 8);
+      if (ch.length) groupsOut.push({
+        label: 'Chapters', items: ch.map(x => ({
+          id: x.c.id, title: x.c.title, meta: 'Phase ' + x.p.num, open: openChap(x.c.id)
+        }))
+      });
+      const ph = phases.filter(p => p.name.toLowerCase().indexOf(sq) >= 0 || (p.intro || '').toLowerCase().indexOf(sq) >= 0).slice(0, 4);
+      if (ph.length) groupsOut.push({
+        label: 'Phases', items: ph.map(p => ({
+          id: 'P' + p.num, title: p.name, meta: p.chapters.length + ' chapters',
+          open: () => { this.setState(s => ({ open: Object.assign({}, s.open, { [p.num]: true }) })); this.go('catalog'); }
+        }))
+      });
+      const rl = roles.filter(r => r.title.toLowerCase().indexOf(sq) >= 0 || r.does.toLowerCase().indexOf(sq) >= 0).slice(0, 4);
+      if (rl.length) groupsOut.push({
+        label: 'Roles', items: rl.map(r => ({ id: '', title: r.title, meta: r.family, open: openRole(r.id) }))
+      });
+    }
+    v.searchGroups = groupsOut;
+    v.searchEmpty = sq ? (groupsOut.length ? '' : 'Nothing matches “' + S.sq + '”.') : 'Type to search 157 chapters, 19 phases and 15 roles.';
+
+    return v;
+  }
+}
+
+</script>
+</body>
+</html>
