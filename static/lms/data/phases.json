@@ -121,9 +121,13 @@
    },
    {
     "id": "1.5",
-    "title": "Classical ML Algorithms Landscape — Comparison",
+    "title": "Classical ML Algorithms Landscape: A Comparison",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-5-classical-ml-algorithms",
+    "summary": "Before deep learning, and still very much in production today, a handful of classical algorithm families cover most tabular machine learning problems: linear models, decision trees, ensembles of trees, k-nearest neighbors, support vector machines, and Naive Bayes. None of them is universally \"best.\" Each makes a different structural assumption about how inputs map to outputs, called an inductive bias, and that assumption is what determines whether it fits a given problem well, how interpretable it is, and where it sits on chapter 1.4's bias-variance spectrum. Choosing among them is a practical decision driven by data size, feature types, interpretability requirements, and how much non-linearity the true relationship actually has.",
+    "published": true,
+    "presentationUrl": "../slides/1.5-Classical-ML-Algorithms-Slides.pptx"
    },
    {
     "id": "1.6",

@@ -1,0 +1,224 @@
+---
+title: "Classical ML Algorithms Landscape: A Comparison"
+sidebar_label: "1.5 Classical ML Algorithms Landscape"
+sidebar_position: 5
+phase: 1
+chapter: "1.5"
+lms_presentation: "1.5-Classical-ML-Algorithms-Slides.pptx"
+prerequisites: ["1.3", "1.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Before deep learning, and still very much in production today, a handful of classical algorithm
+families cover most tabular machine learning problems: linear models, decision trees, ensembles of
+trees, k-nearest neighbors, support vector machines, and Naive Bayes. None of them is universally
+"best." Each makes a different structural assumption about how inputs map to outputs, called an
+inductive bias, and that assumption is what determines whether it fits a given problem well, how
+interpretable it is, and where it sits on chapter 1.4's bias-variance spectrum. Choosing among them
+is a practical decision driven by data size, feature types, interpretability requirements, and how
+much non-linearity the true relationship actually has.
+
+## High-Level Explanation
+
+Every algorithm family answers the same question differently: given a feature vector (chapter
+1.4), what shape of function connects it to the output, and how flexible is that shape allowed to
+be? That answer is the algorithm's inductive bias.
+
+**Linear and logistic regression** assume the relationship is a straight line (regression) or a
+straight decision boundary (logistic regression, for classification): the output is a weighted sum
+of the input features. This is a strong, restrictive assumption, which is exactly what makes these
+models fast, stable, and easy to explain: every prediction can be traced to a specific weighted
+contribution from each feature.
+
+**Decision trees** make almost the opposite assumption: they repeatedly ask a yes/no question about
+one feature at a time (is income above $50,000?) and split the data accordingly, building a
+flowchart of splits that ends in a prediction. This lets a tree represent non-linear relationships
+and mixed feature types without any manual transformation, but a tree grown deep enough to fit its
+training data closely is exactly the high-variance, overfitting case from chapter 1.4: a small
+change in the training data can produce a very different tree.
+
+**Ensembles** combine many individual models, usually trees, to get a stronger predictor than any
+one of them alone. Bagging (bootstrap aggregating) trains many trees independently on randomly
+resampled subsets of the data and averages their predictions, which cancels out each tree's
+individual variance; Random Forest is bagging plus one more trick, randomizing which features each
+split is even allowed to consider. Boosting instead builds trees one at a time, each new tree
+specifically trained to correct the errors the ensemble so far is still making, which drives down
+bias rather than variance.
+
+**k-Nearest Neighbors (kNN)** makes no assumption about a functional shape at all: to predict a new
+point, it finds the k most similar points already seen and predicts based on their labels. It has
+no real training phase (all the work happens at prediction time), which makes it simple to reason
+about but slow to query and, as covered in the Deep-Dive, unreliable once the number of features
+grows large.
+
+**Support vector machines (SVM) and Naive Bayes** round out the classical landscape. SVMs find the
+decision boundary that maximizes the margin, the distance to the nearest points of each class, and
+can be extended to non-linear boundaries via the kernel trick. Naive Bayes applies Bayes' theorem
+under a simplifying assumption that features are independent given the class, which is rarely
+literally true but is often good enough, especially on high-dimensional, sparse data.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/1-5-algorithm-boundaries.svg').default}
+    alt="Four panels showing the same two-class scatter of points with a different decision boundary drawn by each algorithm family: a straight line for linear/logistic regression, a staircase of axis-aligned rectangles for a decision tree, an irregular boundary for k-nearest neighbors, and a finer-grained staircase for an ensemble that approximates a near-arbitrary shape."
+  />
+  <figcaption>Same data, four different assumptions about the boundary's shape. That shape is the inductive bias.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Linear and logistic regression, formally.** Linear regression predicts ŷ = w·x + b, a weighted
+sum of the features plus a bias term, fit by minimizing the sum of squared residuals between ŷ and
+the true y, either in closed form (the normal equation) or by gradient descent for large datasets.
+Logistic regression predicts a probability by passing that same linear combination through the
+sigmoid function, P(y=1 | x) = 1 / (1 + e^-(w·x + b)), and is fit by maximizing the likelihood of
+the observed labels (equivalently, minimizing log loss). Both are high-bias, low-variance models in
+chapter 1.4's terms: the linear form cannot represent a genuinely curved relationship no matter how
+much data it sees, but it is very stable across different training samples.
+
+**Decision trees, formally.** The CART algorithm (Breiman, Friedman, Olshen, and Stone,
+[*Classification and Regression Trees*](https://www.routledge.com/Classification-and-Regression-Trees/Breiman-Friedman-Stone-Olshen/p/book/9780412048418),
+1984) builds a tree by recursively choosing, at each node, the single feature and threshold that
+splits the data into the two purest possible child groups, where purity is measured by Gini
+impurity or information gain (entropy reduction). Splitting continues until a stopping condition is
+reached: a maximum depth, a minimum number of samples per leaf, or no split that improves purity.
+Those stopping conditions are hyperparameters in chapter 1.4's sense, and they directly control the
+tree's position on the bias-variance spectrum: an unconstrained tree grown to purity is low bias
+and high variance (it can represent almost any relationship, including the training set's noise),
+while a shallow, heavily constrained tree shifts back toward high bias.
+
+**Bagging and boosting, formally.** Bagging trains B independent trees, each on a bootstrap sample
+(a random sample of the same size as the original dataset, drawn with replacement) and, for
+classification, predicts by majority vote across the B trees. Random Forest (Breiman,
+[*Random Forests*](https://link.springer.com/article/10.1023/A:1010933404324),
+*Machine Learning*, 2001) adds one refinement: at each split, only a random subset of features is
+even considered, which decorrelates the individual trees further and improves how much variance the
+averaging step actually cancels. Gradient boosting (Friedman,
+[*Greedy Function Approximation: A Gradient Boosting Machine*](https://projecteuclid.org/journals/annals-of-statistics/volume-29/issue-5/Greedy-function-approximation-A-gradient-boosting-machine/10.1214/aos/1013203451.full),
+*Annals of Statistics*, 2001) instead trains trees sequentially, where each new tree is fit to the
+ensemble's current errors, formally the negative gradient of the loss function, which is exactly
+the residual in the common squared-error regression case and a close analogue of it for
+classification losses; AdaBoost (Freund and Schapire,
+[*A Decision-Theoretic Generalization of On-Line Learning and an Application to Boosting*](https://www.sciencedirect.com/science/article/pii/S002200009791504X),
+*Journal of Computer and System Sciences*, 1997) is an earlier boosting variant that instead
+reweights misclassified examples more heavily before training the next tree. Both boosting
+variants reduce bias: each additional tree specifically targets whatever the ensemble is still
+getting wrong, so the ensemble as a whole can represent relationships no single shallow tree could.
+The practical tradeoff mirrors chapter 1.4 directly: bagging is the variance-reduction tool,
+boosting is the bias-reduction tool, and the two are frequently combined (a gradient-boosted
+ensemble of intentionally shallow trees).
+
+**k-Nearest Neighbors, formally.** For a query point x, kNN computes the distance (commonly
+Euclidean) from x to every point in the training set, takes the k closest, and predicts the
+majority class (classification) or the average value (regression) among them (Cover and Hart,
+[*Nearest Neighbor Pattern Classification*](https://ieeexplore.ieee.org/document/1053964),
+*IEEE Transactions on Information Theory*, 1967). It is called a lazy learner because no model is
+fit in advance; all the computation is deferred to prediction time, which becomes expensive as the
+training set grows. A smaller k produces a more flexible, higher-variance boundary (sensitive to
+individual noisy points); a larger k smooths the boundary toward higher bias. kNN also degrades in
+a specific way as the number of features grows, sometimes called the curse of dimensionality: in
+high-dimensional space, the volume between points grows so fast that the distance to the nearest
+neighbor and the distance to a typical randomly chosen point converge, so "nearest" stops being a
+meaningfully informative relationship (Bellman,
+[*Dynamic Programming*](https://press.princeton.edu/books/paperback/9780691146683/dynamic-programming),
+Princeton University Press, 1957, coined the term in a different context; its specific consequence
+for distance-based methods is a widely documented empirical property of high-dimensional spaces
+rather than a single-paper result).
+
+**Support vector machines and Naive Bayes, briefly.** An SVM (Cortes and Vapnik,
+[*Support-Vector Networks*](https://link.springer.com/article/10.1007/BF00994018),
+*Machine Learning*, 1995) finds the linear boundary that maximizes the margin, the distance from
+the boundary to the nearest point of either class, which tends to generalize better than an
+arbitrary linear separator. The kernel trick extends this to non-linear boundaries by implicitly
+mapping features into a higher-dimensional space where a linear separator corresponds to a curved
+boundary in the original space, without ever computing that mapping explicitly. Naive Bayes applies
+Bayes' theorem, P(class | features) is proportional to P(features | class) times P(class), under the
+simplifying assumption that every feature is conditionally independent of every other feature given
+the class. That assumption is almost always literally false (a patient's symptoms are correlated
+with each other, not independent), but the resulting probability estimates are frequently still
+useful for ranking or thresholding decisions even when the underlying probabilities are miscalibrated,
+which is why the algorithm remains a common, cheap baseline for high-dimensional, sparse data like
+text.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Linear / Logistic Regression', 'Decision Trees', 'k-Nearest Neighbors', 'Ensembles (Bagging / Boosting)']}
+  rows={[
+    {aspect: 'Bias-variance profile', values: ['High bias, low variance', 'Low bias, high variance (unconstrained)', 'Tunable via k: small k high variance, large k high bias', 'Bagging lowers variance; boosting lowers bias'], decisive: true},
+    {aspect: 'Decision boundary shape', values: ['A straight line or plane', 'Axis-aligned rectangular regions', 'Irregular, follows local neighborhoods', 'Many overlaid axis-aligned regions; finely stepped, near-arbitrary shape'], },
+    {aspect: 'Interpretability', values: ['High: each feature has an explicit weight', 'High for a shallow tree; readable as rules', 'Low: no explicit model to inspect', 'Low: hundreds of trees combined'], },
+    {aspect: 'Training cost', values: ['Low', 'Low to moderate', 'Near zero at training time, expensive at query time', 'Higher: many trees, sequential for boosting'], },
+  ]}
+  caption="The decisive difference is where each family sits on the bias-variance spectrum from chapter 1.4, because that determines how it fails, not just how it succeeds."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A model-selection pipeline: choosing an algorithm family with cross-validation"
+  mermaid={`
+flowchart LR
+  A[Train / Val / Test Split] --> B[Linear Baseline]
+  A --> C[Decision Tree]
+  A --> D[k-NN]
+  A --> E[Ensemble<br/>Random Forest / Boosting]
+  B --> F[Cross-Validated Comparison]
+  C --> F
+  D --> F
+  E --> F
+  F --> G[Selected Model]
+  G --> H[Test Evaluation<br/>touched once]
+`}
+  components={[
+    {name: 'Linear Baseline', responsibility: 'A fast, interpretable first candidate; often the model to beat, not the model to ship.'},
+    {name: 'Decision Tree / k-NN / Ensemble', responsibility: 'Alternative candidates with different inductive biases, trained on the same split.'},
+    {name: 'Cross-Validated Comparison', responsibility: 'Scores every candidate using k-fold cross-validation (chapter 1.4), not a single split, before any is chosen.'},
+    {name: 'Selected Model', responsibility: 'The candidate with the best validation profile, chosen with interpretability and latency requirements weighed alongside raw accuracy.'},
+    {name: 'Test Evaluation', responsibility: 'Reports the selected model\'s final, honest performance exactly once.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Logistic regression for explainable credit approval', problem: 'A credit decision must be explainable to regulators and applicants in terms of which factors drove it.', solution: 'Logistic regression\'s explicit per-feature weights let every decision be traced to specific, quantified contributions.', risk: 'The linear assumption can understate risk for a segment where the real relationship is genuinely non-linear, such as an interaction between income and existing debt.'},
+    {title: 'Gradient boosting for fraud detection', problem: 'Fraud patterns involve complex interactions between transaction features that a linear model cannot represent.', solution: 'A gradient-boosted ensemble captures non-linear interactions across dozens of transaction features to flag likely fraud.', risk: 'The ensemble is a black box: producing a specific, defensible reason code for why one transaction was declined is far harder than with a linear model.'},
+    {title: 'k-NN for AML investigation triage', problem: 'An investigator wants to find past confirmed suspicious-activity cases that resemble a new alert, to speed up triage.', solution: 'k-NN retrieves the most similar historical cases by distance in feature space for an investigator to review directly.', risk: 'As more transaction features are added over time, the curse of dimensionality can make "nearest" cases no more similar than random ones, quietly degrading investigator trust in the tool.'},
+    {title: 'Decision tree for auditable underwriting rules', problem: 'An underwriting policy needs to be read and audited as an explicit rule set, not just a scored output.', solution: 'A shallow decision tree renders directly as a small set of if/then rules an auditor can step through.', risk: 'An unconstrained tree is unstable: a modest refresh of the training data can produce a materially different rule set, undermining the audit trail\'s consistency over time.'},
+  ]}
+  healthcare={[
+    {title: 'Logistic regression for a clinical risk score', problem: 'A mortality risk score used at the bedside needs clinicians to see which factors drove a specific patient\'s score.', solution: 'Logistic regression\'s weighted contributions let a clinician trace the score back to specific vitals and history.', risk: 'The additive linear assumption misses genuine interaction effects between comorbidities that a clinician would recognize as jointly, not independently, risky.'},
+    {title: 'Gradient boosting for diagnosis prediction from EHR data', problem: 'Structured electronic health record data has many weak, interacting signals that a linear model underfits.', solution: 'A gradient-boosted ensemble typically achieves the strongest raw predictive accuracy on this kind of tabular clinical data.', risk: 'Clinicians who cannot see why the model reached a conclusion often decline to act on it, so the model\'s accuracy advantage fails to translate into better care if adoption stalls.'},
+    {title: 'k-NN for finding clinically similar patients', problem: 'A clinician wants to see how similar past patients were actually treated and how they responded.', solution: 'k-NN retrieves the most similar patients by distance across a curated feature set for side-by-side comparison.', risk: 'High-dimensional EHR feature vectors are exactly the setting where the curse of dimensionality bites hardest, so "similar" patients may not be clinically similar at all.'},
+    {title: 'Naive Bayes for symptom-based triage', problem: 'An early triage tool needs to classify a patient from a checklist of many sparse, mostly-absent symptoms quickly and cheaply.', solution: 'Naive Bayes is inexpensive to train and query on exactly this kind of high-dimensional, sparse, binary feature data.', risk: 'The conditional-independence assumption is clearly violated by symptom clusters that co-occur for a shared underlying cause, which can miscalibrate the triage tool\'s probability estimates.'},
+  ]}
+  telecom={[
+    {title: 'Decision tree for frontline churn-flagging rules', problem: 'Retention agents need a simple, explainable rule set for which accounts to prioritize, not an opaque score.', solution: 'A shallow decision tree renders as a short set of rules frontline staff can apply directly.', risk: 'A single tree\'s instability means the rule set can shift noticeably between training refreshes, confusing staff who memorized the previous version.'},
+    {title: 'Random Forest for churn prediction', problem: 'Call detail record features are numerous and noisy, and a single tree overfits their idiosyncrasies.', solution: 'Bagging across many trees averages out each tree\'s sensitivity to noisy features, producing a more stable churn score.', risk: 'The averaged ensemble is harder to debug than a single tree: explaining why one specific customer was flagged requires aggregating across every tree in the forest.'},
+    {title: 'SVM for network fault classification', problem: 'Detecting a developing fault from a moderate-sized, high-dimensional sensor feature set needs a boundary sensitive to a small margin between normal and faulty readings.', solution: 'An SVM finds the maximum-margin boundary between normal and faulty sensor patterns, extendable to non-linear boundaries via a kernel.', risk: 'SVM outputs are not well-calibrated probabilities by default, so a downstream system that treats the raw score as a probability of fault will misjudge its confidence.'},
+    {title: 'Naive Bayes for SMS spam and robocall text classification', problem: 'Filtering spam text messages requires classifying short, high-dimensional bag-of-words content cheaply at very high volume.', solution: 'Naive Bayes scores each message from word-presence features fast enough to run inline on live traffic.', risk: 'The independence assumption is specifically exploitable: spammers can adapt keyword spacing and substitutions to defeat it once the filter\'s behavior becomes predictable.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why does a single, unconstrained decision tree tend to have low bias but high variance, and how does bagging address that?', answer: 'An unconstrained tree can split all the way down to individual training points, so it can represent almost any relationship (low bias) but is highly sensitive to which specific points it saw (high variance). Bagging trains many such trees on different bootstrap samples and averages their predictions, and because their individual errors are only partially correlated, averaging cancels out much of that variance.'},
+    {question: 'Why does gradient boosting reduce bias rather than variance?', answer: 'Each new tree in a boosted ensemble is trained specifically to correct the residual errors the ensemble so far is still making, rather than being trained independently like in bagging. That sequential error-correction lets the ensemble represent relationships no single shallow tree could capture, which is what reducing bias means.'},
+    {question: 'Why does k-NN performance degrade as the number of features grows, even when k is chosen well?', answer: 'In high-dimensional space, the distance between a query point and its nearest neighbor and the distance to a typical randomly chosen point converge, so the closest points stop being meaningfully more similar than arbitrary ones. This is the curse of dimensionality, and no choice of k fixes it, because the problem is with the distance metric itself becoming uninformative.'},
+    {question: 'A regulator requires that a credit decision be explainable in terms of which specific factors drove it. Which algorithm family is the safest default, and why?', answer: 'Linear or logistic regression, because each prediction decomposes into an explicit, quantified contribution from each feature\'s weight. Tree ensembles and k-NN can be more accurate but are far harder to reduce to a specific, defensible per-decision explanation.'},
+    {question: 'Naive Bayes assumes features are conditionally independent given the class, which is almost always false in practice. Why does the algorithm still work well?', answer: 'The algorithm only needs to rank or threshold classes correctly, not produce perfectly calibrated probabilities. Even when the independence assumption distorts the exact probability values, the relative ranking across classes is often still correct, which is enough for classification decisions.'},
+  ]}
+/>
