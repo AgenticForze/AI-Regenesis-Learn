@@ -347,6 +347,9 @@
         <div style="font-weight:600;font-size:14px;margin-bottom:5px">{{ chap.statusTitle }}</div>
         <div style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-300)">{{ chap.statusBody }}</div>
       </div>
+      <sc-if value="{{ chap.isLive }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ chap.openContent }}" class="btn btn-primary" style="margin:-4px 0 22px">Open full chapter ↗</button>
+      </sc-if>
       <h2 style="font-size:21px;margin-bottom:8px">What this chapter covers</h2>
       <p style="font-size:15.5px;line-height:1.7;color:var(--color-neutral-300);margin:0 0 20px">{{ chap.summary }}</p>
       <h2 style="font-size:21px;margin-bottom:8px">Where it sits</h2>
@@ -1014,9 +1017,11 @@ class Component extends DCLogic {
         title: cur.c.title, tags: cur.c.tags,
         hoursLabel: cur.c.hours + ' hrs', levelLabel: cur.p.level,
         phaseName: cur.p.name,
-        statusTitle: 'Chapter shell — content in progress',
-        statusBody: 'This chapter is planned and tracked, but not yet written. Content ships incrementally; the structure, prerequisites and role mapping below are final.',
-        summary: cur.p.intro,
+        statusTitle: cur.c.published ? 'Full chapter is live' : 'Chapter shell — content in progress',
+        statusBody: cur.c.published ? 'This chapter is published in the knowledge base. Open the full lesson to read it in the curriculum site.' : 'This chapter is planned and tracked, but not yet written. Content ships incrementally; the structure, prerequisites and role mapping below are final.',
+        isLive: Boolean(cur.c.url),
+        openContent: () => { if (cur.c.url) window.location.assign(cur.c.url); },
+        summary: cur.c.summary || cur.p.intro,
         placement: (cur.p.prereq.length ? 'Sits after phase ' + cur.p.prereq.join(' and ') + '. ' : 'Has no prerequisite phases. ') + (rs.length ? rs.length + ' of the fifteen market roles treat it as required reading.' : 'No role treats it as required reading — it is optional depth.'),
         prevLabel: prev ? '← ' + prev.c.id + ' ' + prev.c.title.slice(0, 34) : '← Start of curriculum',
         nextLabel: next ? next.c.id + ' ' + next.c.title.slice(0, 34) + ' →' : 'End of curriculum →',

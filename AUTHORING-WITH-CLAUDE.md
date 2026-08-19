@@ -18,12 +18,28 @@ _templates/
   landscape-chapter.mdx     the four-section contract — Phases 9 and 14 only
 src/components/             the MDX components chapters compose with
 static/img/illustrations/   chapter SVGs live here
-static/lms/                 the curriculum builder (do not edit while authoring content)
+static/lms/                 the curriculum builder (generated catalogue; do not edit while authoring content)
 ```
 
 Written so far: all of Phase 0 (`docs/00-orientation/`) — read `0-1`, `0-5` and `0-6` before
 writing anything, they define voice, vocabulary and structure. Every other phase currently holds a
 shell `index.md` listing planned chapters.
+
+### LMS publishing metadata
+
+The chapter file is the source of truth. On every `npm run build` or `npm run deploy`, the LMS
+catalogue is regenerated from every chapter with `title` and `chapter` front matter. A published
+chapter automatically gets an **Open full chapter** button in the LMS reader. Add these optional
+front-matter fields when the catalogue needs more detail:
+
+```yaml
+lms_hours: 3
+lms_tags: [Foundations, History]
+lms_summary: "A short learner-facing summary for the LMS catalogue."
+```
+
+Do not edit `static/lms/data/curriculum.js` or `static/lms/data/phases.json` by hand; run
+`npm run sync:lms` to regenerate them.
 
 ## 2. The chapter contract
 
