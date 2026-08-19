@@ -111,9 +111,13 @@
    },
    {
     "id": "1.4",
-    "title": "Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, Overfitting",
+    "title": "Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, and Overfitting",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-4-core-ml-concepts",
+    "summary": "A model isn't graded on how well it fits the data it trained on. It's graded on how well it performs on data it has never seen, and those two numbers can be wildly different. This chapter covers the vocabulary for managing that gap: features (the inputs a model actually sees), train/validation/test splits (how you get an honest read on unseen-data performance before it matters), and the bias-variance tradeoff (the mathematical reason a model can fail in two opposite directions, underfitting or overfitting, and why fixing one risk tends to worsen the other).",
+    "published": true,
+    "presentationUrl": "../slides/1.4-Core-ML-Concepts-Slides.pptx"
    },
    {
     "id": "1.5",

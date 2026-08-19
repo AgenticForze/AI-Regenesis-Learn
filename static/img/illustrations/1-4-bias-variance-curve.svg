@@ -1,0 +1,54 @@
+<svg width="1000" height="620" viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-bv desc-bv">
+  <title id="title-bv">Training error versus validation error as model complexity increases</title>
+  <desc id="desc-bv">Training error decreases monotonically as model complexity increases. Validation error decreases, reaches a minimum, then increases again. The region to the left of the minimum is underfitting; the region to the right is overfitting.</desc>
+  <rect width="1000" height="620" fill="#fcfcfb"/>
+
+  <!-- plot area -->
+  <g>
+    <!-- region shading -->
+    <rect x="90" y="60" width="330" height="440" fill="#eaf2fc" opacity="0.5"/>
+    <rect x="420" y="60" width="10" height="440" fill="#e1e0d9"/>
+    <rect x="430" y="60" width="480" height="440" fill="#fdecea" opacity="0.45"/>
+
+    <!-- axes -->
+    <line x1="90" y1="500" x2="910" y2="500" stroke="#52514e" stroke-width="2"/>
+    <line x1="90" y1="60" x2="90" y2="500" stroke="#52514e" stroke-width="2"/>
+
+    <!-- training error curve: high on left, decreasing to low, staying low -->
+    <path d="M 100 120 C 220 260, 320 420, 430 468 C 560 490, 720 497, 900 499"
+          fill="none" stroke="#2a78d6" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- validation error curve: U-shaped, minimum near x=430 -->
+    <path d="M 100 160 C 220 320, 340 420, 430 430 C 520 420, 650 320, 900 130"
+          fill="none" stroke="#a33a2f" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- sweet spot marker -->
+    <line x1="430" y1="60" x2="430" y2="500" stroke="#184f95" stroke-width="2" stroke-dasharray="6,5"/>
+    <circle cx="430" cy="430" r="9" fill="#184f95"/>
+
+    <!-- axis labels -->
+    <text x="500" y="545" text-anchor="middle" font-size="16" font-weight="700" fill="#0b0b0b">Model complexity →</text>
+    <text x="40" y="280" text-anchor="middle" font-size="16" font-weight="700" fill="#0b0b0b" transform="rotate(-90 40 280)">Error →</text>
+
+    <!-- region labels -->
+    <text x="255" y="90" text-anchor="middle" font-size="15" font-weight="700" fill="#184f95">Underfitting</text>
+    <text x="255" y="110" text-anchor="middle" font-size="12" fill="#52514e">high bias, both errors high</text>
+
+    <text x="665" y="90" text-anchor="middle" font-size="15" font-weight="700" fill="#a33a2f">Overfitting</text>
+    <text x="665" y="110" text-anchor="middle" font-size="12" fill="#52514e">high variance, growing gap</text>
+
+    <text x="430" y="45" text-anchor="middle" font-size="14" font-weight="700" fill="#184f95">Sweet spot</text>
+
+    <!-- gap illustration at a point in the overfitting region -->
+    <line x1="760" y1="499" x2="760" y2="177" stroke="#898781" stroke-width="1.5" stroke-dasharray="3,4"/>
+    <text x="775" y="340" font-size="12" fill="#52514e">gap = variance</text>
+  </g>
+
+  <!-- legend -->
+  <g>
+    <line x1="620" y1="560" x2="660" y2="560" stroke="#2a78d6" stroke-width="5" stroke-linecap="round"/>
+    <text x="670" y="565" font-size="14" fill="#0b0b0b">Training error</text>
+    <line x1="620" y1="588" x2="660" y2="588" stroke="#a33a2f" stroke-width="5" stroke-linecap="round"/>
+    <text x="670" y="593" font-size="14" fill="#0b0b0b">Validation error</text>
+  </g>
+</svg>

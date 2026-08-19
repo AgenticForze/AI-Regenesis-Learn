@@ -1,0 +1,229 @@
+---
+title: "Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, and Overfitting"
+sidebar_label: "1.4 Core ML Concepts: Splits, Bias-Variance, Overfitting"
+sidebar_position: 4
+phase: 1
+chapter: "1.4"
+lms_presentation: "1.4-Core-ML-Concepts-Slides.pptx"
+prerequisites: ["1.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A model isn't graded on how well it fits the data it trained on. It's graded on how well it
+performs on data it has never seen, and those two numbers can be wildly different. This chapter
+covers the vocabulary for managing that gap: features (the inputs a model actually sees),
+train/validation/test splits (how you get an honest read on unseen-data performance before it
+matters), and the bias-variance tradeoff (the mathematical reason a model can fail in two opposite
+directions, underfitting or overfitting, and why fixing one risk tends to worsen the other).
+
+## High-Level Explanation
+
+**Features** are the inputs a model actually consumes: a fixed-length numeric representation of
+whatever real-world thing is being predicted. A house isn't fed to a model as a house; it's fed in
+as a vector like [square footage, bedroom count, year built, distance to city center]. Choosing and
+constructing that representation is called feature engineering, covered in full in chapter 1.7;
+this chapter treats features as already-built and focuses on what happens once training starts.
+
+**Train/validation/test splits.** Training a model on a dataset and then reporting its accuracy on
+that same dataset is close to meaningless: a sufficiently flexible model can simply memorize the
+answers. The standard fix splits the available labeled data into three disjoint pieces before
+training starts. The training set is what the model actually learns from. The validation set is
+used repeatedly during development to compare candidate models and tune hyperparameters (settings
+chosen by the practitioner, like a regularization strength, rather than learned from data), because
+using it this way still risks quietly fitting to it over many rounds of tuning. The test set is
+touched exactly once, at the very end, to report a final, honest estimate of how the model performs
+on data it has never influenced in any way. A common split ratio is 70/15/15 or 80/10/10, though
+the right ratio depends on how much labeled data exists at all; with very little data, k-fold
+cross-validation (covered in the Deep-Dive) is used instead of a single static split.
+
+**Underfitting and overfitting** are the two ways a model can fail to generalize, in opposite
+directions. An underfit model is too simple to capture the real pattern in the data: it performs
+poorly on the training set itself, because it lacks the flexibility to represent the relationship
+at all (fitting a straight line to a curved relationship, for example). An overfit model is
+flexible enough to fit not just the real pattern but the training set's own noise and quirks: it
+performs very well on the training set and considerably worse on new data, because part of what it
+learned was specific to that particular sample rather than the underlying relationship. Comparing
+training performance to validation performance is the standard way to tell which failure mode, if
+either, is happening.
+
+**The bias-variance tradeoff** is the formal explanation for why those two failure modes trade off
+against each other rather than being independently fixable. A model's error on new data decomposes
+into three sources: bias (error from a model too simple to represent the true relationship, which
+is what underfitting looks like), variance (error from a model so sensitive to the specific
+training sample that a different training sample would have produced a meaningfully different
+model, which is what overfitting looks like), and irreducible noise (error no model can remove,
+because the data itself is noisy). Increasing a model's flexibility typically lowers bias but
+raises variance, and vice versa; the practical goal is finding the point on that tradeoff that
+minimizes their sum, not driving either one to zero.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/1-4-bias-variance-curve.svg').default}
+    alt="A chart showing training error decreasing and validation error forming a U-shape as model complexity increases, with the underfitting region on the left, the sweet spot at the minimum of the validation curve, and the overfitting region on the right where the gap between training and validation error widens."
+  />
+  <figcaption>Training error keeps falling as complexity increases. Validation error falls, then rises: that turn is where overfitting begins.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Features, formally.** An example is represented as a feature vector x, an element of ℝᵈ (a
+list of d real numbers), and a dataset is a matrix X with one row per example and one column per
+feature (see the Notation conventions in the
+[glossary](../00-orientation/0-5-glossary-notation-conventions.md#notation)). Features fall into a
+few common types that determine how they must be prepared before training: numeric features (age,
+transaction amount) are often scaled so no single feature dominates a distance calculation purely
+because of its units; categorical features (a customer's plan tier, a diagnosis code) are typically
+one-hot encoded, turned into a separate binary column per category, because most algorithms expect
+numeric input and have no notion of category order; ordinal features (a risk tier of Low/Medium/High)
+preserve their order as integers rather than being one-hot encoded, since the order itself carries
+information a one-hot encoding would discard.
+
+**Cross-validation.** A single train/validation split gives one estimate of validation performance,
+and that estimate is itself noisy: a different random split could rank two candidate models
+differently, especially with a small dataset. K-fold cross-validation reduces that noise by
+partitioning the training data into k equal folds, training k separate times, each time holding out
+a different fold as the validation set and training on the remaining k − 1, then averaging the k
+validation scores into a single estimate. k = 5 or k = 10 are the most common choices, trading
+compute cost (k full training runs instead of one) for a more stable performance estimate. The test
+set is still held out entirely from this process; cross-validation only changes how the
+training/validation portion is used. Stratified k-fold, a variant that preserves each fold's class
+proportions to match the full dataset (important when one class is rare, like fraud), was found to
+give the more reliable estimate for classification problems (Kohavi,
+[*A Study of Cross-Validation and Bootstrap for Accuracy Estimation and Model Selection*](https://www.ijcai.org/Proceedings/95-2/Papers/016.pdf),
+IJCAI, 1995), and has since become the default behavior in common tooling such as scikit-learn's
+cross-validation utilities.
+
+**The bias-variance decomposition, formally.** For a model f̂ trained to predict a true function
+f(x) plus irreducible noise (y = f(x) + ε, where the noise ε has mean zero and variance σ²), the
+expected squared error on a new point x decomposes as:
+
+Expected test error at x = Bias[f̂(x)]² + Variance[f̂(x)] + σ²
+
+where Bias[f̂(x)] is the difference between the model's average prediction (averaged over many
+independently drawn training sets) and the true value f(x), and Variance[f̂(x)] is how much the
+model's prediction at x fluctuates across those different training sets. This decomposition, a
+classical identity from estimation theory popularized for machine learning audiences by Geman,
+Bienenstock, and Doursat
+([*Neural Networks and the Bias/Variance Dilemma*](https://direct.mit.edu/neco/article-abstract/4/1/1/5622/Neural-Networks-and-the-Bias-Variance-Dilemma),
+*Neural Computation*, 1992), is why the tradeoff is unavoidable rather than a sign of doing
+something wrong: σ² cannot be reduced by any choice of model, and reducing bias by adding
+flexibility (more parameters, deeper trees, fewer simplifying assumptions) mechanically increases
+how sensitive the fitted model is to which specific training sample it happened to see, which is
+variance.
+
+**Regularization** is the standard technique for controlling variance directly, by penalizing model
+complexity during training rather than by strictly limiting the model's raw capacity. L2
+regularization (also called ridge or weight decay) adds a term proportional to the sum of the
+squared model weights to the loss function being minimized: instead of minimizing loss(w) alone,
+the model minimizes loss(w) + λ·Σwᵢ², where λ (a hyperparameter, a setting chosen by the
+practitioner rather than learned from data) controls how strongly large weights are penalized. This
+shrinks weights toward zero without
+necessarily eliminating them, which reduces the model's sensitivity to any single feature or
+training example. L1 regularization (lasso) uses the sum of absolute weights instead of squared
+weights, and tends to drive some weights to exactly zero, effectively performing feature selection
+as a side effect. Early stopping is a different regularization strategy that doesn't touch the loss
+function at all: it monitors validation error during training and halts once validation error
+starts rising even though training error is still falling, which is the empirical bias-variance
+turn described above happening in real time rather than being predicted from theory in advance.
+
+**Learning curves** are the standard diagnostic for distinguishing bias-dominated from
+variance-dominated error without invoking the formal decomposition directly. Plotting training and
+validation error against training set size reveals the failure mode: if both curves converge to a
+similarly high error, the model is underfitting (more data will not help; the model needs more
+capacity or better features), while if training error stays low but a persistent, large gap remains
+between training and validation error even as more data is added, the model is overfitting (more
+data, more regularization, or fewer features will help). A model with the same behavior evaluated
+against complexity instead of dataset size produces the U-shaped validation curve shown above.
+
+**Data leakage is a related but distinct failure from overfitting, and the two are easy to
+conflate.** Overfitting means the model learned real patterns in the training data too specifically,
+including its noise. Data leakage means the model had access, during training or validation, to
+information that will not be available at prediction time in production: a feature computed using
+the label itself, data from after the event being predicted, or a validation split that shares
+duplicated or correlated records with the training set (two transactions from the same customer
+landing on opposite sides of the split, for instance). A leaked model can show excellent, even
+suspiciously good, validation performance and still fail in production, because the validation
+estimate itself was never honest. This is the same underlying shape of error as chapter 1.3's
+distinction between reward hacking and label leakage: a model or an evaluation can look correct by
+every measurement being taken and still be wrong, because what was measured wasn't what would
+actually be faced in deployment.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Underfitting', 'Overfitting', 'Good Fit', 'Data Leakage']}
+  rows={[
+    {aspect: 'Training error', values: ['High', 'Low', 'Low', 'Often suspiciously low'], },
+    {aspect: 'Gap to validation error', values: ['Small (both are high)', 'Large', 'Small (both are low)', 'Small or absent, but validation itself is dishonest'], decisive: true},
+    {aspect: 'Root cause', values: ['Model too simple / too little capacity', 'Model fit noise specific to the training sample', 'Capacity matched to signal in the data', 'Future or label information reached training/validation'], },
+    {aspect: 'Fix', values: ['More capacity, better features, less regularization', 'More data, more regularization, less capacity, early stopping', 'None needed; monitor as data or requirements change', 'Audit the pipeline: rebuild the split, remove the leaked feature'], },
+  ]}
+  caption="The decisive tell is the training-to-validation gap, with one exception: leakage can produce a small gap while still being wrong, because it corrupts the validation estimate itself rather than widening the gap the estimate is meant to reveal."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where splits and validation sit in a standard training pipeline"
+  mermaid={`
+flowchart LR
+  A[Raw Data] --> B[Feature Engineering]
+  B --> C[Train / Validation / Test Split]
+  C --> D[Model Training]
+  D --> E[Validation Evaluation]
+  E -->|tune hyperparameters, repeat| D
+  E -->|selected model| F[Test Evaluation<br/>touched once]
+  F --> G[Deployment]
+`}
+  components={[
+    {name: 'Feature Engineering', responsibility: 'Builds the feature vector each example will be represented as; covered in full in chapter 1.7.'},
+    {name: 'Train / Validation / Test Split', responsibility: 'Partitions labeled data before any training happens, so the test set is never seen during development.'},
+    {name: 'Model Training', responsibility: 'Fits model parameters to the training set only.'},
+    {name: 'Validation Evaluation', responsibility: 'Scores the current model and feeds back into hyperparameter tuning, in a loop that can run many times.'},
+    {name: 'Test Evaluation', responsibility: 'Reports final performance exactly once, after the model is fully selected, as the honest estimate of production performance.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Credit scoring feature construction', problem: 'A raw transaction history is not a usable model input; it has to become a fixed-length numeric representation per applicant.', solution: 'Feature engineering converts raw records into features like debt-to-income ratio and payment-history length before any model sees the data.', risk: 'A feature computed using data that would not exist at application time (this applicant\'s eventual default status, for example) silently leaks the label into training.'},
+    {title: 'Loan-approval train/test split integrity', problem: 'Applications from the same household or the same broker can appear more than once in the dataset, and a naive random split can put near-duplicates on both sides of it.', solution: 'A group-aware split keeps all records from the same household together on one side of the train/test boundary.', risk: 'Without grouping, validation performance looks strong because the model is partly recognizing near-duplicate records rather than generalizing, and that strength disappears in production.'},
+    {title: 'Algorithmic trading strategy overfitting', problem: 'A trading strategy tuned against years of historical price data can fit that specific historical sequence rather than a real, repeatable market pattern.', solution: 'Walk-forward validation, a time-respecting variant of cross-validation, evaluates the strategy only on periods strictly after the data it was tuned on.', risk: 'A strategy that backtests extremely well but was never evaluated out-of-sample is the classic high-variance failure: excellent on the training period, unreliable live.'},
+    {title: 'Regulatory capital model bias diagnosis', problem: 'A capital-risk model that underperforms during a stress period needs a fast, defensible answer for whether it is too simple or was fit to the wrong training window.', solution: 'Learning curves computed at model validation time distinguish a genuine underfitting problem (needs more risk factors) from a variance problem (needs more regularization or more historical data).', risk: 'Misdiagnosing high bias as high variance leads a team to add more regularization to a model that was already too simple, which makes performance worse in the direction opposite to what was intended.'},
+  ]}
+  healthcare={[
+    {title: 'Diagnostic imaging cross-hospital generalization', problem: 'A diagnostic model trained on images from one hospital\'s scanner can pick up on scanner-specific artifacts rather than the clinical signal.', solution: 'A test set built entirely from hospitals absent from training measures whether the model generalizes across equipment and populations, not just within one site.', risk: 'A model evaluated only on a held-out sample from the same hospital it trained on can look strong in validation while carrying hidden bias toward that hospital\'s specific equipment.'},
+    {title: 'Readmission-risk feature engineering', problem: 'Predicting 30-day readmission risk requires converting a patient\'s visit history, medications, and vitals into a consistent per-patient feature set.', solution: 'Feature engineering aggregates time-series vitals and visit history into fixed summary features (most recent value, trend, count of prior admissions) usable by a standard classifier.', risk: 'Including a vital sign or lab result recorded after the discharge decision was already made leaks post-decision information into a pre-decision prediction.'},
+    {title: 'Rare-disease model variance from small samples', problem: 'A rare condition provides very little labeled data, and a flexible model trained on it can fit the small sample\'s idiosyncrasies rather than the real clinical pattern.', solution: 'Stratified k-fold cross-validation, combined with a simpler, more heavily regularized model class, produces a more stable estimate than a single hold-out split on a small dataset would.', risk: 'A single lucky or unlucky validation split can make a genuinely weak model look adequate, or a genuinely adequate model look weak, when the labeled sample is small.'},
+    {title: 'Sepsis early-warning underfitting', problem: 'An early-warning score built from only two or three vitals can be too simple to separate true sepsis onset from ordinary post-surgical vital-sign changes.', solution: 'A learning curve showing high error on both training and validation data, with the gap between them small, is the diagnostic signal that more features or a more expressive model are needed, not more data.', risk: 'Treating a high-bias underfitting problem as if it were a data-volume problem wastes a data-collection effort that will not fix the model\'s actual limitation.'},
+  ]}
+  telecom={[
+    {title: 'Churn model feature construction from call detail records', problem: 'Raw call detail records are per-event and cannot be fed to a classifier directly; they need to become one row of stable features per customer.', solution: 'Feature engineering aggregates call/data/SMS event streams into per-customer summary features: average monthly usage, trend over the last three months, support-call count.', risk: 'A feature built from usage in the same month as the churn label (rather than strictly before it) leaks near-term information that will not be available when the model actually needs to predict ahead of time.'},
+    {title: 'Network fault prediction temporal leakage', problem: 'A naive random train/test split on time-series network telemetry can place a future data point in training and an earlier one in test, letting the model implicitly see the future.', solution: 'A strictly time-based split trains only on data before a cutoff date and tests only on data after it, matching how the model will actually be used in production.', risk: 'A model validated with a random split rather than a time-based one can show inflated performance that will not hold once deployed against genuinely future data.'},
+    {title: 'Capacity forecasting bias-variance tuning', problem: 'A demand forecast that is too simple misses real seasonal capacity swings; one that is too flexible fits a single unusual event (an outage, a product launch) as if it were a recurring pattern.', solution: 'Cross-validated selection of a regularization strength balances fitting real seasonal structure against overfitting to one-off historical events.', risk: 'An underregularized forecast treats a one-time surge as a recurring seasonal pattern and recommends permanent capacity that is never actually needed again.'},
+    {title: 'Customer segmentation feature scaling', problem: 'Clustering customers on raw features mixes a feature measured in gigabytes with one measured in dollars, and the larger-magnitude feature dominates the distance calculation regardless of its actual importance.', solution: 'Standardizing each numeric feature (subtracting its mean and dividing by its standard deviation) before clustering ensures every feature contributes on a comparable scale.', risk: 'Skipping feature scaling produces segments that mostly reflect whichever raw feature happened to have the largest numeric range, not genuine behavioral similarity.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'A model achieves 98% training accuracy and 71% validation accuracy. Is this model more likely underfitting or overfitting, and what is the standard first fix?', answer: 'Overfitting: a large gap between low training error and much higher validation error is the signature of high variance. Standard first fixes are more training data, stronger regularization, reduced model capacity, or early stopping, not adding more model flexibility.'},
+    {question: 'Why is the test set used only once, at the very end, rather than checked periodically like the validation set?', answer: 'Any dataset used repeatedly to make modeling decisions, including which hyperparameters to keep, stops being an honest estimate of unseen-data performance, because the choices made in response to it start to fit that specific dataset. The test set is reserved specifically to avoid this, so its single use still reflects genuinely unseen data.'},
+    {question: 'A validation set shows unusually high accuracy that the team cannot otherwise explain. What should be checked before treating that number as good news, and why?', answer: 'Data leakage should be checked first: whether a feature encodes label or future information, or whether the split allows correlated or duplicate records across the train/validation boundary. Suspiciously good performance is a common leakage symptom, not just a modeling success, and a leaked evaluation will not hold up in production.'},
+    {question: 'What specifically does the bias-variance decomposition say happens when a model\'s capacity is increased?', answer: 'Bias (error from the model being too simple to represent the true relationship) tends to decrease, but variance (how much the fitted model would change if trained on a different sample) tends to increase, because a more flexible model has more freedom to fit the specific training sample\'s noise. The irreducible noise term is unaffected by any model choice.'},
+    {question: 'Why does k-fold cross-validation give a more reliable performance estimate than a single train/validation split, and what does it cost to get that reliability?', answer: 'A single split gives one noisy estimate that depends on which examples happened to land in validation; k-fold cross-validation averages k such estimates across k different splits, reducing that noise. The cost is k times the training compute, since the model is fully retrained once per fold.'},
+  ]}
+/>
