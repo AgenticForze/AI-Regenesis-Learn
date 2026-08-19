@@ -12,39 +12,57 @@
   "chapters": [
    {
     "id": "0.1",
-    "title": "Welcome & How to Use This Program",
+    "title": "Welcome & How to Use This Knowledge Base",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-1-welcome",
+    "summary": "RegAITraining is a continuously growing, GitHub-hosted knowledge base that teaches working professionals AI from first principles through advanced Agentic AI. It isn't a course you finish once — chapters are added and revised on an ongoing basis (see the **Recently Added / Updated** page), and the site is designed to be read non-linearly.",
+    "published": true
    },
    {
     "id": "0.2",
     "title": "Learning Paths & Personas",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-2-learning-paths-personas",
+    "summary": "All nineteen phases live on the same site, but almost nobody should read them front-to-back. Pick the path that matches where you're starting from — each phase's index page also states its prerequisites explicitly, so if you arrive mid-curriculum you know what to backfill.",
+    "published": true
    },
    {
     "id": "0.3",
     "title": "AI Roles in the Market: Definitions, Responsibilities & Your Curriculum Path",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-3-ai-roles-in-the-market",
+    "summary": "A market map of the fifteen major AI/agentic job roles as of 2026 — from Data Scientist through Multi-Agent Systems Architect through AI Governance Specialist — so you can go from **\"what job am I aiming for\"** straight to **\"which chapters do I actually need\"** without reading all nineteen phases to find out. For each role: what they actually do day to day, which curriculum phases are core vs. supplementary, and which industry certifications are worth pursuing.",
+    "published": true
    },
    {
     "id": "0.4",
-    "title": "Prerequisites & Self-Assessment",
+    "title": "Prerequisites Self-Assessment",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-4-prerequisites-self-assessment",
+    "summary": "A quick, honest checklist to figure out where to enter the curriculum. You don't need to check every box in a section to start there — these are meant to catch the case where you'd be lost on page one of a phase, not to gatekeep.",
+    "published": true
    },
    {
     "id": "0.5",
     "title": "Glossary & Notation Conventions",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-5-glossary-notation-conventions",
+    "summary": "A living reference for terms and notation used consistently across the site. Individual chapters don't redefine these — they link back here.",
+    "published": true
    },
    {
     "id": "0.6",
-    "title": "The Content Standard, Explained",
+    "title": "The Content Standard, Explained to Learners",
     "tags": [],
-    "hours": 1
+    "hours": 1,
+    "url": "../docs/orientation/0-6-content-standard-explained",
+    "summary": "Every concept chapter on this site (Phases 1–8, 10–13, and 15–18) is built from the same seven sections, in the same order. Knowing the shape in advance means you can jump straight to the section that matches what you need right now, instead of reading a chapter top to bottom every time.",
+    "published": true
    }
   ]
  },
@@ -65,7 +83,10 @@
     "id": "1.1",
     "title": "What Is Artificial Intelligence? History, AI Winters, Narrow vs. General AI",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-1-what-is-ai",
+    "summary": "Artificial intelligence is the field of building systems that do things we've historically assumed require human intelligence: recognizing a face, holding a conversation, deciding a next move. The odd thing about the label is that it keeps moving. Optical character recognition, chess engines, and spam filters were all once called \"AI,\" and almost nobody calls them that today, because once a task is reliably automated it quietly gets reclassified as \"just software\" (sometimes called the *AI effect*). That's also why AI has a reputation for overpromising: twice in its history, funding and interest collapsed (two \"AI winters\") after the field's ambitions outran what the era's compute and data could support. The systems people mean when they say \"AI\" in 2026 are still **narrow**: extremely capable at specific tasks, not generally intelligent the way a human is. Think of AI's history less as one continuous invention and more like a relay race, where each runner hands off the baton once the previous approach hits its ceiling.",
+    "published": true
    },
    {
     "id": "1.2",
@@ -379,6 +400,12 @@
     "hours": 3
    },
    {
+    "id": "6.10",
+    "title": "Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard",
+    "tags": [],
+    "hours": 3
+   },
+   {
     "id": "6.2",
     "title": "Embeddings & Vector Search Foundations",
     "tags": [],
@@ -427,12 +454,6 @@
     "title": "RAG Reference Architecture Blueprint",
     "tags": [],
     "hours": 4
-   },
-   {
-    "id": "6.10",
-    "title": "Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard",
-    "tags": [],
-    "hours": 3
    }
   ]
  },
@@ -513,6 +534,12 @@
     "hours": 3
    },
    {
+    "id": "8.10",
+    "title": "Single-Agent Reference Architecture Blueprint",
+    "tags": [],
+    "hours": 4
+   },
+   {
     "id": "8.2",
     "title": "Anatomy of an LLM Agent: Perception, Reasoning, Memory, Action, Tools",
     "tags": [],
@@ -563,12 +590,6 @@
      "v5"
     ],
     "hours": 3
-   },
-   {
-    "id": "8.10",
-    "title": "Single-Agent Reference Architecture Blueprint",
-    "tags": [],
-    "hours": 4
    }
   ]
  },
@@ -650,6 +671,12 @@
     "hours": 3
    },
    {
+    "id": "10.10",
+    "title": "Reference Architectures: RAG Agent, Tool-Using Agent, Autonomous Research Agent",
+    "tags": [],
+    "hours": 4
+   },
+   {
     "id": "10.2",
     "title": "Reactive vs. Deliberative vs. Hybrid Agent Architectures",
     "tags": [],
@@ -700,12 +727,6 @@
     "title": "Cost, Latency & Reliability Engineering for Agents",
     "tags": [],
     "hours": 3
-   },
-   {
-    "id": "10.10",
-    "title": "Reference Architectures: RAG Agent, Tool-Using Agent, Autonomous Research Agent",
-    "tags": [],
-    "hours": 4
    }
   ]
  },
@@ -863,6 +884,38 @@
     "hours": 4
    },
    {
+    "id": "13.10",
+    "title": "Inference Optimization & Speculative Decoding",
+    "tags": [
+     "v3"
+    ],
+    "hours": 4
+   },
+   {
+    "id": "13.11",
+    "title": "Small Language Models (SLMs): What, Why, and When",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.12",
+    "title": "Building SLMs: Distillation, Pruning, Edge Deployment",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.13",
+    "title": "LLM vs. SLM — Comparison Table",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.14",
+    "title": "Case Study Blueprint: Standing Up a Small, Domain-Specific Model End-to-End",
+    "tags": [],
+    "hours": 4
+   },
+   {
     "id": "13.2",
     "title": "Pretraining Data Pipelines",
     "tags": [],
@@ -909,38 +962,6 @@
    {
     "id": "13.9",
     "title": "Evaluating a Newly Trained Base Model",
-    "tags": [],
-    "hours": 4
-   },
-   {
-    "id": "13.10",
-    "title": "Inference Optimization & Speculative Decoding",
-    "tags": [
-     "v3"
-    ],
-    "hours": 4
-   },
-   {
-    "id": "13.11",
-    "title": "Small Language Models (SLMs): What, Why, and When",
-    "tags": [],
-    "hours": 4
-   },
-   {
-    "id": "13.12",
-    "title": "Building SLMs: Distillation, Pruning, Edge Deployment",
-    "tags": [],
-    "hours": 4
-   },
-   {
-    "id": "13.13",
-    "title": "LLM vs. SLM — Comparison Table",
-    "tags": [],
-    "hours": 4
-   },
-   {
-    "id": "13.14",
-    "title": "Case Study Blueprint: Standing Up a Small, Domain-Specific Model End-to-End",
     "tags": [],
     "hours": 4
    }
@@ -1036,6 +1057,20 @@
     "hours": 3
    },
    {
+    "id": "15.10",
+    "title": "Enterprise Reference Architecture",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "15.11",
+    "title": "AI Product Strategy: Business Case, ROI Modeling & Build-Measure-Learn",
+    "tags": [
+     "v5"
+    ],
+    "hours": 3
+   },
+   {
     "id": "15.2",
     "title": "Evaluating Agentic Systems — The Multi-Layered Testing Pyramid",
     "tags": [
@@ -1087,20 +1122,6 @@
     "id": "15.9",
     "title": "Responsible AI & Human Oversight for Autonomous Agents",
     "tags": [],
-    "hours": 3
-   },
-   {
-    "id": "15.10",
-    "title": "Enterprise Reference Architecture",
-    "tags": [],
-    "hours": 4
-   },
-   {
-    "id": "15.11",
-    "title": "AI Product Strategy: Business Case, ROI Modeling & Build-Measure-Learn",
-    "tags": [
-     "v5"
-    ],
     "hours": 3
    }
   ]
