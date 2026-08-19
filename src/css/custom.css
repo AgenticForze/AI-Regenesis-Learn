@@ -137,3 +137,52 @@
   padding: 3rem 1.5rem 5rem;
 }
 
+/* Unified LMS visual system. The Docusaurus routes retain their existing
+ * hierarchy and behaviour, but use the same dark shell as the LMS reader. */
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --regai-paper: #161826;
+  --regai-paper-raised: #232532;
+  --regai-graphite: #161826;
+  --regai-graphite-soft: #232532;
+  --regai-ink: #e9e9ed;
+  --regai-amber: #b5abfc;
+  --regai-amber-dim: #968ae0;
+  --regai-teal: #9184d9;
+  --regai-teal-dim: #796cbf;
+  --regai-hairline: rgba(233, 233, 237, 0.16);
+  --ifm-color-primary: #b5abfc;
+  --ifm-color-primary-dark: #968ae0;
+  --ifm-color-primary-darker: #796cbf;
+  --ifm-color-primary-darkest: #5d5294;
+  --ifm-color-primary-light: #d2cefd;
+  --ifm-color-primary-lighter: #e7e5fe;
+  --ifm-color-primary-lightest: #f5f4ff;
+  --ifm-background-color: #161826;
+  --ifm-background-surface-color: #232532;
+  --ifm-font-color-base: #e9e9ed;
+  --ifm-navbar-background-color: #161826;
+  --ifm-footer-background-color: #161826;
+  --ifm-font-family-base: Inter, system-ui, sans-serif;
+  --ifm-heading-font-family: Inter, system-ui, sans-serif;
+}
+
+html, body { background: #161826; }
+.navbar { border-bottom: 1px solid var(--regai-hairline); box-shadow: none; }
+.menu, .table-of-contents, .pagination-nav__link, .alert { background: #232532; }
+.menu__link--active, .menu__link:hover { color: #d2cefd; background: rgba(145, 132, 217, 0.14); }
+.markdown h2 { border-bottom-color: var(--regai-hairline); }
+.markdown code { background: #292b31; border: 1px solid var(--regai-hairline); }
+
+/* Embedded lessons remove duplicate Docusaurus chrome while retaining the
+ * real, fully rendered MDX lesson and all of its interactive components. */
+html[data-lms-embed='true'] .navbar,
+html[data-lms-embed='true'] footer,
+html[data-lms-embed='true'] .theme-doc-sidebar-container,
+html[data-lms-embed='true'] .theme-doc-breadcrumbs,
+html[data-lms-embed='true'] .theme-doc-footer,
+html[data-lms-embed='true'] .theme-doc-toc-mobile { display: none !important; }
+html[data-lms-embed='true'] main { max-width: none; }
+html[data-lms-embed='true'] .docItemContainer { max-width: 100%; padding: 1.5rem 2rem 4rem; }
+
