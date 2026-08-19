@@ -86,7 +86,8 @@ export const PHASES = [
     "hours": 3,
     "url": "../docs/ai-ml-foundations/1-1-what-is-ai",
     "summary": "Artificial intelligence is the field of building systems that do things we've historically assumed require human intelligence: recognizing a face, holding a conversation, deciding a next move. The odd thing about the label is that it keeps moving. Optical character recognition, chess engines, and spam filters were all once called \"AI,\" and almost nobody calls them that today, because once a task is reliably automated it quietly gets reclassified as \"just software\" (sometimes called the *AI effect*). That's also why AI has a reputation for overpromising: twice in its history, funding and interest collapsed (two \"AI winters\") after the field's ambitions outran what the era's compute and data could support. The systems people mean when they say \"AI\" in 2026 are still **narrow**: extremely capable at specific tasks, not generally intelligent the way a human is. Think of AI's history less as one continuous invention and more like a relay race, where each runner hands off the baton once the previous approach hits its ceiling.",
-    "published": true
+    "published": true,
+    "presentationUrl": "../slides/1.1-What-Is-AI-Slides.pptx"
    },
    {
     "id": "1.2",

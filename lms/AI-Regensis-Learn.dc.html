@@ -342,6 +342,7 @@
         <span class="tag tag-neutral">{{ chap.hoursLabel }}</span>
         <span class="tag tag-outline">{{ chap.levelLabel }}</span>
         <sc-for list="{{ chap.tags }}" as="t" hint-placeholder-count="1"><span class="tag tag-accent">{{ t }}</span></sc-for>
+        <sc-if value="{{ chap.hasPresentation }}" hint-placeholder-val="{{ false }}"><button onClick="{{ chap.downloadPresentation }}" class="tag tag-accent" style="cursor:pointer">↓ Download concepts presentation</button></sc-if>
       </div>
       <div class="card" style="padding:16px 18px;border-left:2px solid var(--color-accent-600);margin-bottom:22px">
         <div style="font-weight:600;font-size:14px;margin-bottom:5px">{{ chap.statusTitle }}</div>
@@ -1024,6 +1025,8 @@ class Component extends DCLogic {
         isLive: Boolean(cur.c.url),
         isShell: !cur.c.url,
         contentUrl: cur.c.url ? cur.c.url + '?lms-embed=1' : '',
+        hasPresentation: Boolean(cur.c.presentationUrl),
+        downloadPresentation: () => { if (cur.c.presentationUrl) window.location.assign(cur.c.presentationUrl); },
         summary: cur.c.summary || cur.p.intro,
         placement: (cur.p.prereq.length ? 'Sits after phase ' + cur.p.prereq.join(' and ') + '. ' : 'Has no prerequisite phases. ') + (rs.length ? rs.length + ' of the fifteen market roles treat it as required reading.' : 'No role treats it as required reading — it is optional depth.'),
         prevLabel: prev ? '← ' + prev.c.id + ' ' + prev.c.title.slice(0, 34) : '← Start of curriculum',
