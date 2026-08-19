@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkregai_training=self.webpackChunkregai_training||[]).push([["8620"],{8391(e,a,i){i.d(a,{createInfoServices:()=>r.v});var r=i(6491);i(1400)}}]);

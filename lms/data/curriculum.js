@@ -1,0 +1,1623 @@
+export const PHASES = [
+ {
+  "id": "0",
+  "num": 0,
+  "slug": "orientation",
+  "name": "Program Orientation",
+  "title": "Phase 0 — Program Orientation",
+  "intro": "How the program works, which path fits you, and how job titles in the market map onto the nineteen phases.",
+  "kind": "Orientation",
+  "level": "Orientation",
+  "prereq": [],
+  "chapters": [
+   {
+    "id": "0.1",
+    "title": "Welcome & How to Use This Program",
+    "tags": [],
+    "hours": 1
+   },
+   {
+    "id": "0.2",
+    "title": "Learning Paths & Personas",
+    "tags": [],
+    "hours": 1
+   },
+   {
+    "id": "0.3",
+    "title": "AI Roles in the Market: Definitions, Responsibilities & Your Curriculum Path",
+    "tags": [],
+    "hours": 1
+   },
+   {
+    "id": "0.4",
+    "title": "Prerequisites & Self-Assessment",
+    "tags": [],
+    "hours": 1
+   },
+   {
+    "id": "0.5",
+    "title": "Glossary & Notation Conventions",
+    "tags": [],
+    "hours": 1
+   },
+   {
+    "id": "0.6",
+    "title": "The Content Standard, Explained",
+    "tags": [],
+    "hours": 1
+   }
+  ]
+ },
+ {
+  "id": "1",
+  "num": 1,
+  "slug": "ai-ml-foundations",
+  "name": "AI & ML Foundations",
+  "title": "Phase 1 — AI & Machine Learning Foundations",
+  "intro": "The building blocks: what AI/ML actually is, the classical algorithm landscape, evaluation metrics, and the math and data-pipeline foundations every later phase assumes.",
+  "kind": "Full 7-section",
+  "level": "Beginner",
+  "prereq": [
+   0
+  ],
+  "chapters": [
+   {
+    "id": "1.1",
+    "title": "What Is Artificial Intelligence? History, AI Winters, Narrow vs. General AI",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.2",
+    "title": "A Taxonomy of AI: Rule-Based → ML → Deep Learning → Generative → Agentic",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.3",
+    "title": "Machine Learning Foundations: Supervised, Unsupervised, Reinforcement Learning",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.4",
+    "title": "Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, Overfitting",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.5",
+    "title": "Classical ML Algorithms Landscape — Comparison",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.6",
+    "title": "Evaluation Metrics (Accuracy, Precision/Recall, F1, ROC-AUC, RMSE)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.7",
+    "title": "Data Foundations: Pipelines, Feature Engineering, Data Quality",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.8",
+    "title": "Math Refresher for AI: Linear Algebra, Probability, Statistics, Optimization",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "1.9",
+    "title": "Ethics & Responsible AI Foundations (Bias, Fairness, Explainability Primer)",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "2",
+  "num": 2,
+  "slug": "deep-learning-foundations",
+  "name": "Deep Learning Foundations",
+  "title": "Phase 2 — Deep Learning Foundations",
+  "intro": "From the perceptron to the Transformer: neural network mechanics, optimization, and the architectures every modern LLM is built on.",
+  "kind": "Full 7-section",
+  "level": "Beginner",
+  "prereq": [
+   1
+  ],
+  "chapters": [
+   {
+    "id": "2.1",
+    "title": "Neural Networks 101: From Perceptron to MLP",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.2",
+    "title": "Backpropagation & Optimization (Gradient Descent, Momentum, Adam, LR Schedules)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.3",
+    "title": "Convolutional Neural Networks: Architecture & Use Cases",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.4",
+    "title": "Sequence Models Before Transformers: RNN, LSTM, GRU",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.5",
+    "title": "The Transformer Architecture — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "2.6",
+    "title": "Transfer Learning & the Pretrain-Then-Adapt Paradigm",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.7",
+    "title": "Deep Learning Frameworks Compared (PyTorch vs. TensorFlow vs. JAX)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "2.8",
+    "title": "Hardware for AI: GPUs, TPUs, Training vs. Inference Compute Economics",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "3",
+  "num": 3,
+  "slug": "nlp-llm-foundations",
+  "name": "NLP & Language Model Foundations",
+  "title": "Phase 3 — NLP & Language Model Foundations",
+  "intro": "How raw text becomes tokens, embeddings, and eventually the LLM landscape you're choosing a base model from today.",
+  "kind": "Full 7-section",
+  "level": "Beginner",
+  "prereq": [
+   2
+  ],
+  "chapters": [
+   {
+    "id": "3.1",
+    "title": "NLP Fundamentals: Tokenization, Embeddings, Vector Semantics",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "3.2",
+    "title": "From Word2Vec to Contextual Embeddings (BERT-Era Shift)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "3.3",
+    "title": "Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "3.4",
+    "title": "Evolution of LLMs: GPT / BERT / T5 Families — Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "3.5",
+    "title": "Tokenizers Deep Dive: BPE, WordPiece, SentencePiece",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "3.6",
+    "title": "Scaling Laws & Emergent Abilities",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "3.7",
+    "title": "The 2026 Model Landscape: Open vs. Closed, Size Classes, Choosing a Base Model",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "4",
+  "num": 4,
+  "slug": "generative-ai-foundations",
+  "name": "Generative AI Foundations",
+  "title": "Phase 4 — Generative AI Foundations",
+  "intro": "Generative vs. discriminative modeling, decoding strategies, multimodal generation, and the responsible-GenAI baseline every later phase builds on.",
+  "kind": "Full 7-section",
+  "level": "Beginner",
+  "prereq": [
+   3
+  ],
+  "chapters": [
+   {
+    "id": "4.1",
+    "title": "What Is Generative AI? Generative vs. Discriminative Models",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.2",
+    "title": "Generative Model Families Compared: LLMs, Diffusion Models, GANs, VAEs",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.3",
+    "title": "How LLMs Generate Text: Decoding Strategies",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.4",
+    "title": "Multimodal Generative AI: Text-to-Image, Text-to-Video, Speech",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.5",
+    "title": "Context Windows, Memory Limits & Cost/Latency Trade-offs",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.6",
+    "title": "Hallucination: Causes, Types, and Mitigation Strategies (Primer)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "4.7",
+    "title": "Responsible GenAI: Content Safety, Watermarking, Provenance",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "5",
+  "num": 5,
+  "slug": "prompt-engineering",
+  "name": "Prompt Engineering & LLM Apps",
+  "title": "Phase 5 — Prompt Engineering & LLM Application Development",
+  "intro": "From zero-shot prompting through schema-enforced structured outputs to your first production LLM app architecture.",
+  "kind": "Full 7-section",
+  "level": "Intermediate",
+  "prereq": [
+   4
+  ],
+  "chapters": [
+   {
+    "id": "5.1",
+    "title": "Prompting Fundamentals: Zero-Shot, Few-Shot, Instruction Following",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.2",
+    "title": "Advanced Prompting Patterns: Chain-of-Thought, Self-Consistency, Tree-of-Thought",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.3",
+    "title": "Structured Outputs & Tool/Function Calling — the Basics",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.4",
+    "title": "Structured Output Enforcement & Constrained Decoding — Deep Dive",
+    "tags": [
+     "v3"
+    ],
+    "hours": 4
+   },
+   {
+    "id": "5.5",
+    "title": "System Prompts, Guardrails & Prompt-Injection Defense",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.6",
+    "title": "Prompt Optimization & Evaluation (Versioning, A/B Testing Prompts)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.7",
+    "title": "Architecture Patterns for Your First LLM App",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "5.8",
+    "title": "Prompting vs. Fine-Tuning vs. RAG — A Decision Framework",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "6",
+  "num": 6,
+  "slug": "rag-knowledge-systems",
+  "name": "RAG & Knowledge Systems",
+  "title": "Phase 6 — Retrieval-Augmented Generation & Knowledge Systems",
+  "intro": "Grounding LLMs in real knowledge: vector search, RAG architecture, GraphRAG, semantic caching, and Google Cloud's Open Knowledge Format.",
+  "kind": "Full 7-section",
+  "level": "Intermediate",
+  "prereq": [
+   5
+  ],
+  "chapters": [
+   {
+    "id": "6.1",
+    "title": "Why RAG? The Limits of Parametric Knowledge",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.2",
+    "title": "Embeddings & Vector Search Foundations",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.3",
+    "title": "Vector Databases Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.4",
+    "title": "RAG Architecture Deep Dive: Ingestion, Chunking, Retrieval, Reranking, Generation",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "6.5",
+    "title": "Advanced RAG Patterns: Hybrid Search, Reranking, HyDE, GraphRAG, Agentic RAG",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.6",
+    "title": "Knowledge Graphs + LLMs",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.7",
+    "title": "Caching Infrastructure for GenAI & Agents",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "6.8",
+    "title": "Evaluating RAG Systems: Retrieval Metrics, Faithfulness, RAGAS",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "6.9",
+    "title": "RAG Reference Architecture Blueprint",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "6.10",
+    "title": "Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "7",
+  "num": 7,
+  "slug": "finetuning-alignment",
+  "name": "Fine-Tuning & Alignment",
+  "title": "Phase 7 — Fine-Tuning, Alignment & Model Customization",
+  "intro": "When to fine-tune instead of prompt or retrieve, and how to do it — PEFT, RLHF/DPO, distillation, and deployment.",
+  "kind": "Full 7-section",
+  "level": "Intermediate",
+  "prereq": [
+   5
+  ],
+  "chapters": [
+   {
+    "id": "7.1",
+    "title": "When to Fine-Tune vs. Prompt vs. RAG: A Decision Framework",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "7.2",
+    "title": "Full Fine-Tuning vs. Parameter-Efficient Fine-Tuning — Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "7.3",
+    "title": "Alignment Techniques Deep Dive: Instruction Tuning, RLHF, RLAIF, DPO",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "7.4",
+    "title": "Domain Adaptation & Continual Pretraining",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "7.5",
+    "title": "Model Compression: Distillation, Quantization, Pruning",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "7.6",
+    "title": "Evaluating & Benchmarking Fine-Tuned Models",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "7.7",
+    "title": "Deployment Considerations for Custom Models",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "8",
+  "num": 8,
+  "slug": "agents-foundations",
+  "name": "AI Agents: Foundations",
+  "title": "Phase 8 — AI Agents: Foundations",
+  "intro": "What an agent actually is, the agent loop, tool use, memory, context engineering, and agent UX — the flagship phase most Practitioners come for.",
+  "kind": "Full 7-section",
+  "level": "Intermediate",
+  "prereq": [
+   5
+  ],
+  "chapters": [
+   {
+    "id": "8.1",
+    "title": "What Is an \"Agent\"? From Classical AI Agents to LLM Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.2",
+    "title": "Anatomy of an LLM Agent: Perception, Reasoning, Memory, Action, Tools",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.3",
+    "title": "The Agent Loop: Plan → Act → Observe → Reflect (ReAct and Beyond)",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.4",
+    "title": "Tool Use & Function Calling — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "8.5",
+    "title": "Memory Systems for Agents — Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.6",
+    "title": "Context Engineering for Agents",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "8.7",
+    "title": "Planning & Reasoning Strategies: CoT, ReAct, Reflexion, Plan-and-Execute, Graph-of-Thought",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.8",
+    "title": "Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "8.9",
+    "title": "Conversational & Agent UX Design",
+    "tags": [
+     "v5"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "8.10",
+    "title": "Single-Agent Reference Architecture Blueprint",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "9",
+  "num": 9,
+  "slug": "agentic-frameworks-landscape",
+  "name": "Agentic Frameworks Landscape",
+  "title": "Phase 9 — Agentic Frameworks Landscape",
+  "intro": "A high-level, breadth-first survey of orchestration frameworks, cloud-native agent builders, and the protocol layer — before the site goes deep in Phase 12.",
+  "kind": "Survey",
+  "level": "Intermediate",
+  "prereq": [
+   8
+  ],
+  "chapters": [
+   {
+    "id": "9.1",
+    "title": "Why an Ecosystem Landscape Chapter? How to Read This Phase",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.2",
+    "title": "Orchestration Frameworks at a Glance",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.3",
+    "title": "Cloud-Native Agent Builders at a Glance",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.4",
+    "title": "Protocol Layer at a Glance: MCP and A2A in One Page",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.5",
+    "title": "Open-Source vs. Managed/Proprietary Frameworks — HL Trade-offs",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.6",
+    "title": "How to Pick a Starting Framework for Your First Project",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "9.7",
+    "title": "Landscape Comparison Table",
+    "tags": [],
+    "hours": 2
+   }
+  ]
+ },
+ {
+  "id": "10",
+  "num": 10,
+  "slug": "agentic-architectures",
+  "name": "Agentic Architectures & Patterns",
+  "title": "Phase 10 — Agentic AI Architectures & Design Patterns",
+  "intro": "The four core agentic design patterns, hybrid deterministic/non-deterministic orchestration, sandboxing, autonomy levels, and reference architectures.",
+  "kind": "Full 7-section",
+  "level": "Advanced",
+  "prereq": [
+   8,
+   9
+  ],
+  "chapters": [
+   {
+    "id": "10.1",
+    "title": "The Four Core Agentic Design Patterns",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.2",
+    "title": "Reactive vs. Deliberative vs. Hybrid Agent Architectures",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.3",
+    "title": "State-Machine & Graph-Based Agent Orchestration",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.4",
+    "title": "Hybrid Deterministic / Non-Deterministic Orchestration",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "10.5",
+    "title": "Agent Sandboxing & Code Execution Environments",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "10.6",
+    "title": "Human-in-the-Loop Patterns: Approval Gates, Escalation, Oversight",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.7",
+    "title": "Error Handling, Self-Correction & Guardrails in Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.8",
+    "title": "Agent Autonomy Levels (L0–L5 Framework) — Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.9",
+    "title": "Cost, Latency & Reliability Engineering for Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "10.10",
+    "title": "Reference Architectures: RAG Agent, Tool-Using Agent, Autonomous Research Agent",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "11",
+  "num": 11,
+  "slug": "multi-agent-systems",
+  "name": "Multi-Agent Systems",
+  "title": "Phase 11 — Multi-Agent Systems & Orchestration",
+  "intro": "Why and how to decompose work across multiple agents: topologies, communication protocols, coordination, and shared state.",
+  "kind": "Full 7-section",
+  "level": "Advanced",
+  "prereq": [
+   10
+  ],
+  "chapters": [
+   {
+    "id": "11.1",
+    "title": "Why Multi-Agent? Decomposition, Specialization, Parallelism",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.2",
+    "title": "Multi-Agent Topologies — Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.3",
+    "title": "Agent Communication Protocols & Message Passing",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.4",
+    "title": "Role Design & Prompt Specialization for Sub-Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.5",
+    "title": "Coordination, Consensus & Conflict Resolution Among Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.6",
+    "title": "Shared Memory & State Management Across Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.7",
+    "title": "Multi-Agent Orchestration Frameworks Compared",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "11.8",
+    "title": "Multi-Agent Reference Architecture Blueprints",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "12",
+  "num": 12,
+  "slug": "agentic-frameworks-protocols-deep-dive",
+  "name": "Frameworks & Protocols (Deep Dive)",
+  "title": "Phase 12 — Agentic AI Tooling, Frameworks & Protocols (Deep Dive)",
+  "intro": "The Phase 9 landscape survey, now with implementation depth: LangGraph, CrewAI, AutoGen, MCP, A2A, and the wider tool ecosystem.",
+  "kind": "Full 7-section",
+  "level": "Advanced",
+  "prereq": [
+   9,
+   10
+  ],
+  "chapters": [
+   {
+    "id": "12.1",
+    "title": "Framework Landscape Recap & Selection Criteria",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "12.2",
+    "title": "LangChain & LangGraph — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "12.3",
+    "title": "CrewAI — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "12.4",
+    "title": "AutoGen & Semantic Kernel — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "12.5",
+    "title": "OpenAI Agents SDK / Assistants API — Deep Dive",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "12.6",
+    "title": "Model Context Protocol (MCP) — Deep Dive & Architecture",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "12.7",
+    "title": "Agent-to-Agent (A2A) Protocols & Interoperability Standards",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "12.8",
+    "title": "The Wider Tool Ecosystem: Vector Stores, Orchestration, Observability",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "12.9",
+    "title": "Framework Comparison Matrix",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "13",
+  "num": 13,
+  "slug": "build-your-own-llm-and-slm",
+  "name": "Build Your Own LLM / SLM",
+  "title": "Phase 13 — Building Your Own Language Models: LLMs & SLMs",
+  "intro": "An optional, advanced infrastructure track: pretraining data pipelines, distributed training, synthetic data, inference optimization, and SLMs — for readers who need to build, not just fine-tune, a model.",
+  "kind": "Advanced track",
+  "level": "Expert",
+  "prereq": [
+   2,
+   7
+  ],
+  "chapters": [
+   {
+    "id": "13.1",
+    "title": "Why Build Your Own Model? Build vs. Buy vs. Fine-Tune",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.2",
+    "title": "Pretraining Data Pipelines",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.3",
+    "title": "Tokenizer Design & Training for a New Model",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.4",
+    "title": "Model Architecture Design Choices: Dense vs. MoE",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.5",
+    "title": "Distributed Training Infrastructure",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.6",
+    "title": "The Pretraining Run: Curriculum, Hyperparameters, Compute Budgeting",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.7",
+    "title": "Synthetic Data Generation & Data Distillation",
+    "tags": [
+     "v3/v4"
+    ],
+    "hours": 4
+   },
+   {
+    "id": "13.8",
+    "title": "Post-Training Your Base Model: SFT, RLHF/DPO Recap & Model Cards",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.9",
+    "title": "Evaluating a Newly Trained Base Model",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.10",
+    "title": "Inference Optimization & Speculative Decoding",
+    "tags": [
+     "v3"
+    ],
+    "hours": 4
+   },
+   {
+    "id": "13.11",
+    "title": "Small Language Models (SLMs): What, Why, and When",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.12",
+    "title": "Building SLMs: Distillation, Pruning, Edge Deployment",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.13",
+    "title": "LLM vs. SLM — Comparison Table",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "13.14",
+    "title": "Case Study Blueprint: Standing Up a Small, Domain-Specific Model End-to-End",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "14",
+  "num": 14,
+  "slug": "hyperscaler-platforms",
+  "name": "Hyperscaler AI Platforms",
+  "title": "Phase 14 — Hyperscaler AI & Agentic Platforms: High-Level Foundations",
+  "intro": "A breadth-first survey of Google Cloud, AWS, Microsoft, Oracle, and other hyperscaler AI/agentic platforms — before Phase 15's enterprise decisions.",
+  "kind": "Survey",
+  "level": "Intermediate",
+  "prereq": [
+   5
+  ],
+  "chapters": [
+   {
+    "id": "14.1",
+    "title": "Why Hyperscaler Platforms Matter for Enterprise Agentic AI",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.2",
+    "title": "Google Cloud AI & Agentic Foundations",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.3",
+    "title": "AWS AI & Agentic Foundations",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.4",
+    "title": "Microsoft AI & Agentic Foundations",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.5",
+    "title": "Oracle AI & Agentic Foundations",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.6",
+    "title": "Other Notable Platforms (Brief Pointers)",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.7",
+    "title": "Hyperscaler Comparison Matrix",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.8",
+    "title": "Multi-Cloud & Portability Considerations for Agentic AI",
+    "tags": [],
+    "hours": 2
+   },
+   {
+    "id": "14.9",
+    "title": "Choosing a Hyperscaler: A Decision Framework",
+    "tags": [],
+    "hours": 2
+   }
+  ]
+ },
+ {
+  "id": "15",
+  "num": 15,
+  "slug": "enterprise-agentops-governance",
+  "name": "Enterprise AgentOps & Governance",
+  "title": "Phase 15 — Enterprise Agentic AI: Governance, Security, Evaluation & Operations",
+  "intro": "The AgentOps/LLMOps lifecycle, multi-layered evaluation, security, identity/OAuth, gateway/router patterns, governance, FinOps, and AI product strategy.",
+  "kind": "Full 7-section",
+  "level": "Advanced",
+  "prereq": [
+   10,
+   14
+  ],
+  "chapters": [
+   {
+    "id": "15.1",
+    "title": "The AgentOps/LLMOps Lifecycle: Dev → Eval → Deploy → Monitor → Improve",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.2",
+    "title": "Evaluating Agentic Systems — The Multi-Layered Testing Pyramid",
+    "tags": [
+     "v3/v4"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "15.3",
+    "title": "Observability & Tracing for Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.4",
+    "title": "Security for Agentic AI",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.5",
+    "title": "Identity, Access & Permissions for Agents",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "15.6",
+    "title": "LLM Gateway & Router Patterns",
+    "tags": [
+     "v3"
+    ],
+    "hours": 3
+   },
+   {
+    "id": "15.7",
+    "title": "Governance, Risk & Compliance: NIST AI RMF, ISO 42001, EU AI Act",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.8",
+    "title": "Cost Management & FinOps for Agentic Systems",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.9",
+    "title": "Responsible AI & Human Oversight for Autonomous Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "15.10",
+    "title": "Enterprise Reference Architecture",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "15.11",
+    "title": "AI Product Strategy: Business Case, ROI Modeling & Build-Measure-Learn",
+    "tags": [
+     "v5"
+    ],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "16",
+  "num": 16,
+  "slug": "domain-deep-dives",
+  "name": "Domain Deep Dives",
+  "title": "Phase 16 — Domain Deep Dives",
+  "intro": "Capstone-depth modules that go beyond the standard use-case grid: domain-native regulatory constraints, data realities and reference workflows for three regulated industries.",
+  "kind": "Capstone depth",
+  "level": "Advanced",
+  "prereq": [
+   15
+  ],
+  "chapters": [
+   {
+    "id": "16.1",
+    "title": "Finance: Regulated Agentic Workflows, Model Risk & Market Data",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "16.2",
+    "title": "Healthcare: Clinical Safety, PHI Handling & Care-Pathway Agents",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "16.3",
+    "title": "Telecom: Network Operations, Assurance & Service Agents",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ },
+ {
+  "id": "17",
+  "num": 17,
+  "slug": "frontier-topics",
+  "name": "Advanced & Frontier Topics",
+  "title": "Phase 17 — Advanced & Frontier Agentic AI Topics",
+  "intro": "Where agentic AI is heading: long-horizon agents, multimodal/embodied agents, self-improvement, agent economies, and frontier safety.",
+  "kind": "Full 7-section",
+  "level": "Expert",
+  "prereq": [
+   11,
+   15
+  ],
+  "chapters": [
+   {
+    "id": "17.1",
+    "title": "Autonomous, Long-Horizon Agents",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.2",
+    "title": "Multi-Modal Agents: Vision, Voice, Computer-Use / Browser-Use Agents",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.3",
+    "title": "Bridge to Embodied AI & Robotics-Adjacent Agentic Workflows",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.4",
+    "title": "Self-Improving Agents & Automated Prompt/Tool Optimization",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.5",
+    "title": "Agent Economies & Multi-Agent Marketplaces",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.6",
+    "title": "Reasoning Models & Test-Time Compute — Impact on Agent Design",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.7",
+    "title": "AI Safety & Alignment for Autonomous Agentic Systems (Frontier Risk Primer)",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.8",
+    "title": "Simulation & Evaluation Environments for Agents",
+    "tags": [],
+    "hours": 4
+   },
+   {
+    "id": "17.9",
+    "title": "Emerging Standards & the Road Ahead (living page)",
+    "tags": [],
+    "hours": 4
+   }
+  ]
+ },
+ {
+  "id": "18",
+  "num": 18,
+  "slug": "capstones-and-contributing",
+  "name": "Capstones & Contribution",
+  "title": "Phase 18 — Capstones, Projects & Contribution Path",
+  "intro": "End-to-end capstone builds per domain, a portfolio rubric, certification mapping, and how to contribute new chapters as the site grows.",
+  "kind": "Mixed",
+  "level": "Mixed",
+  "prereq": [
+   8
+  ],
+  "chapters": [
+   {
+    "id": "18.1",
+    "title": "Capstone Project Briefs — One End-to-End Agent Build per Domain",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "18.2",
+    "title": "Build-Along Tutorials",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "18.3",
+    "title": "Portfolio & Assessment Rubric",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "18.4",
+    "title": "Suggested Certification / External Learning-Path Mapping",
+    "tags": [],
+    "hours": 3
+   },
+   {
+    "id": "18.5",
+    "title": "Contribution Guide — How New Chapters and Use Cases Get Added",
+    "tags": [],
+    "hours": 3
+   }
+  ]
+ }
+];
+
+export const ROLES = [
+ {
+  "id": "data-scientist",
+  "title": "Data Scientist",
+  "family": "Data & Modeling",
+  "does": "EDA, feature engineering, classical ML model selection/tuning, translating findings into business recommendations",
+  "core": [
+   "P1",
+   "2.1",
+   "2.2",
+   "4.1"
+  ],
+  "certs": [
+   "AWS Certified Machine Learning Engineer – Associate",
+   "Google Cloud Professional Machine Learning Engineer",
+   "Azure Data Scientist Associate (DP-100)"
+  ]
+ },
+ {
+  "id": "data-engineer",
+  "title": "Data Engineer (AI-Focused)",
+  "family": "Data & Modeling",
+  "does": "Builds/maintains ingestion pipelines, feature stores, and the plumbing feeding training data and RAG corpora",
+  "core": [
+   "1.7",
+   "6.2",
+   "6.3",
+   "6.4",
+   "6.7",
+   "13.2"
+  ],
+  "certs": [
+   "Google Cloud Professional Data Engineer",
+   "AWS Certified Data Engineer – Associate (general data-eng certs — complementary, not AI-specific)"
+  ]
+ },
+ {
+  "id": "genai-engineer",
+  "title": "Generative AI Engineer / LLM App Developer",
+  "family": "Building",
+  "does": "Builds production LLM-powered apps: prompt pipelines, RAG integration, vector DB wiring, output validation",
+  "core": [
+   "P3",
+   "P4",
+   "P5",
+   "P6",
+   "15.2"
+  ],
+  "certs": [
+   "AWS Certified AI Practitioner",
+   "Google Cloud Generative AI Leader",
+   "Azure AI Engineer Associate (AI-102)",
+   "Databricks Certified Generative AI Engineer Associate"
+  ]
+ },
+ {
+  "id": "prompt-engineer",
+  "title": "Prompt Engineer",
+  "note": "increasingly folded into GenAI Engineer",
+  "family": "Building",
+  "does": "Prompt design, testing, versioning, few-shot curation, guardrail authoring",
+  "core": [
+   "P5"
+  ],
+  "certs": [
+   "Same as Generative AI Engineer"
+  ]
+ },
+ {
+  "id": "foundation-model-engineer",
+  "title": "LLM / Foundation Model Engineer",
+  "family": "Data & Modeling",
+  "does": "Pretrains and fine-tunes base models; manages distributed training infra; evaluates base-model quality",
+  "core": [
+   "P2",
+   "P7",
+   "P13"
+  ],
+  "certs": [
+   "NVIDIA-Certified Associate: Generative AI",
+   "Databricks Certified Generative AI Engineer Associate (partial)",
+   "A cloud ML-engineer cert as infra baseline"
+  ]
+ },
+ {
+  "id": "agent-developer",
+  "title": "AI Agent Developer / Agentic AI Engineer",
+  "family": "Agentic",
+  "does": "Builds single-agent and tool-using agents; implements memory/context management; integrates a framework",
+  "core": [
+   "P8",
+   "P9",
+   "P10",
+   "12.1",
+   "12.2",
+   "12.6"
+  ],
+  "certs": [
+   "No dedicated agentic-AI certification exists industry-wide yet (verified 2026) — closest proxies are framework-specific learning paths (LangChain Academy, CrewAI) and cloud agent-builder training paths"
+  ]
+ },
+ {
+  "id": "multi-agent-architect",
+  "title": "Multi-Agent Systems Architect",
+  "family": "Agentic",
+  "does": "Designs multi-agent topologies, inter-agent protocols, coordination/consensus strategies at scale",
+  "core": [
+   "P10",
+   "P11",
+   "P12"
+  ],
+  "certs": [
+   "Same as Agent Developer, plus a general architecture credential (e.g. TOGAF) at enterprise-architect level"
+  ]
+ },
+ {
+  "id": "solutions-architect",
+  "title": "AI Solutions / Enterprise Architect",
+  "family": "Enterprise",
+  "does": "End-to-end architecture spanning model, data, agent, and platform layers; hyperscaler selection; landing-zone design",
+  "core": [
+   "P14",
+   "P15",
+   "16.1"
+  ],
+  "certs": [
+   "Google Cloud Generative AI Leader + Professional Cloud Architect",
+   "AWS Certified AI Practitioner + Solutions Architect Professional",
+   "Azure AI Engineer Associate + Solutions Architect Expert",
+   "OCI AI Foundations Associate + OCI Generative AI Professional"
+  ]
+ },
+ {
+  "id": "agentops-engineer",
+  "title": "MLOps / LLMOps / AgentOps Engineer",
+  "family": "Enterprise",
+  "does": "CI/CD for models and agents, evaluation pipelines, observability, FinOps",
+  "core": [
+   "15.1",
+   "15.2",
+   "15.3",
+   "15.6",
+   "15.8"
+  ],
+  "certs": [
+   "Databricks Certified Generative AI Engineer Associate",
+   "A cloud ML-engineer cert",
+   "General SRE/DevOps certs as complementary background"
+  ]
+ },
+ {
+  "id": "platform-engineer",
+  "title": "AI Platform / Infrastructure Engineer",
+  "family": "Enterprise",
+  "does": "GPU/TPU cluster management, distributed-training infra, inference-serving optimization",
+  "core": [
+   "2.8",
+   "13.5",
+   "13.10"
+  ],
+  "certs": [
+   "NVIDIA-Certified Associate: Generative AI",
+   "NVIDIA AI infrastructure training",
+   "Cloud architect-level certs"
+  ]
+ },
+ {
+  "id": "security-engineer",
+  "title": "AI Security Engineer / Red-Teamer",
+  "family": "Governance",
+  "does": "Adversarial testing, prompt-injection defense, execution-sandboxing review, vulnerability benchmarking",
+  "core": [
+   "10.5",
+   "15.2",
+   "15.4"
+  ],
+  "certs": [
+   "OWASP Top 10 for LLM Applications training/certificate",
+   "CISSP, OSCP as complementary background — no mature AI-specific security cert exists industry-wide yet"
+  ]
+ },
+ {
+  "id": "grc-specialist",
+  "title": "AI Governance, Risk & Compliance Specialist",
+  "family": "Governance",
+  "does": "Regulatory mapping (EU AI Act, NIST AI RMF, ISO 42001), risk assessments, model-risk management",
+  "core": [
+   "1.9",
+   "15.6",
+   "15.7",
+   "15.9"
+  ],
+  "certs": [
+   "IAPP AI Governance Professional (AIGP)",
+   "ISO/IEC 42001 Lead Implementer or Lead Auditor",
+   "NIST AI RMF practitioner training"
+  ]
+ },
+ {
+  "id": "responsible-ai-lead",
+  "title": "Responsible AI / AI Ethics Lead",
+  "family": "Governance",
+  "does": "Bias/fairness audits, human-oversight design, ethics-review processes",
+  "core": [
+   "1.9",
+   "15.9"
+  ],
+  "certs": [
+   "Same governance certs as GRC Specialist",
+   "A university Responsible AI specialization"
+  ]
+ },
+ {
+  "id": "product-manager",
+  "title": "AI Product Manager",
+  "family": "Product",
+  "does": "Defines agentic-product requirements, prioritizes use cases, owns the business case/ROI, cross-functional coordination",
+  "core": [
+   "P0",
+   "5.7",
+   "5.8",
+   "15.11",
+   "16.1"
+  ],
+  "certs": [
+   "Google Cloud Generative AI Leader",
+   "An AI-focused product-management certificate program",
+   "General PM credentials (CSPO, etc.) as complementary background"
+  ]
+ },
+ {
+  "id": "domain-specialist",
+  "title": "Domain-Specific AI Specialist",
+  "note": "Quant AI Engineer, Clinical AI Specialist, Network AI Engineer",
+  "family": "Product",
+  "does": "Applies the full agentic stack to one regulated domain's workflows",
+  "core": [
+   "P5",
+   "P6",
+   "P7",
+   "P8",
+   "P9",
+   "P10",
+   "P11",
+   "P12",
+   "P16",
+   "15.6",
+   "15.7"
+  ],
+  "certs": [
+   "One hyperscaler AI cert (any provider) plus a domain credential — a finance/AI credential for Quant roles, HIMSS-style health-IT credentials for Clinical AI, TM Forum certifications for Telco"
+  ]
+ }
+];
+
+export const TRACKS = [
+ {
+  "id": "foundations",
+  "name": "Foundations Track",
+  "for": "New to AI",
+  "blurb": "Understand AI/ML concepts from the ground up before touching anything agentic.",
+  "phases": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ]
+ },
+ {
+  "id": "practitioner",
+  "name": "Practitioner / Builder Track",
+  "for": "Some ML/GenAI experience",
+  "blurb": "Straight at agent design, frameworks and multi-agent systems. Phase 13 is an optional detour, not a stop.",
+  "phases": [
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   18
+  ]
+ },
+ {
+  "id": "architect",
+  "name": "Advanced / Architect Track",
+  "for": "Already building agentic systems",
+  "blurb": "Platform selection, governance depth and domain-specific patterns for enterprise-grade systems.",
+  "phases": [
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17
+  ]
+ }
+];
+
+export const COHORTS = [
+ {
+  "id": "c1",
+  "title": "Agentic Architectures — Spring Cohort",
+  "phases": [
+   8,
+   10,
+   11
+  ],
+  "starts": "2026-09-07",
+  "weeks": 8,
+  "seats": 24,
+  "taken": 19,
+  "cadence": "Tue & Thu · 18:00–19:30 IST",
+  "lead": "Practitioner track"
+ },
+ {
+  "id": "c2",
+  "title": "Enterprise AgentOps & Governance",
+  "phases": [
+   14,
+   15
+  ],
+  "starts": "2026-09-21",
+  "weeks": 6,
+  "seats": 18,
+  "taken": 7,
+  "cadence": "Wed · 17:00–19:00 IST",
+  "lead": "Architect track"
+ },
+ {
+  "id": "c3",
+  "title": "Foundations Intensive",
+  "phases": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "starts": "2026-10-05",
+  "weeks": 10,
+  "seats": 30,
+  "taken": 12,
+  "cadence": "Mon & Fri · 19:00–20:30 IST",
+  "lead": "Foundations track"
+ },
+ {
+  "id": "c4",
+  "title": "Build Your Own SLM — Lab Cohort",
+  "phases": [
+   13
+  ],
+  "starts": "2026-11-02",
+  "weeks": 7,
+  "seats": 12,
+  "taken": 11,
+  "cadence": "Sat · 10:00–13:00 IST",
+  "lead": "Advanced lab"
+ }
+];

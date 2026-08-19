@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkregai_training=self.webpackChunkregai_training||[]).push([["5733"],{7650(e){e.exports=JSON.parse('{"tags":[{"label":"v5","permalink":"/AI-Regenesis-Learn/docs/tags/v-5","count":1}]}')}}]);
