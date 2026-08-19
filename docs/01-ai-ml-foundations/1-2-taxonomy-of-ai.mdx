@@ -1,0 +1,185 @@
+---
+title: "A Taxonomy of AI: Rule-Based, Machine Learning, Deep Learning, Generative, and Agentic"
+sidebar_label: "1.2 A Taxonomy of AI"
+sidebar_position: 2
+phase: 1
+chapter: "1.2"
+lms_presentation: "1.2-Taxonomy-of-AI-Slides.pptx"
+prerequisites: ["1.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+The five terms from 1.1's timeline (rule-based AI, machine learning, deep learning, generative AI,
+agentic AI; folding 1.1's separate rule-based and expert-systems eras into one rule-based layer,
+and its statistical-ML era into machine learning) aren't five competing technologies. They're five layers, each a narrower
+specialization of the one below it: rule-based systems run any human-authored logic, machine
+learning narrows that to logic learned from data, deep learning narrows further to logic learned
+without hand-built features, generative AI narrows further still to systems that produce new
+content rather than a label, and agentic AI narrows the most by choosing its own sequence of
+actions. It's similar to medical specialization: a general practitioner can treat a wide range of
+conditions; a subspecialist treats a narrower set, but goes deeper on each one. A real production
+system today usually stacks several of these layers together rather than picking just one.
+
+## High-Level Explanation
+
+Picture the five layers as a pyramid, widest at the base. **Rule-based AI** is the widest layer:
+any system whose logic a person wrote out explicitly, like an if/then rule flagging a suspicious
+transaction. **Machine learning** narrows that down to systems whose logic was learned from data
+instead of hand-written, like a logistic-regression scorecard fit to historical repayment records.
+**Deep learning** narrows further to learning systems that also learn their own features rather
+than relying on a human to engineer them, like a CNN that learns to recognize handwriting directly
+from pixels. **Generative AI** narrows further to systems that produce new content rather than a
+label or score, like a model that writes a paragraph or draws an image. **Agentic AI**, at the
+narrow tip, adds one more constraint on top of generative capability: the system chooses its own
+sequence of actions toward a goal rather than producing one output and stopping.
+
+![Five layers of the AI taxonomy, narrowing from rule-based systems at the base to agentic AI at the tip, each layer a specialization of the one beneath it](/img/illustrations/1-2-layered-stack.svg)
+
+The narrowing matters because it tracks a real tradeoff. A wider layer is more general and more
+predictable; a narrower layer is more powerful within its scope but also more specific about what
+it can do and how it was built. None of the layers make the ones below them obsolete: a rule-based
+input check still runs in front of a machine-learned model in most production systems, for the
+simple reason that catching an obviously malformed input with one line of code is cheaper and more
+reliable than asking a trained model to notice it.
+
+## Deep-Dive Explanation
+
+**What formally distinguishes each layer.** The distinction isn't about how sophisticated a system
+looks; it's about where its decision logic came from.
+
+- *Rule-based*: the decision procedure is fully specified by a human author, as explicit branching
+  logic. Nothing is learned; the same input always produces the same output because a person chose
+  every rule. In practice these are usually implemented as production-rule engines that either
+  match rules forward from known facts to a conclusion (forward chaining, the pattern MYCIN used)
+  or work backward from a candidate conclusion to the facts needed to prove it (backward chaining).
+  Because every interaction between rules has to be anticipated by the author, the rule set's
+  complexity grows combinatorially as more rules are added. That maintenance burden is the
+  underlying cause of the expert-systems maintenance problem covered in 1.1.
+- *Machine learning*: a loss function defines what "good" means for the task, and an optimization
+  procedure, gradient descent for many contemporary parametric models, greedy recursive splitting
+  for a decision tree, or a closed-form solution for methods like ordinary least squares, fits a
+  set of parameters to minimize that loss over training data. The logic is learned, but a human
+  still chooses the features the model sees.
+- *Deep learning*: a composition of many parameterized layers learns its own intermediate
+  representations directly from raw or lightly processed input, removing the manual
+  feature-engineering step. The learning procedure, backpropagation to compute how the loss
+  changes with respect to each parameter, then gradient descent to update the parameters using
+  that computation, is the same gradient-based idea as other machine learning, just applied to a
+  much deeper, more expressive function.
+- *Generative AI*: the model samples new content (a full sentence, image, or other artifact) from
+  a learned probability distribution over outputs, most often one conditioned on an input and
+  written P(output | input). This is a narrower, modern-usage version of an older statistical
+  distinction: a *discriminative* model predicts P(label | input) directly to draw a boundary
+  between fixed classes (an SVM or logistic-regression credit-approval model, for example), while
+  a classical *generative* model instead learns the joint distribution of inputs and labels,
+  P(input, label), and can sample new inputs from it (a Naive Bayes spam filter is the standard
+  textbook example of this classical sense). What the AI industry calls "generative AI" inherits
+  that second model's ability to sample new examples, but almost always in the conditional
+  P(output | input) form rather than the unconditional or joint form the classical term describes.
+- *Agentic*: a control loop wraps the model, so the system perceives its current state, decides on
+  a next action, executes it, and observes the result before deciding again (see **Agent** in the
+  [glossary](../00-orientation/0-5-glossary-notation-conventions.md#core-terms)). What changes here
+  isn't the underlying model. It's that the model's output now selects an action inside a loop
+  instead of being the final answer. Phase 8 (8.1–8.3) covers this loop in full. This chapter's
+  pyramid stacks agentic AI on top of generative AI because that is today's dominant pattern (an
+  LLM's generated text becomes the action to take), but the control-loop idea itself is older and
+  more general: a rule-based thermostat or a reinforcement-learning agent built on a non-generative
+  policy network is also agentic in the perceive/decide/act sense, with no generative layer
+  underneath.
+
+**Where the boundary blurs.** A decision tree is a useful edge case: its parameters (which
+feature to split on, at what threshold, at every node) are learned from data by a greedy
+algorithm, which formally makes it machine learning. But the resulting decision procedure, once
+trained, is a sequence of if/then branches that a person could read, print, and follow by hand,
+indistinguishable in *form* from a rule system a human wrote directly (see the classic CART
+formulation in Breiman et al.,
+[*Classification and Regression Trees*](https://www.routledge.com/Classification-and-Regression-Trees/Breiman-Friedman-Stone-Olshen/p/book/9780412048418),
+1984). This is the taxonomy's actual point: the layers classify a system by *how its logic was
+produced*, not by what the logic looks like afterward, and a system can straddle the line.
+
+**A common misclassification worth naming.** A model built with deep learning that outputs a
+fixed label, such as a fine-tuned transformer that classifies a support ticket into one of ten
+categories, is not generative AI. It's a deep-learning discriminative model: it draws a boundary
+between ten known classes rather than modeling a distribution it can sample new content from. Deep
+learning and generative AI overlap heavily in today's systems (most generative models are also
+deep learning models) but the two properties are independent, and the taxonomy layer a system
+belongs to depends on which property is being asked about.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Rule-Based', 'Machine Learning', 'Deep Learning', 'Generative AI', 'Agentic AI']}
+  rows={[
+    {aspect: 'Does it decide its own next action', values: ['No', 'No', 'No', 'No (single output, then stops)', 'Yes'], decisive: true},
+    {aspect: 'What defines the logic', values: ['Human-authored branching logic', 'Parameters fit to a loss function', 'Learned hierarchical representations', 'A learned output distribution', 'A model plus a perceive/decide/act loop'], },
+    {aspect: 'Data requirement', values: ['None required', 'Moderate, structured data works', 'Large, needs volume to learn features', 'Large, but scale varies widely by use case', 'Inherits its base model’s requirement'], },
+    {aspect: 'Typical output', values: ['A fixed decision or flag', 'A label or score', 'A label, score, or learned embedding', 'New content: text, image, audio, code', 'A sequence of tool calls or actions'], },
+  ]}
+  caption="Each column is a narrower specialization of the one to its left, not a competing option. Most production systems use several columns together, as the reference architecture below shows."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A loan-intake pipeline stacking all five layers"
+  mermaid={`
+flowchart LR
+  A[Input Validation<br/>Rule-Based] --> B[Risk Scoring<br/>Machine Learning]
+  B --> C[Document OCR<br/>Deep Learning]
+  C --> D[Case Summary Draft<br/>Generative AI]
+  D --> E[Escalation Decision<br/>Agentic AI]
+  E --> F[Human Reviewer]
+`}
+  components={[
+    {name: 'Input Validation (Rule-Based)', responsibility: 'Rejects malformed or incomplete applications before any model runs, cheaply and deterministically.'},
+    {name: 'Risk Scoring (Machine Learning)', responsibility: 'Scores approved applications against historical repayment patterns to produce a numeric risk estimate.'},
+    {name: 'Document OCR (Deep Learning)', responsibility: 'Extracts fields from scanned pay stubs and statements that the risk model needs as input.'},
+    {name: 'Case Summary Draft (Generative AI)', responsibility: 'Drafts a plain-language summary of the application and flagged risk factors for the reviewer.'},
+    {name: 'Escalation Decision (Agentic AI)', responsibility: 'Decides whether to auto-approve, request more documents, or route to a human, then acts on that choice.'},
+    {name: 'Human Reviewer', responsibility: 'Makes or confirms the final call on anything the agentic layer routes to them.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Real-time payments screening stack', problem: 'Screening every payment for fraud in milliseconds, without blocking the large majority of legitimate transactions.', solution: 'A rule-based filter clears obviously legitimate transactions instantly; anything it can’t clear goes to a machine-learning model trained on historical fraud patterns.', risk: 'The rule layer and the ML layer disagree on edge cases in ways nobody audits, so a transaction pattern quietly stops being screened by either layer.'},
+    {title: 'Loan document intake', problem: 'Manually reading scanned pay stubs and bank statements to extract the fields underwriting needs.', solution: 'A deep-learning OCR model extracts structured fields from scanned documents, which then feed a separate underwriting score.', risk: 'OCR extraction errors on unusual document formats silently corrupt a downstream score that was never designed to sanity-check its own inputs.'},
+    {title: 'Earnings call summarization', problem: 'Analysts spend hours turning hour-long earnings call transcripts into a usable summary.', solution: 'A generative model drafts a structured summary of the call, which an analyst edits rather than writing from scratch.', risk: 'A generated summary omits a material caveat the executives stated verbally, and it goes out under the analyst’s name unverified against the transcript.'},
+    {title: 'Agentic reconciliation assistant', problem: 'Investigating a mismatched balance across ledgers requires manually cross-referencing several internal systems.', solution: 'An agent queries each system in turn, narrows down the likely source of the mismatch, and drafts a reconciliation entry for a human to approve.', risk: 'The agent proposes a plausible-looking reconciliation entry that fixes the visible symptom without addressing the actual upstream data error.'},
+  ]}
+  healthcare={[
+    {title: 'Sepsis alert stack', problem: 'Early sepsis signs are easy to miss in a busy ward until vitals have already deteriorated significantly.', solution: 'A rule-based threshold check triggers a first-level alert; a machine-learning risk model layered on top ranks alerted patients by estimated urgency.', risk: 'Alert fatigue from the rule layer causes clinicians to deprioritize the ML layer’s ranking along with everything else.'},
+    {title: 'Radiology triage', problem: 'Radiologists can’t read every study the moment it’s captured, so urgent findings can sit in an unprioritized queue.', solution: 'A deep-learning model flags studies with likely urgent findings and moves them to the top of the radiologist’s queue.', risk: 'A finding type underrepresented in the model’s training data doesn’t get flagged and waits in the queue like everything else.'},
+    {title: 'Ambient clinical note drafting', problem: 'Physicians spend a large share of each visit typing notes instead of talking with the patient.', solution: 'A generative model drafts a structured visit note from the conversation, for the physician to review and sign.', risk: 'A drafted note includes a plausible-sounding detail that was never actually said in the visit, and it goes uncorrected into the permanent record.'},
+    {title: 'Agentic prior-authorization assistant', problem: 'Getting a procedure pre-approved by insurance means assembling documentation across multiple systems and following up repeatedly.', solution: 'An agent gathers the required clinical documentation, submits the prior-authorization request, and follows up on its status automatically.', risk: 'The agent submits a request with a coding error it isn’t positioned to catch, triggering an automatic denial that then requires a manual appeal.'},
+  ]}
+  telecom={[
+    {title: 'Provisioning and capacity stack', problem: 'Provisioning new service capacity has both hard rules (a link either has spare capacity or it doesn’t) and softer forecasting questions.', solution: 'A rule-based check confirms hard capacity constraints; a machine-learning forecast estimates demand growth over the next planning cycle.', risk: 'The forecast quietly drifts out of date as usage patterns shift, while the rule layer keeps passing checks that no longer reflect real headroom.'},
+    {title: 'Network signal anomaly detection', problem: 'Detecting a developing hardware fault in network signal data before it causes a customer-facing outage.', solution: 'A deep-learning model trained on historical signal telemetry flags statistically anomalous patterns for a technician to inspect.', risk: 'A genuinely novel fault pattern that doesn’t resemble anything in the training data goes undetected until it causes a visible outage.'},
+    {title: 'Support response drafting', problem: 'Support agents spend significant time writing similar responses to common billing and service questions.', solution: 'A generative model drafts a first-pass response from the customer’s message and account context, for the agent to edit and send.', risk: 'A drafted response states an account-specific fact (a balance, a plan detail) that the model inferred rather than looked up, and the agent sends it unchecked.'},
+    {title: 'Agentic truck-roll dispatch assistant', problem: 'Deciding whether a service issue needs an on-site technician visit involves checking several diagnostic systems in sequence.', solution: 'An agent runs the standard remote diagnostics in order, and only schedules a technician visit if remote steps can’t resolve the issue.', risk: 'The agent schedules an unnecessary technician visit because a diagnostic step it depended on returned a stale or cached result.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'A decision tree learns its splits from training data, but its output looks like a hand-written if/then rule set. Which taxonomy layer does it belong to, and why?', answer: 'Machine learning. The taxonomy classifies a system by how its logic was produced, not by what the logic looks like afterward: a decision tree’s splits are fit from data by an algorithm, which is what makes it ML even though a human could read and follow the resulting rules by hand.'},
+    {question: 'Why is deep learning described as a subset of machine learning rather than a separate category next to it?', answer: 'Because deep learning uses the same underlying idea as other machine learning (parameters fit to minimize a loss function via gradient-based optimization) and only narrows it further, to models that also learn their own feature representations instead of relying on hand-engineered ones.'},
+    {question: 'A company fine-tunes a deep learning model to sort support tickets into one of ten fixed categories. Is this generative AI? Why or why not?', answer: 'No. It’s a deep-learning discriminative model: it draws a boundary between ten known classes rather than learning a distribution it can sample new content from. Deep learning and generative AI overlap often in practice, but they are independent properties.'},
+    {question: 'What is the one property that separates agentic AI from generative AI in this taxonomy?', answer: 'Whether the system decides its own next action. A generative model produces one output and stops; an agentic system wraps a model in a perceive/decide/act loop that lets it choose and execute a sequence of actions toward a goal.'},
+    {question: 'In the loan-intake reference architecture, why does the rule-based input-validation step still exist even though a far more capable machine-learning model runs right after it?', answer: 'Because a narrower, more general-purpose layer is often cheaper and more reliable for what it’s good at: catching an obviously malformed input with one line of deterministic logic doesn’t need a trained model, and running the rule first saves the expensive model from ever seeing garbage input.'},
+  ]}
+/>

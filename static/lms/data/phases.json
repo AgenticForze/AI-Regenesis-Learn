@@ -91,9 +91,13 @@
    },
    {
     "id": "1.2",
-    "title": "A Taxonomy of AI: Rule-Based → ML → Deep Learning → Generative → Agentic",
+    "title": "A Taxonomy of AI: Rule-Based, Machine Learning, Deep Learning, Generative, and Agentic",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-2-taxonomy-of-ai",
+    "summary": "The five terms from 1.1's timeline (rule-based AI, machine learning, deep learning, generative AI, agentic AI; folding 1.1's separate rule-based and expert-systems eras into one rule-based layer, and its statistical-ML era into machine learning) aren't five competing technologies. They're five layers, each a narrower specialization of the one below it: rule-based systems run any human-authored logic, machine learning narrows that to logic learned from data, deep learning narrows further to logic learned without hand-built features, generative AI narrows further still to systems that produce new content rather than a label, and agentic AI narrows the most by choosing its own sequence of actions. It's similar to medical specialization: a general practitioner can treat a wide range of conditions; a subspecialist treats a narrower set, but goes deeper on each one. A real production system today usually stacks several of these layers together rather than picking just one.",
+    "published": true,
+    "presentationUrl": "../slides/1.2-Taxonomy-of-AI-Slides.pptx"
    },
    {
     "id": "1.3",
