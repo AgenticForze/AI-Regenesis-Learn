@@ -28,6 +28,8 @@ chapters don't redefine these — they link back here.
 | Term | Definition |
 |---|---|
 | **Agent** | A system that uses an LLM to decide its own sequence of actions (tool calls, sub-tasks) toward a goal, rather than following a fixed, human-authored control flow. See 8.1 and 8.8 for the full agent-vs-workflow-vs-copilot distinction. |
+| **AI Winter** | A period of collapsed funding and research interest following an era of AI overpromising relative to what the era's compute/data could deliver. Two are widely recognized: ~1974–1980 (following the 1973 Lighthill Report and matching DARPA cuts) and ~1987–1993 (following the collapse of the expert-system/Lisp-machine market). See 1.1. |
+| **Narrow AI (ANI) / AGI / ASI** | A capability-*generality* spectrum, not a "smartness" spectrum. Narrow AI (all systems built to date, including current LLM agents) is competent at specific tasks without that competence transferring to unrelated ones. AGI (not yet achieved) would generalize across essentially any cognitive task the way a human does. ASI is a hypothetical further step beyond AGI. See 1.1. |
 | **RAG (Retrieval-Augmented Generation)** | Augmenting an LLM's response with content retrieved from an external knowledge source at inference time, rather than relying solely on what the model learned during training. See Phase 6. |
 | **Fine-tuning** | Further training a pretrained model's weights on a smaller, task- or domain-specific dataset. See Phase 7. |
 | **SLM (Small Language Model)** | A language model deliberately sized down from frontier-scale LLMs for cost, latency, privacy, or on-device deployment reasons. See 13.11–13.13. |

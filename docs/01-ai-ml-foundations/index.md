@@ -9,14 +9,17 @@ sidebar_position: 0
 The building blocks: what AI/ML actually is, the classical algorithm landscape, evaluation metrics, and the math and data-pipeline foundations every later phase assumes.
 
 :::info Chapter shells
-The chapters below are planned and tracked, but not yet written. Content is added
-incrementally — see the [Contribution Guide](/docs/capstones-and-contributing) to propose or
-draft one. Check the [Recently Added](/docs) page for what has shipped so far.
+Chapters below marked as links are live; the rest are planned and tracked but not yet written.
+Content is added incrementally — see the [Contribution Guide](/docs/capstones-and-contributing)
+to propose or draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 :::
+
+## Chapters
+
+- [1.1 What Is Artificial Intelligence? History, AI Winters, Narrow vs. General AI](./1-1-what-is-ai.mdx)
 
 ## Planned chapters
 
-- 1.1 What Is Artificial Intelligence? History, AI Winters, Narrow vs. General AI
 - 1.2 A Taxonomy of AI: Rule-Based → ML → Deep Learning → Generative → Agentic
 - 1.3 Machine Learning Foundations: Supervised, Unsupervised, Reinforcement Learning
 - 1.4 Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, Overfitting
