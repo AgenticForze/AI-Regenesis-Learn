@@ -1,0 +1,205 @@
+---
+title: "Machine Learning Foundations: Supervised, Unsupervised, and Reinforcement Learning"
+sidebar_label: "1.3 ML Foundations: Supervised, Unsupervised, RL"
+sidebar_position: 3
+phase: 1
+chapter: "1.3"
+lms_presentation: "1.3-ML-Foundations-Slides.pptx"
+prerequisites: ["1.1", "1.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 1.2 named "machine learning" as one layer in the AI taxonomy: logic learned from data via
+a loss function and an optimizer. This chapter opens that layer up. What a model learns from, and
+how it's told whether it's doing well, splits into three paradigms: supervised learning (learn
+from labeled examples), unsupervised learning (find structure with no labels at all), and
+reinforcement learning (learn from a reward signal earned by acting in an environment). Most
+production ML systems combine more than one of these, often in the same pipeline.
+
+## High-Level Explanation
+
+**Supervised learning** starts from labeled examples: pairs of an input and the correct output,
+like a set of past loan applications each labeled "defaulted" or "repaid." The model learns a
+mapping from input to output and is graded against the labels it was given. Supervised problems
+split into two shapes: classification, where the output is one of a fixed set of categories (fraud
+or not fraud), and regression, where the output is a continuous number (the price of a house).
+
+**Unsupervised learning** starts from the same kind of input data but with no labels at all. There
+is no "correct answer" to be graded against; the goal is to find structure that was already there.
+Clustering groups similar records together (segmenting customers by behavior); dimensionality
+reduction compresses many correlated features into a few informative ones (compressing thousands of
+sensor readings into a handful of components for visualization); anomaly detection flags records
+that don't resemble the rest of the data, without ever having been shown a labeled example of what
+"anomalous" looks like.
+
+**Reinforcement learning (RL)** doesn't start from a fixed dataset at all. An agent takes actions
+inside an environment, observes what happens, and receives a reward signal, a number saying how
+good or bad the outcome was, then adjusts its behavior to earn more reward over time. AlphaGo Zero
+(Silver et al.,
+[*Mastering the Game of Go without Human Knowledge*](https://www.nature.com/articles/nature24270),
+*Nature*, 2017) is the cleanest example: starting from random play with no human game data at all,
+nobody labels the "correct" move in a given board position, but the system improves purely from
+whether it eventually wins or loses against itself.
+
+![Three data flows: supervised learning compares a prediction to a label, unsupervised learning looks for structure with no label to compare against, and reinforcement learning loops an agent's actions through an environment that returns a new state and a reward](/img/illustrations/1-3-three-paradigms.svg)
+
+The dividing question across all three: what feedback does the model get, and where does that
+feedback come from? A human-supplied label, no feedback signal at all beyond the data's own
+structure, or a reward earned by interacting with a live environment.
+
+## Deep-Dive Explanation
+
+**Supervised learning, formally.** Given a labeled dataset of examples (x₁, y₁) through (xₙ, yₙ),
+the goal is to learn a function f(x) that approximates y for inputs the model hasn't seen yet,
+found by minimizing a loss function that penalizes wrong predictions on the training set. When y is
+categorical, this is classification; when y is a real number, it's regression. The label y is what
+distinguishes supervised learning from the other two paradigms: it's the ground truth the model is
+directly graded against at every training step.
+
+**Unsupervised learning, formally.** There is no y. The model instead learns something about the
+structure of P(x), the distribution the inputs themselves came from. Clustering algorithms like
+k-means (the term was coined by MacQueen,
+[*Some Methods for Classification and Analysis of Multivariate Observations*](https://projecteuclid.org/ebooks/berkeley-symposium-on-mathematical-statistics-and-probability/Some-methods-for-classification-and-analysis-of-multivariate-observations/chapter/Some-methods-for-classification-and-analysis-of-multivariate-observations/bsmsp/1200512992),
+1967) partition x into groups that minimize within-group distance. Dimensionality-reduction
+methods like PCA, which traces to Pearson,
+[*On Lines and Planes of Closest Fit to Systems of Points in Space*](https://www.tandfonline.com/doi/abs/10.1080/14786440109462720),
+1901 (the geometric best-fit-line problem), and to Hotelling,
+[*Analysis of a Complex of Statistical Variables into Principal Components*](https://psycnet.apa.org/doi/10.1037/h0071325),
+1933 (who coined "principal components" and gave the eigenvector-based formulation used today),
+find the directions of greatest variance in x and re-express the data along them. Neither
+technique has a label to check its answer against; success is judged by how useful or compact the
+discovered structure turns out to be, which is a softer, more subjective bar than a classifier's
+accuracy on held-out labels.
+
+**Reinforcement learning, formally.** RL is usually formalized as a Markov Decision Process: a set
+of states S, actions A, a transition function describing how the state changes given an action, and
+a reward function R that scores each transition (Sutton and Barto,
+[*Reinforcement Learning: An Introduction*](http://incompleteideas.net/book/the-book-2nd.html),
+2nd ed., 2018). "Agent" here is RL's own decades-older usage: any decision-maker that perceives a
+state and chooses an action, whether or not it involves a language model at all (a thermostat's
+control loop or a robotic arm's controller both count). It's a broader use of the word than the
+glossary's Agent entry, which is scoped specifically to LLM-based systems; chapter 1.2's agentic-AI
+layer is the narrower, generative-model-wrapping case of this same general idea. Chapter 1.2 also
+notes that RL itself is not one of that chapter's five layers; it is an optimization technique that
+can train a system at any of them, tabular, deep, or generative, so "reinforcement learning" and
+"agentic AI" answer different questions (how a policy was optimized, versus whether a system acts
+in a perceive/decide/act loop) and a given system can be described by either, both, or neither. The
+agent learns a policy, a rule for
+choosing actions, that maximizes its expected cumulative reward over time, not just the immediate
+reward at each step. Two properties make this
+fundamentally different from supervised learning rather than just a variant of it. First, there is
+no per-step ground truth: nobody labels the single correct action for a given state, only a reward
+that may not reveal how good that action really was until many steps later (credit assignment).
+Second, the agent's own actions determine what data it sees next, which supervised learning never
+has to deal with: a classifier's training set doesn't change based on what the classifier predicts,
+but an RL agent that explores a bad strategy generates its own bad training data as a consequence.
+
+**Where the boundary blurs: self-supervised learning.** Large language model pretraining, next-token
+prediction over raw text, looks unsupervised (no human labeled anything) but is mechanically
+supervised: the label for each training example is the actual next token in the text, and the model
+is graded against it with an ordinary loss function. This is called self-supervised learning: the
+labels are real, they're just generated automatically from the data itself instead of by a human
+annotator. Some researchers treat self-supervised learning as its own paradigm rather than a variant
+of supervised learning, since it needs no human-curated labels and is typically used to learn
+general-purpose representations rather than one specific task; this chapter uses the mechanical
+framing because it's the one that explains why the training loop looks identical to ordinary
+supervised learning. Next-token prediction specifically is the paradigm behind autoregressive
+language models; other parts of the generative AI layer covered in chapter 1.2, such as diffusion
+image models, use a different self-supervised target (predicting the noise added to an image) rather
+than a next-token label, but the same mechanical pattern applies: an automatically generated label,
+checked with an ordinary loss.
+
+**A common misclassification worth naming: reward hacking is not the same failure as label leakage.**
+A supervised model trained on leaked labels performs well during training and poorly in production
+because it learned a shortcut that won't exist at inference time. An RL agent that hacks its reward
+function performs exactly as well as its reward function measures. The problem is that the reward
+function was an imperfect proxy for what its designers actually wanted (Amodei et al.,
+[*Concrete Problems in AI Safety*](https://arxiv.org/abs/1606.06565),
+2016). A hypothetical often used to illustrate the pattern: a cleaning robot rewarded for "not
+seeing any mess" could learn to turn off its own camera rather than clean. Nothing was leaked; the
+objective itself was wrong. This distinction matters
+directly for Phase 7's coverage of RLHF (reinforcement learning from human feedback), where a reward
+model trained on human preference comparisons (Christiano et al.,
+[*Deep Reinforcement Learning from Human Preferences*](https://arxiv.org/abs/1706.03741),
+2017) is itself a supervised model, whose imperfections become exactly the kind of reward-hacking
+surface described above once an RL policy is optimized against it.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Supervised', 'Unsupervised', 'Reinforcement Learning']}
+  rows={[
+    {aspect: 'Feedback signal', values: ['A human-supplied label for every example', 'None (no ground truth at all)', 'A reward earned by acting, often delayed'], decisive: true},
+    {aspect: 'What it learns', values: ['A mapping from input to output', 'Structure already present in the data', 'A policy for choosing actions over time'], },
+    {aspect: 'Does its own behavior change its training data', values: ['No (the dataset is fixed)', 'No (the dataset is fixed)', 'Yes (actions determine what happens next)'], },
+    {aspect: 'Typical output', values: ['A label or a number (classification/regression)', 'Clusters, components, or an anomaly score', 'A policy: a rule for which action to take'], },
+    {aspect: 'Classic example', values: ['Credit default classifier', 'Customer segmentation via clustering', 'AlphaGo Zero, robotic control'], },
+  ]}
+  caption="The decisive difference is where the feedback comes from. Self-supervised learning (chapter 1.2's generative AI layer) is mechanically supervised: the labels are just generated from the data itself rather than by a human."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A churn-prevention pipeline using all three paradigms"
+  mermaid={`
+flowchart LR
+  A[Customer Data] --> B[Behavioral Segmentation<br/>Unsupervised]
+  B --> C[Churn Risk Scoring<br/>Supervised]
+  C --> D[Next-Best-Action Agent<br/>Reinforcement Learning]
+  D --> E[Retention Offer]
+  E --> F[Observed Outcome]
+  F -.reward.-> D
+`}
+  components={[
+    {name: 'Behavioral Segmentation (Unsupervised)', responsibility: 'Clusters customers into behavioral cohorts with no predefined labels, before any prediction happens.'},
+    {name: 'Churn Risk Scoring (Supervised)', responsibility: 'Trained on historical labeled churn outcomes, scores each customer within their cohort.'},
+    {name: 'Next-Best-Action Agent (Reinforcement Learning)', responsibility: 'Chooses which retention offer to make, learning from the long-run value of past offers rather than a single labeled correct choice.'},
+    {name: 'Retention Offer', responsibility: 'The action the agent selects and the system executes.'},
+    {name: 'Observed Outcome', responsibility: 'Whether the customer stayed and how much they spent afterward, converted into the reward that updates the agent.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Credit default prediction', problem: 'Deciding whether to approve a loan requires estimating the risk of default before any repayment history exists.', solution: 'A supervised classifier trained on historical labeled loan outcomes scores new applications.', risk: 'The labels only exist for applicants who were previously approved, so the model never learns from the applicants it would have rejected: a selection-bias blind spot, not a data-quality bug.'},
+    {title: 'Transaction clustering for fraud rings', problem: 'Coordinated fraud rings spread transactions across many accounts, so no single transaction looks obviously fraudulent.', solution: 'Unsupervised clustering groups transactions by behavioral similarity to surface coordinated patterns with no prior labeled example of that ring\'s specific tactic.', risk: 'Clusters have no ground truth to validate against, so an analyst can mistake an ordinary seasonal pattern for a coordinated ring and waste an investigation.'},
+    {title: 'Algorithmic trade execution', problem: 'Executing a large order without moving the market price against the trader requires deciding order size and timing continuously.', solution: 'A reinforcement learning agent learns an execution policy that is rewarded for minimizing market impact and cost over the life of the order.', risk: 'A reward function that only measures execution cost can learn a policy that increases systemic risk during volatile periods, a cost the reward never priced in.'},
+    {title: 'Revenue forecasting', problem: 'Planning requires a numeric forecast of next quarter\'s revenue, not just a category.', solution: 'A supervised regression model trained on historical financials predicts a continuous revenue figure.', risk: 'A model trained only on stable-period data quietly degrades during a regime change (a rate shock, a new competitor) because nothing in training resembled the new pattern.'},
+  ]}
+  healthcare={[
+    {title: 'Diagnostic image classification', problem: 'Classifying a scan as showing a specific condition or not requires consistent judgment across thousands of images.', solution: 'A supervised classifier trained on physician-labeled images predicts the diagnostic category for new scans.', risk: 'Label quality is bounded by inter-radiologist disagreement on the training labels themselves, so the model can inherit and amplify a labeling inconsistency rather than correct it.'},
+    {title: 'Patient subgroup discovery', problem: 'Treatment protocols are often written for "the average patient," missing subgroups that respond differently.', solution: 'Unsupervised clustering on patient records surfaces subgroups with distinct clinical patterns with no predefined subgroup labels.', risk: 'A discovered cluster can reflect a data-collection artifact (which clinic a patient visited) rather than a real clinical subgroup, and get treated as medically meaningful anyway.'},
+    {title: 'ICU treatment policy optimization', problem: 'Choosing a dosing strategy over the course of treatment involves a long sequence of decisions whose effects unfold over days.', solution: 'A reinforcement learning agent learns a dosing policy rewarded for patient outcomes over the full treatment course rather than the immediate response to one dose.', risk: 'A reward defined on retrospective clinical data can encode the biases of the clinicians whose decisions generated that data, and the agent then automates that bias rather than correcting it.'},
+    {title: 'Length-of-stay prediction', problem: 'Bed and staffing planning requires a numeric estimate of how long an admitted patient will stay.', solution: 'A supervised regression model trained on historical admissions predicts expected length of stay.', risk: 'A forecast trained on historical average-case data underpredicts for patients whose combination of conditions rarely co-occurred in the training set.'},
+  ]}
+  telecom={[
+    {title: 'Device upgrade eligibility scoring', problem: 'Deciding whether to offer a subsidized device upgrade requires estimating credit and usage risk before extending the offer.', solution: 'A supervised classifier trained on historical labeled repayment and usage outcomes scores each eligible account.', risk: 'A model trained mostly on postpaid accounts extends poorly to prepaid customers, whose usage and repayment patterns look statistically unlike anything in the training set.'},
+    {title: 'Network traffic anomaly clustering', problem: 'A developing network fault or attack pattern rarely resembles any previously labeled incident.', solution: 'Unsupervised clustering on traffic patterns flags behavior that doesn\'t resemble the rest of the network\'s normal clusters, with no labeled example of that specific fault required.', risk: 'A legitimate but unusual traffic spike (a product launch, a viral event) clusters as anomalous and triggers an unnecessary incident response.'},
+    {title: 'Dynamic network resource allocation', problem: 'Allocating bandwidth across cells in real time as demand shifts requires a continuously updated decision, not a one-time plan.', solution: 'A reinforcement learning agent learns an allocation policy rewarded for overall network throughput and latency over time.', risk: 'A policy optimized for average throughput can learn to systematically underserve a low-traffic rural cell because it contributes little to the reward the agent is actually optimizing.'},
+    {title: 'Capacity demand forecasting', problem: 'Infrastructure investment decisions require a numeric forecast of future demand, months in advance.', solution: 'A supervised regression model trained on historical usage data forecasts demand by region.', risk: 'A forecast trained before a major demand shift (a new large enterprise customer, a competitor\'s network outage) has no mechanism to anticipate it and just extrapolates the old trend.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'A system has no labeled data but receives a numeric score after each action it takes in a live environment. Which of the three paradigms is this, and what specifically makes it that paradigm rather than unsupervised learning?', answer: 'Reinforcement learning. The presence of a reward signal tied to the system\'s own actions is the deciding factor: unsupervised learning has no feedback signal of any kind, while RL has a reward, even though neither one has human-supplied labels.'},
+    {question: 'What is the difference between the classification and regression subtypes of supervised learning?', answer: 'Classification predicts a category from a fixed set of options (fraud or not fraud); regression predicts a continuous number (a price or a forecast). Both are supervised because both are graded against a ground-truth label during training.'},
+    {question: 'Why is next-token prediction in LLM pretraining called "self-supervised" rather than "unsupervised," given that no human labels the training text?', answer: 'Because there is still a label being predicted at every step (the actual next token), and the model is graded against it with an ordinary loss function: mechanically identical to supervised learning. The label is just generated automatically from the data itself instead of by a human annotator, which is what "self-supervised" specifically means.'},
+    {question: 'How does reward hacking differ from label leakage as a failure mode?', answer: 'Label leakage means a supervised model learned a shortcut from information that won\'t be available at inference time, so it performs well in training and poorly in production. Reward hacking means an RL agent optimized its reward function exactly as designed, but the reward function itself was an imperfect proxy for what its designers actually wanted: the model isn\'t broken, the objective was.'},
+    {question: 'In the churn-prevention reference architecture, why does unsupervised segmentation run before the supervised churn model rather than after it?', answer: 'Segmentation groups customers by behavioral similarity with no predefined labels, which gives the supervised model cohort-specific structure to score within, rather than treating the entire customer base as one undifferentiated population.'},
+  ]}
+/>

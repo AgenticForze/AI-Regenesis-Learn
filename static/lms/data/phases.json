@@ -101,9 +101,13 @@
    },
    {
     "id": "1.3",
-    "title": "Machine Learning Foundations: Supervised, Unsupervised, Reinforcement Learning",
+    "title": "Machine Learning Foundations: Supervised, Unsupervised, and Reinforcement Learning",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-3-ml-foundations",
+    "summary": "Chapter 1.2 named \"machine learning\" as one layer in the AI taxonomy: logic learned from data via a loss function and an optimizer. This chapter opens that layer up. What a model learns from, and how it's told whether it's doing well, splits into three paradigms: supervised learning (learn from labeled examples), unsupervised learning (find structure with no labels at all), and reinforcement learning (learn from a reward signal earned by acting in an environment). Most production ML systems combine more than one of these, often in the same pipeline.",
+    "published": true,
+    "presentationUrl": "../slides/1.3-ML-Foundations-Slides.pptx"
    },
    {
     "id": "1.4",

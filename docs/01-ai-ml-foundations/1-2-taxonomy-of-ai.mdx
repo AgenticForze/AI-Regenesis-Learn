@@ -85,6 +85,12 @@ looks; it's about where its decision logic came from.
   textbook example of this classical sense). What the AI industry calls "generative AI" inherits
   that second model's ability to sample new examples, but almost always in the conditional
   P(output | input) form rather than the unconditional or joint form the classical term describes.
+  Autoregressive language models make the bridge between those two forms concrete: the model is
+  trained on the full joint probability of a token sequence, factored one token at a time as
+  P(x₁, x₂, ..., xₜ) = P(x₁) · P(x₂ | x₁) · P(x₃ | x₁, x₂) · ... · P(xₜ | x₁, ..., xₜ₋₁). Prompting
+  the model is what turns that joint factorization into the conditional case: the prompt fixes the
+  first several tokens, and generation only samples the conditionals for the tokens that come
+  after them.
 - *Agentic*: a control loop wraps the model, so the system perceives its current state, decides on
   a next action, executes it, and observes the result before deciding again (see **Agent** in the
   [glossary](../00-orientation/0-5-glossary-notation-conventions.md#core-terms)). What changes here
@@ -94,7 +100,13 @@ looks; it's about where its decision logic came from.
   LLM's generated text becomes the action to take), but the control-loop idea itself is older and
   more general: a rule-based thermostat or a reinforcement-learning agent built on a non-generative
   policy network is also agentic in the perceive/decide/act sense, with no generative layer
-  underneath.
+  underneath. Reinforcement learning, covered in depth in [chapter 1.3](./1-3-ml-foundations.mdx),
+  is a related but separate idea worth disentangling from this one: it's an optimization technique
+  that can show up inside several of these layers rather than being a layer of its own. A Q-table
+  is tabular machine learning; a deep Q-network is deep learning; RLHF fine-tunes a generative
+  model using a reward signal; and some agentic systems use RL to shape which action their policy
+  selects. Which layer a system belongs to still depends on where its logic came from, not on
+  whether RL was involved in producing it.
 
 **Where the boundary blurs.** A decision tree is a useful edge case: its parameters (which
 feature to split on, at what threshold, at every node) are learned from data by a greedy
@@ -138,13 +150,15 @@ flowchart LR
   C --> D[Case Summary Draft<br/>Generative AI]
   D --> E[Escalation Decision<br/>Agentic AI]
   E --> F[Human Reviewer]
+  E -.->|re-runs a rule check| A
+  E -.->|requests OCR on another page| C
 `}
   components={[
     {name: 'Input Validation (Rule-Based)', responsibility: 'Rejects malformed or incomplete applications before any model runs, cheaply and deterministically.'},
     {name: 'Risk Scoring (Machine Learning)', responsibility: 'Scores approved applications against historical repayment patterns to produce a numeric risk estimate.'},
     {name: 'Document OCR (Deep Learning)', responsibility: 'Extracts fields from scanned pay stubs and statements that the risk model needs as input.'},
     {name: 'Case Summary Draft (Generative AI)', responsibility: 'Drafts a plain-language summary of the application and flagged risk factors for the reviewer.'},
-    {name: 'Escalation Decision (Agentic AI)', responsibility: 'Decides whether to auto-approve, request more documents, or route to a human, then acts on that choice.'},
+    {name: 'Escalation Decision (Agentic AI)', responsibility: 'Decides whether to auto-approve, request more documents, or route to a human, then acts on that choice. Unlike the earlier stages, it can also call back into an earlier layer, such as re-running the rule check after a document amendment or requesting OCR on a page it skipped, which is why the pipeline is a loop with a linear happy path through it rather than a strict one-way sequence.'},
     {name: 'Human Reviewer', responsibility: 'Makes or confirms the final call on anything the agentic layer routes to them.'},
   ]}
 />

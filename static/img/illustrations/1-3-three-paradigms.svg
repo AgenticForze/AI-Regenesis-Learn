@@ -1,0 +1,97 @@
+<svg width="1400" height="560" viewBox="0 0 1400 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title3 desc3">
+  <title id="title3">Three data flows: supervised, unsupervised, and reinforcement learning</title>
+  <desc id="desc3">Supervised learning compares a model's prediction to a known label and feeds the error back. Unsupervised learning has no label to compare against, only structure to discover. Reinforcement learning loops an agent's actions through an environment that returns a new state and a reward.</desc>
+
+  <rect x="0" y="0" width="1400" height="560" rx="12" fill="#fcfcfb"/>
+
+  <!-- column dividers -->
+  <line x1="466" y1="40" x2="466" y2="520" stroke="#e1e0d9" stroke-width="1.5"/>
+  <line x1="932" y1="40" x2="932" y2="520" stroke="#e1e0d9" stroke-width="1.5"/>
+
+  <!-- ================= PANEL 1: SUPERVISED ================= -->
+  <text x="233" y="45" text-anchor="middle" font-size="17" font-weight="700" fill="#0b0b0b">Supervised</text>
+
+  <rect x="63" y="80" width="340" height="60" rx="8" fill="#5598e7"/>
+  <text x="233" y="115" text-anchor="middle" font-size="13.5" font-weight="700" fill="#ffffff">Labeled Data (x, y)</text>
+
+  <line x1="233" y1="140" x2="233" y2="175" stroke="#898781" stroke-width="2" marker-end="url(#arrowS)"/>
+
+  <rect x="63" y="180" width="340" height="60" rx="8" fill="#2a78d6"/>
+  <text x="233" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Model</text>
+
+  <line x1="233" y1="240" x2="233" y2="275" stroke="#898781" stroke-width="2" marker-end="url(#arrowS)"/>
+
+  <rect x="63" y="280" width="340" height="60" rx="8" fill="#184f95"/>
+  <text x="233" y="315" text-anchor="middle" font-size="13.5" font-weight="700" fill="#ffffff">Prediction ŷ</text>
+
+  <line x1="233" y1="340" x2="233" y2="375" stroke="#898781" stroke-width="2" marker-end="url(#arrowS)"/>
+
+  <rect x="63" y="380" width="340" height="60" rx="8" fill="#f0efec" stroke="#c3c2b7" stroke-width="1.5"/>
+  <text x="233" y="408" text-anchor="middle" font-size="12.5" fill="#0b0b0b">Compare ŷ to true label y</text>
+  <text x="233" y="426" text-anchor="middle" font-size="12.5" fill="#0b0b0b">→ error signal</text>
+
+  <path d="M 63 410 C 20 410, 20 210, 63 210" stroke="#a33a2f" stroke-width="2" fill="none" marker-end="url(#arrowErr)"/>
+  <text x="30" y="300" font-size="11" fill="#a33a2f" transform="rotate(-90 30 300)" text-anchor="middle">feeds back</text>
+
+  <text x="233" y="480" text-anchor="middle" font-size="12" fill="#52514e">Graded against a</text>
+  <text x="233" y="497" text-anchor="middle" font-size="12" fill="#52514e">human-supplied label</text>
+
+  <!-- ================= PANEL 2: UNSUPERVISED ================= -->
+  <text x="699" y="45" text-anchor="middle" font-size="17" font-weight="700" fill="#0b0b0b">Unsupervised</text>
+
+  <rect x="529" y="80" width="340" height="60" rx="8" fill="#5598e7"/>
+  <text x="699" y="115" text-anchor="middle" font-size="13.5" font-weight="700" fill="#ffffff">Unlabeled Data (x)</text>
+
+  <line x1="699" y1="140" x2="699" y2="175" stroke="#898781" stroke-width="2" marker-end="url(#arrowS)"/>
+
+  <rect x="529" y="180" width="340" height="60" rx="8" fill="#2a78d6"/>
+  <text x="699" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Model</text>
+
+  <line x1="699" y1="240" x2="699" y2="275" stroke="#898781" stroke-width="2" marker-end="url(#arrowS)"/>
+
+  <rect x="529" y="280" width="340" height="60" rx="8" fill="#184f95"/>
+  <text x="699" y="308" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Structure</text>
+  <text x="699" y="326" text-anchor="middle" font-size="11.5" fill="#cde2fb">clusters, components, outliers</text>
+
+  <rect x="529" y="380" width="340" height="60" rx="8" fill="#f0efec" stroke="#c3c2b7" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <text x="699" y="408" text-anchor="middle" font-size="12.5" fill="#898781">No comparison</text>
+  <text x="699" y="426" text-anchor="middle" font-size="12.5" fill="#898781">no ground truth to check against</text>
+
+  <text x="699" y="480" text-anchor="middle" font-size="12" fill="#52514e">Judged by usefulness,</text>
+  <text x="699" y="497" text-anchor="middle" font-size="12" fill="#52514e">not accuracy</text>
+
+  <!-- ================= PANEL 3: REINFORCEMENT LEARNING ================= -->
+  <text x="1165" y="45" text-anchor="middle" font-size="17" font-weight="700" fill="#0b0b0b">Reinforcement Learning</text>
+
+  <circle cx="1075" cy="220" r="70" fill="#184f95"/>
+  <text x="1075" y="215" text-anchor="middle" font-size="15" font-weight="700" fill="#ffffff">Agent</text>
+  <text x="1075" y="234" text-anchor="middle" font-size="11" fill="#cde2fb">learns a policy</text>
+
+  <circle cx="1255" cy="220" r="70" fill="#104281"/>
+  <text x="1255" y="215" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Environment</text>
+
+  <path d="M 1140 195 Q 1195 175 1190 200" stroke="#898781" stroke-width="2.5" fill="none" marker-end="url(#arrowS)"/>
+  <text x="1165" y="168" text-anchor="middle" font-size="11.5" fill="#52514e">action</text>
+
+  <path d="M 1190 250 Q 1195 275 1140 255" stroke="#898781" stroke-width="2.5" fill="none" marker-end="url(#arrowS)"/>
+  <text x="1165" y="292" text-anchor="middle" font-size="11.5" fill="#52514e">state + reward</text>
+
+  <rect x="1005" y="380" width="340" height="70" rx="8" fill="#f0efec" stroke="#c3c2b7" stroke-width="1.5"/>
+  <text x="1175" y="405" text-anchor="middle" font-size="12.5" fill="#0b0b0b">No per-step correct action</text>
+  <text x="1175" y="424" text-anchor="middle" font-size="12.5" fill="#0b0b0b">only a reward, often delayed</text>
+  <text x="1175" y="442" text-anchor="middle" font-size="12.5" fill="#0b0b0b">and shaped by the agent's own choices</text>
+
+  <text x="1175" y="490" text-anchor="middle" font-size="12" fill="#52514e">Optimizes cumulative reward,</text>
+  <text x="1175" y="507" text-anchor="middle" font-size="12" fill="#52514e">not one-step accuracy</text>
+
+  <defs>
+    <marker id="arrowS" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#898781"/>
+    </marker>
+    <marker id="arrowErr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#a33a2f"/>
+    </marker>
+  </defs>
+
+  <text x="700" y="545" text-anchor="middle" font-size="13" fill="#898781">The dividing question: what feedback does the model get, and where does it come from?</text>
+</svg>
