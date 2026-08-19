@@ -29,17 +29,19 @@ shell `index.md` listing planned chapters.
 
 The chapter file is the source of truth. On every `npm run build` or `npm run deploy`, the LMS
 catalogue is regenerated from every chapter with `title` and `chapter` front matter. A published
-chapter automatically gets an **Open full chapter** button in the LMS reader. Add these optional
-front-matter fields when the catalogue needs more detail:
+chapter renders directly in the LMS reader. Add these optional front-matter fields when the
+catalogue needs more detail:
 
 ```yaml
 lms_hours: 3
 lms_tags: [Foundations, History]
 lms_summary: "A short learner-facing summary for the LMS catalogue."
+lms_presentation: "1.1-What-Is-AI-Slides.pptx"
 ```
 
 Do not edit `static/lms/data/curriculum.js` or `static/lms/data/phases.json` by hand; run
-`npm run sync:lms` to regenerate them.
+`npm run sync:lms` to regenerate them. Put chapter PowerPoint files in `static/slides/`; the build
+publishes them at `/slides/<filename>` and exposes the LMS download tag automatically.
 
 ## 2. The chapter contract
 

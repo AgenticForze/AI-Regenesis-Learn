@@ -58,6 +58,7 @@ async function publishedChapters() {
       summary: meta.lms_summary || firstParagraph(source),
       hours: meta.lms_hours ? Number(meta.lms_hours) : undefined,
       tags: parseTags(meta.lms_tags),
+      presentationUrl: meta.lms_presentation ? `../slides/${meta.lms_presentation}` : undefined,
     });
   }
   return chapters;
@@ -95,7 +96,7 @@ for (const live of liveChapters.values()) {
 for (const phase of phases) for (const chapter of phase.chapters) {
   const live = liveChapters.get(String(chapter.id));
   if (!live) {
-    delete chapter.url; delete chapter.summary; delete chapter.published;
+    delete chapter.url; delete chapter.summary; delete chapter.published; delete chapter.presentationUrl;
     continue;
   }
   chapter.title = live.title;
@@ -104,6 +105,8 @@ for (const phase of phases) for (const chapter of phase.chapters) {
   chapter.published = true;
   if (Number.isFinite(live.hours)) chapter.hours = live.hours;
   if (live.tags) chapter.tags = live.tags;
+  if (live.presentationUrl) chapter.presentationUrl = live.presentationUrl;
+  else delete chapter.presentationUrl;
 }
 
 for (const phase of phases) {
