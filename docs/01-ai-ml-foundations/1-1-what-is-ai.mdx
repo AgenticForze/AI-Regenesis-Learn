@@ -19,91 +19,122 @@ import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding'
 
 Artificial intelligence is the field of building systems that do things we've historically
 assumed require human intelligence: recognizing a face, holding a conversation, deciding a next
-move. The odd thing about the label is that it keeps moving — optical character recognition,
-chess engines, and spam filters were all once called "AI," and almost nobody calls them that
-today, because once a task is reliably automated it quietly gets reclassified as "just software."
-That's also why AI has a reputation for overpromising: twice in its history, funding and interest
-collapsed (two "AI winters") after the field's ambitions outran what the era's compute and data
-could support. The systems people mean when they say "AI" in 2026 are still **narrow** —
-extremely capable at specific tasks, not generally intelligent the way a human is. Think of AI's
-history less as one continuous invention and more like a relay race, where each runner
-(rule-based systems, expert systems, statistical ML, deep learning, generative AI, agentic AI)
-hands off the baton once the previous approach hits its ceiling.
+move. The odd thing about the label is that it keeps moving. Optical character recognition, chess
+engines, and spam filters were all once called "AI," and almost nobody calls them that today,
+because once a task is reliably automated it quietly gets reclassified as "just software"
+(sometimes called the *AI effect*). That's also why AI has a reputation for overpromising: twice
+in its history, funding and interest collapsed (two "AI winters") after the field's ambitions
+outran what the era's compute and data could support. The systems people mean when they say "AI"
+in 2026 are still **narrow**: extremely capable at specific tasks, not generally intelligent the
+way a human is. Think of AI's history less as one continuous invention and more like a relay race,
+where each runner hands off the baton once the previous approach hits its ceiling.
 
 ## High-Level Explanation
 
-Six eras, each a response to the previous one's limits. The first wave (1950s–early 1970s) built
-**symbolic, rule-based systems**: hand-written logic that manipulated symbols according to
+Six eras, each a response to the previous one's limits. The first wave (1950s to early 1970s)
+built **symbolic, rule-based systems**: hand-written logic that manipulated symbols according to
 explicit human-authored rules. It worked for tightly bounded problems (theorem proving, simple
-games) but broke down as soon as a problem's rule count grew combinatorially — a "combinatorial
+games) but broke down as soon as a problem's rule count grew combinatorially, a "combinatorial
 explosion" no amount of hand-authoring could keep up with. Funding followed enthusiasm, and when
 the approach hit its ceiling, funding collapsed: the **first AI winter** (roughly 1974–1980).
 
 The second wave, **expert systems** (1980s), narrowed the ambition: instead of general reasoning,
 encode one domain expert's rules into a system that only had to be as good as that expert, in that
 one domain (medical diagnosis, equipment configuration). It found real commercial traction for a
-few years, then hit its own ceiling — expert systems were brittle outside their narrow rule set
-and expensive to maintain — triggering the **second AI winter** (late 1980s–early 1990s).
+few years, then hit its own ceiling (brittle outside its narrow rule set, and costly to keep
+current as the world it modeled changed), triggering the **second AI winter** (late 1980s to
+early 1990s).
 
 The thaw came from a different direction entirely: **statistical machine learning** (1990s–2010s)
 replaced hand-written rules with parameters *learned* from data. **Deep learning** (2012 onward)
 went further, learning the features themselves rather than requiring a human to engineer them.
-**Generative AI** (2017 onward, accelerating sharply after 2022) learned to produce new content —
-text, images, code — rather than only classify or predict. **Agentic AI** (2023 onward) is the
-current frontier: systems that don't just generate an answer but decide a *sequence* of actions
-toward a goal, the subject of this site's flagship Phase 8.
+**Generative AI**, built on the 2017 [Transformer architecture](https://arxiv.org/abs/1706.03762)
+and mainstream since [ChatGPT's November 2022 launch](https://openai.com/index/chatgpt/), learned
+to produce new content (text, images, code) rather than only classify or predict. **Agentic AI**
+(2023 onward) is the current frontier: systems that don't just generate an answer but decide a
+*sequence* of actions toward a goal, the subject of this site's flagship Phase 8. Both of these
+last two eras have earlier technical roots than their mainstream-adoption dates suggest; see the
+Deep-Dive's dating caveat below.
 
 ![Six eras of AI history, from rule-based systems through agentic AI, with the two AI winters marked as dips in funding and interest between eras](/img/illustrations/1-1-ai-timeline.svg)
 
 Layered on top of this timeline is a second, orthogonal distinction: **narrow AI (ANI)** versus
 **general AI (AGI)** versus the still-hypothetical **superintelligence (ASI)**. This isn't about
-how "smart" a system seems in conversation — it's about *generality*: whether competence at one
+how "smart" a system seems in conversation. It's about *generality*: whether competence at one
 task transfers to unrelated tasks the way it does for a human. Every system across all six eras
 above, including today's most capable LLM agents, is narrow: remarkably capable within its
 training and tooling, but not able to walk into an unrelated cognitive task the way a person can.
 
 ## Deep-Dive Explanation
 
-**What actually caused the first AI winter.** The UK's 1973 Lighthill Report, commissioned by the
-Science Research Council, concluded that AI research had failed to deliver on its promises and
-that most results didn't generalize past laboratory-scale toy problems. It directly led to major
-UK funding cuts, and DARPA in the US followed with its own retrenchment after early machine
-translation efforts (formally, the 1966 ALPAC report) failed to produce usable results. The
-underlying technical problem was real, not just a PR failure: symbolic search and rule systems
-scale combinatorially with problem size, and 1970s compute had no way to absorb that cost.
+**What actually caused the first AI winter.** Two separate national retrenchments compound into
+what's remembered as a single winter. In the US, the 1966
+[ALPAC report](https://www.nap.edu/catalog/9547/language-and-machines-computers-in-translation-and-linguistics),
+commissioned by the funders of machine-translation research, concluded MT wasn't living up to its
+promises; the 1969 [Mansfield Amendment](https://en.wikipedia.org/wiki/Mansfield_Amendment) then
+redirected DARPA funding toward narrowly mission-relevant research, pulling money away from
+open-ended AI work through the mid-1970s. In the UK, the 1973
+[Lighthill Report](https://en.wikipedia.org/wiki/Lighthill_report), commissioned by the Science
+Research Council, concluded that AI research had failed to generalize past laboratory-scale toy
+problems and led directly to major UK funding cuts. These aren't one cause-and-effect chain; they
+are two governments independently reaching a similar conclusion within a few years of each other.
+The underlying technical problem was real, not just a funding story: symbolic search and rule
+systems scale combinatorially with problem size, and 1970s compute had no way to absorb that cost.
 
-**What ended it, and what caused the second winter.** Expert systems like MYCIN (antibiotic
-therapy recommendations, Stanford, early 1970s) and XCON (DEC's computer-configuration system,
-commercially deployed from 1980) proved narrow rule-based AI could pay for itself. That success
-funded a boom — specialized Lisp-machine hardware companies, Japan's Fifth Generation Computer
-Systems project — that collapsed for two compounding reasons: general-purpose workstations (Sun,
-and later cheap PCs) matched Lisp machines on price/performance by the late 1980s, and expert
-systems proved expensive to maintain because every new edge case required a human expert to
-hand-author another rule. DARPA cut funding again in 1987.
+**What ended it, and what caused the second winter.** Expert systems narrowed the ambition enough
+to work commercially. [MYCIN](https://en.wikipedia.org/wiki/Mycin) (Stanford, development began
+1972) proved a rule-based system could match specialist-level diagnostic accuracy for antibiotic
+therapy in blinded evaluations, though it was never actually deployed at the bedside; liability
+and workflow-integration concerns kept it a research system rather than a commercial one.
+[XCON](https://en.wikipedia.org/wiki/Xcon) (DEC's computer-configuration system, built at CMU and
+live in DEC production from 1980) is the one that proved the commercial case: by the mid-1980s it
+was processing tens of thousands of orders a year and saving DEC an estimated $25 million
+annually. That commercial success funded a boom in specialized Lisp-machine hardware companies.
+Most of that industry collapsed abruptly, in roughly a single year (1987), once general-purpose
+workstations and PCs matched Lisp machines on price and performance. Japan's Fifth Generation
+Computer Systems project is a separate story: it ran its full planned course from 1982 to 1994 and
+is judged a disappointment relative to its goals, not a company that folded alongside the
+Lisp-machine vendors. Expert systems more broadly also proved expensive to maintain, since every
+new edge case required a human expert to hand-author another rule. DARPA cut AI funding again in
+1987.
 
-**Why deep learning "arrived" in 2012, not 1986.** Backpropagation — the algorithm that makes
-training deep neural networks tractable — was popularized by Rumelhart, Hinton, and Williams in
-1986. It sat mostly dormant for 26 years not because it was wrong, but because it needed two
-things the era didn't have: enough labeled data to avoid overfitting a network with millions of
-parameters, and enough parallel compute to train one in reasonable time. ImageNet (released 2009,
-~14 million labeled images) supplied the first; GPUs, repurposed from graphics rendering, supplied
-the second. AlexNet's 2012 ImageNet win — a deep convolutional network beating every prior
-hand-engineered computer-vision pipeline by a wide margin — is the conventional marker for when
-the field's center of gravity shifted to deep learning.
+**Why deep learning "arrived" in 2012, not 1986.** Backpropagation, the algorithm that makes
+training deep neural networks tractable, was popularized by
+[Rumelhart, Hinton, and Williams in 1986](https://www.nature.com/articles/323533a0). It sat mostly
+dormant for 26 years, not because it was wrong, but because it needed two things the era didn't
+have: enough labeled data to avoid overfitting a network with millions of parameters, and enough
+parallel compute to train one in reasonable time. [ImageNet](https://www.image-net.org/) supplied
+the first (introduced in 2009 with 3.2 million labeled images, later grown to roughly 14 million
+through continued crowdsourced annotation); GPUs, repurposed from graphics rendering, supplied the
+second.
+[AlexNet's 2012 ImageNet win](https://papers.nips.cc/paper_files/paper/2012/hash/c399862d3b9d6b76c8436e924a68c45b-Abstract.html)
+(a deep convolutional network with a 15.3% top-5 error rate, against roughly 26% for the
+next-best hand-engineered pipeline) is the conventional marker for when the field's center of
+gravity shifted to deep learning.
 
-**Narrow AI, formally.** A system is narrow to the extent that its learned competence is
-task-specific: a model trained to play chess doesn't thereby know anything about protein folding,
-even if both are "hard" problems by human standards. AGI would require competence that transfers
-across essentially arbitrary cognitive tasks, the way human general intelligence does; no system
-built in any of the six eras above has demonstrated this. ASI is a hypothetical further step —
-general intelligence that substantially exceeds human capability across the board — and remains
-outside the scope of what any current system does; treat claims of AGI or ASI arrival with the
-same evidentiary standard as any other extraordinary technical claim, and check the date on any
-source making one, since this is an actively and publicly contested question as of 2026.
+**A dating caveat worth flagging.** This chapter's era boundaries are conventional markers, not
+sharp cutoffs. Generative modeling predates the 2017 Transformer paper: GANs (2014) and VAEs
+(2013) were already producing synthetic images years earlier; what's specific to 2017 onward is
+the Transformer-based lineage that led to today's large language and diffusion models. Similarly,
+agentic AI's technical seed, the [ReAct](https://arxiv.org/abs/2210.03629) reasoning-and-acting
+pattern, was published in October 2022, several months before the 2023 mainstream tooling wave
+(autonomous-agent projects, widespread function-calling APIs) this chapter dates it to.
+
+**How narrowness is actually measured.** Generality isn't asserted, it's tested via transfer:
+evaluate a system on tasks it wasn't specifically built for and see whether performance holds up
+without task-specific retraining. This is why agent evaluation work (Phase 15 covers this in
+depth) increasingly leans on out-of-distribution and multi-domain benchmarks rather than
+single-task leaderboards; a model that tops one narrow benchmark and collapses on a slightly
+different one is exhibiting exactly the task-specificity that defines narrow AI. A related
+mechanism worth naming: an LLM's apparent flexibility across topics in conversation is mostly
+*in-context learning* (using information provided in the prompt to shape a response) rather than
+*weight-level generalization* (the model's underlying parameters transferring competence the way
+learning does in a human). The two produce superficially similar fluency, but only one of them is
+what AGI would require.
 
 **Failure mode to watch for:** conflating a narrow system's fluency with generality. A model that
 writes convincingly about a subject it has no grounded competence in (law, medicine, a codebase it
-has never seen) is exhibiting narrow linguistic capability, not general understanding — this
+has never seen) is exhibiting narrow linguistic capability, not general understanding. This
 distinction is the seed of the hallucination and over-trust failure modes covered throughout this
 site's Phase 8 and Phase 15.
 
@@ -112,9 +143,9 @@ site's Phase 8 and Phase 15.
 <ComparisonTable
   columns={['AI (the field)', 'Machine Learning', 'Deep Learning', 'Generative AI']}
   rows={[
-    {aspect: 'What decides the output', values: ['Any approach — rules, statistics, or learning', 'Parameters learned from data via a loss function', 'Learned, hierarchical representations (no manual feature engineering)', 'A learned probability distribution over possible outputs'], decisive: true},
-    {aspect: 'Data requirement', values: ['Varies by approach', 'Moderate — structured/tabular data works', 'Large — typically needs volume to learn representations', 'Very large — internet-scale corpora for frontier models'], },
-    {aspect: 'Characteristic era', values: ['1950s onward (umbrella term)', '1990s–2010s', '2012 onward', '2017 onward, mainstream from 2022'], },
+    {aspect: 'What decides the output', values: ['Any approach: rules, statistics, or learned parameters', 'Parameters learned from data via a loss function', 'Learned, hierarchical representations (no manual feature engineering)', 'A learned probability distribution over possible outputs'], decisive: true},
+    {aspect: 'Data requirement', values: ['Varies by approach', 'Moderate (structured/tabular data works)', 'Large: typically needs volume to learn representations', 'Very large: internet-scale corpora for frontier models'], },
+    {aspect: 'Characteristic era', values: ['1950s onward (umbrella term)', '1990s–2010s', '2012 onward', 'Transformer-based lineage from 2017, mainstream since Nov. 2022'], },
     {aspect: 'Canonical example', values: ['Any system in this chapter’s timeline', 'Logistic regression credit scorecard', 'CNN image classifier', 'GPT-style text or diffusion image model'], },
   ]}
   caption="AI is the umbrella; ML, deep learning, and generative AI are progressively narrower, nested specializations, not competing alternatives. Agentic AI narrows further still and gets its own comparison in 8.1 and 8.8."
@@ -122,7 +153,7 @@ site's Phase 8 and Phase 15.
 
 ## Reference Architecture
 
-N/A for this concept — this chapter surveys AI's history and taxonomy rather than describing one
+N/A for this concept: this chapter surveys AI's history and taxonomy rather than describing one
 system, so there's no single architecture to diagram here. See chapter 1.2 (A Taxonomy of AI,
 planned) for the layered diagram showing how these eras stack together inside a real production
 system today.
@@ -134,10 +165,10 @@ system today.
     {title: 'Rule-based transaction fraud flags (expert-system era)', problem: 'Manual review of every transaction was too slow to catch fraud before settlement.', solution: 'Hand-authored if-then rule engines flagged transactions matching known fraud patterns in real time.', risk: 'Rules go stale as fraud patterns evolve, and are easily reverse-engineered once a fraud ring learns the thresholds.'},
     {title: 'Statistical ML credit scoring', problem: 'Manual loan underwriting was slow and inconsistent across underwriters.', solution: 'Logistic-regression and scorecard models trained on historical repayment data standardized decisions.', risk: 'Historical repayment data can bake in proxy discrimination that regulators (fair lending law) specifically look for.'},
     {title: 'Deep learning check and document image processing', problem: 'Manually keying data from scanned checks and forms was slow and error-prone.', solution: 'CNN-based image models read handwritten and printed fields directly from scanned documents.', risk: 'Silent accuracy drops on document formats or handwriting styles underrepresented in training data.'},
-    {title: 'Agentic research and filings-review assistant', problem: 'Analysts spend hours summarizing filings and cross-referencing prior research.', solution: 'An LLM agent reads source documents, drafts a cited summary memo, and flags discrepancies for review.', risk: 'A hallucinated or misattributed citation presented with unearned confidence, entering a decision without adequate human review — a live model-risk-management concern.'},
+    {title: 'Agentic research and filings-review assistant', problem: 'Analysts spend hours summarizing filings and cross-referencing prior research.', solution: 'An LLM agent reads source documents, drafts a cited summary memo, and flags discrepancies for review.', risk: 'The agent misattributes or fabricates a filing detail in the summary memo, and it reaches a decision-maker without the analyst re-checking primary sources: a control gap under model-risk-management frameworks like SR 11-7.'},
   ]}
   healthcare={[
-    {title: 'Rule-based antibiotic selection (MYCIN-era expert systems)', problem: 'Selecting the right antibiotic quickly, before lab cultures return, required specialist knowledge not always available.', solution: 'A rule-based inference engine encoded infectious-disease specialists’ decision logic into a bedside tool.', risk: 'Brittle outside the scenarios its rules covered, with no real explanation beyond a trace of which rule fired.'},
+    {title: 'Rule-based antibiotic-selection decision support (MYCIN-era expert systems)', problem: 'Selecting the right antibiotic quickly, before lab cultures return, required specialist knowledge not always available.', solution: 'A rule-based inference engine encoded infectious-disease specialists’ decision logic into a diagnostic support tool, in MYCIN’s research tradition (MYCIN itself was never deployed clinically).', risk: 'Brittle outside the scenarios its rules covered, with no real explanation beyond a trace of which rule fired.'},
     {title: 'Statistical ML readmission risk prediction', problem: 'Hospitals face financial and quality penalties for preventable 30-day readmissions.', solution: 'Logistic regression or random-forest models trained on EHR features flag high-risk patients at discharge.', risk: 'Bias from historical disparities in care access can produce systematically wrong risk scores for underserved populations.'},
     {title: 'Deep learning diagnostic imaging (e.g., diabetic retinopathy screening)', problem: 'Specialist shortages mean many at-risk patients never get screened in time.', solution: 'A CNN trained on labeled retinal images flags likely disease for specialist confirmation.', risk: 'Performance degrades on imaging hardware or patient populations not represented in the training set.'},
     {title: 'Agentic clinical documentation assistant', problem: 'Physician burnout is heavily driven by time spent on manual note-taking.', solution: 'An agent listens to (or reads notes from) a visit, drafts structured documentation, and flags follow-up items.', risk: 'PHI handling requirements and unverified clinical suggestions entering the permanent record without clinician sign-off.'},
@@ -154,10 +185,10 @@ system today.
 
 <CheckYourUnderstanding
   questions={[
-    {question: 'What triggered the first AI winter, and what ended it?', answer: 'The UK’s 1973 Lighthill Report and matching DARPA funding cuts, following symbolic AI’s failure to scale past toy problems (the combinatorial explosion problem) and the 1966 ALPAC report’s negative verdict on machine translation. It thawed as narrow, commercially useful expert systems (like MYCIN and XCON) emerged in the early 1980s.'},
-    {question: 'What is the difference between narrow AI and AGI?', answer: 'Narrow AI performs well at a specific, bounded task without that competence transferring to unrelated tasks. AGI — not yet achieved by any system — would generalize across essentially any cognitive task the way a human does.'},
-    {question: 'Backpropagation was popularized in 1986. Why did deep learning only take off in 2012?', answer: 'The algorithm existed, but training a deep network well requires large labeled datasets and heavy parallel compute — neither was available at the needed scale until ImageNet (2009) supplied the data and GPUs supplied the compute, culminating in AlexNet’s 2012 ImageNet win.'},
-    {question: 'Why does the definition of "AI" keep shifting over time?', answer: 'Because a task that gets reliably automated tends to get relabeled as "just software" rather than "AI" (sometimes called the AI effect) — so the label keeps moving to whatever capability is still unsolved.'},
-    {question: 'A vendor claims their chatbot has "achieved AGI." What should you check before taking that claim at face value?', answer: 'Whether the claim is about generalization across genuinely unrelated cognitive tasks (the actual AGI bar) or about fluency/breadth within language-based tasks (which is narrow-AI capability, however impressive) — and treat the claim with the same evidentiary skepticism as any other extraordinary technical claim, checking the date and source.'},
+    {question: 'What triggered the first AI winter, and what ended it?', answer: 'Two separate national retrenchments: in the US, the 1966 ALPAC report on machine translation and the 1969 Mansfield Amendment redirecting DARPA funding; in the UK, the 1973 Lighthill Report. Both concluded, independently, that symbolic AI had failed to scale past toy problems (the combinatorial explosion problem). It thawed as narrow, commercially useful expert systems, especially XCON’s proven commercial payoff for DEC, emerged in the early 1980s.'},
+    {question: 'What is the difference between narrow AI and AGI?', answer: 'Narrow AI performs well at a specific, bounded task without that competence transferring to unrelated tasks. AGI, not yet achieved by any system, would generalize across essentially any cognitive task the way a human does.'},
+    {question: 'Backpropagation was popularized in 1986. Why did deep learning only take off in 2012?', answer: 'The algorithm existed, but training a deep network well requires large labeled datasets and heavy parallel compute; neither was available at the needed scale until ImageNet supplied the data (introduced 2009, grown to roughly 14 million labeled images over time) and GPUs supplied the compute, culminating in AlexNet’s 2012 ImageNet win.'},
+    {question: 'Why does the definition of "AI" keep shifting over time?', answer: 'Because a task that gets reliably automated tends to get relabeled as "just software" rather than "AI" (sometimes called the AI effect), so the label keeps moving to whatever capability is still unsolved.'},
+    {question: 'A vendor claims their chatbot has "achieved AGI." What should you check before taking that claim at face value?', answer: 'Whether the claim is about generalization across genuinely unrelated cognitive tasks (the actual AGI bar) or about fluency/breadth within language-based tasks, which is narrow-AI capability however impressive, and often just in-context learning rather than weight-level generalization. Treat the claim with the same evidentiary skepticism as any other extraordinary technical claim, checking the date and source.'},
   ]}
 />
