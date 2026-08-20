@@ -1,0 +1,49 @@
+<svg width="1000" height="560" viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-af desc-af">
+  <title id="title-af">Sigmoid, tanh, and ReLU activation functions compared</title>
+  <desc id="desc-af">A line chart plotting three activation functions over inputs from -4 to 4: sigmoid, squashed between 0 and 1; tanh, squashed between -1 and 1 and zero-centered; and ReLU, which is flat at zero for negative inputs and rises linearly for positive inputs with no upper bound.</desc>
+  <rect width="1000" height="560" fill="#fcfcfb"/>
+  <text x="500" y="36" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Three activation functions, one job: add nonlinearity</text>
+
+  <!-- plot frame -->
+  <rect x="100" y="70" width="800" height="400" fill="#ffffff" stroke="#e3e1db" stroke-width="1.5"/>
+  <!-- gridlines -->
+  <line x1="100" y1="150" x2="900" y2="150" stroke="#f0efec" stroke-width="1"/>
+  <line x1="100" y1="270" x2="900" y2="270" stroke="#c9c7c1" stroke-width="1.2"/>
+  <line x1="100" y1="390" x2="900" y2="390" stroke="#f0efec" stroke-width="1"/>
+  <line x1="500" y1="70" x2="500" y2="470" stroke="#c9c7c1" stroke-width="1.2"/>
+
+  <text x="94" y="115" text-anchor="end" font-size="10.5" fill="#898781">+1.0</text>
+  <text x="94" y="274" text-anchor="end" font-size="10.5" fill="#898781">0</text>
+  <text x="94" y="434" text-anchor="end" font-size="10.5" fill="#898781">-1.0</text>
+  <text x="500" y="488" text-anchor="middle" font-size="11.5" fill="#898781">input z</text>
+
+  <!-- sigmoid: 0..1 mapped to plot y 460(z=0)..80(z=1) roughly, reuse computed points shifted -->
+  <polyline fill="none" stroke="#5598e7" stroke-width="3"
+    points="120.0,267.2 170.7,265.2 221.3,262.0 272.0,256.8 322.7,248.8 373.3,237.0 424.0,220.9 474.7,201.3 500.0,190.8 525.3,180.3 576.0,160.8 626.7,144.7 677.3,132.9 728.0,124.8 778.7,119.7 829.3,116.5 880.0,114.5"/>
+
+  <!-- tanh -->
+  <polyline fill="none" stroke="#184f95" stroke-width="3" stroke-dasharray="1,0"
+    points="120.0,270.0 170.7,269.5 221.3,268.7 272.0,267.1 322.7,262.6 373.3,251.3 424.0,227.6 474.7,192.4 500.0,171.4 525.3,150.4 576.0,116.4 626.7,94.6 677.3,81.7 728.0,74.6 778.7,71.0 829.3,69.4 880.0,68.8"/>
+
+  <!-- relu, own axis 0..4 mapped 460..80 -->
+  <polyline fill="none" stroke="#104281" stroke-width="3" stroke-dasharray="9,5"
+    points="120.0,270.0 500.0,270.0 550.7,246.6 601.3,223.2 652.0,199.8 702.7,176.4 753.3,153.0 804.0,129.6 854.7,106.2 880.0,94.5"/>
+
+  <!-- legend -->
+  <g font-size="13" font-weight="600">
+    <line x1="640" y1="90" x2="670" y2="90" stroke="#5598e7" stroke-width="3"/>
+    <text x="678" y="94" fill="#0b0b0b">Sigmoid: 1/(1+e</text>
+    <text x="800" y="88" fill="#0b0b0b" font-size="9">-z</text>
+    <text x="812" y="94" fill="#0b0b0b">)</text>
+
+    <line x1="640" y1="112" x2="670" y2="112" stroke="#184f95" stroke-width="3"/>
+    <text x="678" y="116" fill="#0b0b0b">tanh(z), zero-centered</text>
+
+    <line x1="640" y1="134" x2="670" y2="134" stroke="#104281" stroke-width="3" stroke-dasharray="9,5"/>
+    <text x="678" y="138" fill="#0b0b0b">ReLU: max(0, z)</text>
+  </g>
+
+  <rect x="100" y="490" width="800" height="50" rx="8" fill="#fdecea"/>
+  <text x="500" y="512" text-anchor="middle" font-size="12" font-weight="700" fill="#a33a2f">Sigmoid and tanh saturate at large |z|; their gradient shrinks toward zero there</text>
+  <text x="500" y="530" text-anchor="middle" font-size="11.5" fill="#a33a2f">ReLU's gradient stays exactly 1 for any positive z, which is why deep nets train faster with it</text>
+</svg>

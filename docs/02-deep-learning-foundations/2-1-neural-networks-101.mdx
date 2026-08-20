@@ -1,0 +1,207 @@
+---
+title: "Neural Networks 101: From Perceptron to MLP"
+sidebar_label: "2.1 Neural Networks 101"
+sidebar_position: 1
+phase: 2
+chapter: "2.1"
+lms_presentation: "2.1-Neural-Networks-101-Slides.pptx"
+prerequisites: ["1.3", "1.4", "1.8"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A neural network is built from a simple unit, the perceptron, that takes a weighted sum of its
+inputs, adds a bias, and passes the result through an activation function. One perceptron alone can
+only separate data with a straight line, so it cannot even learn the XOR function. Stacking
+perceptrons into layers, an architecture called a multilayer perceptron (MLP), and giving each unit
+a nonlinear activation function, lets the network bend that straight line into an arbitrarily
+complex decision boundary. This single change, adding a hidden layer with a nonlinearity, is the
+mechanical difference between a model that can only draw lines and one that, per the universal
+approximation theorem, can approximate essentially any continuous function given enough hidden
+units.
+
+## High-Level Explanation
+
+A **perceptron** takes a set of numeric inputs, multiplies each by a learned weight, adds them
+together with a learned bias term, and checks whether the result crosses a threshold. Frank
+Rosenblatt introduced it in 1958 as a simplified model of a biological neuron: dendrites as
+weighted inputs, the cell body as the summation, and the axon firing or not firing as the
+threshold decision (Rosenblatt,
+[*The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain*](https://pubmed.ncbi.nlm.nih.gov/13602029/),
+*Psychological Review*, 1958). Geometrically, a single perceptron can only draw one straight line
+(or, in higher dimensions, one flat hyperplane) through its input space and say "everything on
+this side is class A, everything on the other side is class B." That is enough for problems where a
+straight line genuinely separates the classes, but many real problems are not shaped that way.
+
+A **multilayer perceptron (MLP)** stacks perceptron-like units into layers: an input layer that
+just holds the feature values, one or more **hidden layers** where the actual computation happens,
+and an output layer that produces the prediction. Every unit in a layer connects to every unit in
+the next layer, which is why this is also called a fully connected or dense network. Crucially, each
+hidden unit applies a nonlinear **activation function** to its weighted sum before passing the
+result on. Without that nonlinearity, stacking layers would be pointless: a chain of purely linear
+transformations collapses algebraically into one single linear transformation, so a "deep" network
+with no nonlinear activation is mathematically no more expressive than a single perceptron. The
+nonlinearity is what lets the network bend and fold its decision boundary instead of only ever
+drawing a straight line.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-1-perceptron-to-mlp.svg').default}
+    alt="Left: a single perceptron computing a weighted sum of three inputs plus a bias, passed through an activation function, drawing one straight decision line that fails to separate the two classes of the XOR problem. Right: a small multilayer perceptron with one hidden layer of three units, whose combined nonlinear boundaries correctly separate the same XOR data into a folded, non-linear region."
+  />
+  <figcaption>A single perceptron can only cut its input space with one straight line. A hidden layer of perceptrons, each contributing its own line, combines into a folded boundary that a single unit cannot produce.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The forward pass, formally.** For a single unit, the pre-activation value is z = Σ(wi·xi) + b,
+where wi are the unit's learned weights, xi are its inputs, and b is the learned bias. The unit's
+output is a = φ(z), where φ is the activation function. Three activation functions cover most of
+what appears later in this phase: the sigmoid, σ(z) = 1 / (1 + e^-z), squashes any real number into
+(0, 1) and was the default choice through the 1980s and 1990s; tanh(z) is a rescaled sigmoid that
+squashes into (-1, 1) and is zero-centered, which tends to make training converge faster than plain
+sigmoid; and the rectified linear unit, ReLU(z) = max(0, z), which is simply zero for negative
+inputs and the identity for positive inputs. ReLU became the default hidden-layer activation for
+deep networks after Nair and Hinton showed it trains faster than sigmoid or tanh units in deep
+architectures, in large part because its gradient does not shrink toward zero for positive inputs
+the way sigmoid's does (Nair and Hinton,
+[*Rectified Linear Units Improve Restricted Boltzmann Machines*](http://www.cs.toronto.edu/~fritz/absps/reluICML.pdf),
+ICML, 2010). Chapter 2.2 covers why a shrinking gradient (the vanishing gradient problem) matters
+once a network has many layers.
+
+**Why one perceptron cannot solve XOR.** XOR (exclusive or) outputs 1 when its two binary inputs
+differ and 0 when they match: (0,0)→0, (0,1)→1, (1,0)→1, (1,1)→0. Plotted on a plane, the two
+positive points and the two negative points cannot be separated by any single straight line, no
+matter how the perceptron's weights and bias are chosen, because the classes are diagonally
+interleaved rather than sitting on opposite sides of a line. Minsky and Papert proved this formally
+and catalogued the broader class of problems a single-layer perceptron cannot represent, in a book
+whose pessimistic reception is credited with contributing to the first AI winter (see 1.1) by
+souring funding for neural network research through the 1970s (Minsky and Papert, *Perceptrons: An
+Introduction to Computational Geometry*, MIT Press, 1969). The fix is exactly the MLP structure
+above: a hidden layer of two units, each drawing its own line, can jointly carve out the diagonal
+region XOR needs, and the output unit then combines their two outputs. This is not a special case
+that happens to work for XOR; it is the general mechanism by which any number of hidden units with
+nonlinear activations build up arbitrarily complex regions from simple linear pieces.
+
+**The universal approximation theorem** formalizes how far that mechanism generalizes. Cybenko
+proved that a feedforward network with a single hidden layer of sigmoid units can approximate any
+continuous function on a bounded input region to arbitrary precision, given enough hidden units
+(Cybenko,
+[*Approximation by Superpositions of a Sigmoidal Function*](https://www.sciencedirect.com/science/article/abs/pii/0893608089900208),
+*Mathematics of Control, Signals and Systems*, 1989). Hornik, Stinchcombe, and White extended the
+result the same year to a broad class of activation functions, not just sigmoids, showing the
+approximation property is a consequence of having a nonlinear activation and enough width, not a
+special property of any one activation function (Hornik, Stinchcombe, and White,
+[*Multilayer Feedforward Networks Are Universal Approximators*](https://www.sciencedirect.com/science/article/abs/pii/0893608089900256),
+*Neural Networks*, 1989); Hornik's 1991 follow-up generalized the conditions on the activation
+function further (Hornik,
+[*Approximation Capabilities of Multilayer Feedforward Networks*](https://web.njit.edu/~usman/courses/cs677/hornik-nn-1991.pdf),
+*Neural Networks*, 1991). The theorem is an existence proof, not a training or efficiency guarantee:
+it says a network wide enough can represent the function, but says nothing about how many hidden
+units "enough" actually is for a given function, nor whether gradient descent (chapter 2.2) will
+actually find the right weights. In practice, going deeper (more layers of moderate width) is almost
+always more parameter-efficient than going wider (one enormous hidden layer), which is the
+motivation for the deep architectures the rest of this phase builds toward.
+
+**Weight initialization matters more than it looks.** If every weight in a layer starts at the same
+value, every unit in that layer computes the same output and receives the same gradient update
+during training, so they stay identical forever, a failure called the symmetry problem. Weights are
+instead initialized to small random values, typically drawn from a distribution scaled to the
+layer's number of inputs so that the variance of activations neither explodes nor collapses to zero
+as signal passes through many layers; chapter 2.2 covers the specific schemes (Glorot/Xavier and He
+initialization) once backpropagation makes clear exactly what is being initialized.
+
+```python
+import numpy as np
+
+def forward_pass(x, W1, b1, W2, b2):
+    """A 2-layer MLP forward pass: input -> hidden (ReLU) -> output (sigmoid)."""
+    z1 = W1 @ x + b1              # pre-activation, hidden layer
+    a1 = np.maximum(0, z1)        # ReLU activation
+    z2 = W2 @ a1 + b2             # pre-activation, output layer
+    a2 = 1 / (1 + np.exp(-z2))    # sigmoid activation for a binary output
+    return a2
+
+# XOR inputs and a hidden layer of 2 units is enough to separate them
+x = np.array([1.0, 0.0])
+W1 = np.array([[1.0, 1.0], [1.0, 1.0]])
+b1 = np.array([0.0, -1.0])
+W2 = np.array([[1.0, -2.0]])
+b2 = np.array([0.0])
+print(forward_pass(x, W1, b1, W2, b2))  # ~0.73, above the 0.5 threshold for this XOR-separating weight set
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Single Perceptron', 'Multilayer Perceptron (MLP)', 'Logistic Regression', 'Decision Tree']}
+  rows={[
+    {aspect: 'Decision boundary shape', values: ['One straight line/hyperplane', 'Arbitrarily complex, folded regions', 'One straight line/hyperplane', 'Axis-aligned rectangular regions'], decisive: true},
+    {aspect: 'Can it solve XOR', values: ['No', 'Yes, with one hidden layer', 'No', 'Yes, with enough splits'], },
+    {aspect: 'How it learns', values: ['Perceptron update rule (historic) or gradient descent', 'Backpropagation + gradient descent (2.2)', 'Gradient descent on log loss', 'Greedy recursive splitting (1.5)'], },
+    {aspect: 'Interpretability', values: ['High: weights are directly readable', 'Low without extra tooling (SHAP/LIME, 1.9)', 'High: coefficients are directly readable', 'High: the split path is directly readable'], },
+  ]}
+  caption="Logistic regression is mathematically a single perceptron with a sigmoid activation; what makes an MLP qualitatively different is stacking a hidden layer beneath the output unit, not the activation function choice."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Forward pass through a 2-hidden-layer MLP"
+  mermaid={`
+flowchart LR
+  A[Input Layer: raw feature vector] --> B[Hidden Layer 1: weighted sum + ReLU]
+  B --> C[Hidden Layer 2: weighted sum + ReLU]
+  C --> D[Output Layer: weighted sum + sigmoid or softmax]
+  D --> E[Prediction]
+`}
+  components={[
+    {name: 'Input Layer', responsibility: 'Holds the feature vector as-is; performs no computation of its own.'},
+    {name: 'Hidden Layer 1 / 2', responsibility: 'Each unit computes a weighted sum of the previous layer\'s outputs plus a bias, then applies a nonlinear activation (typically ReLU).'},
+    {name: 'Output Layer', responsibility: 'Produces the final prediction; sigmoid for binary classification, softmax for multi-class, linear (no activation) for regression.'},
+    {name: 'Prediction', responsibility: 'The network\'s output, compared against the true label to compute a loss during training (chapter 2.2 covers how that loss updates every weight).'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Credit default scoring with a shallow MLP', problem: 'Logistic regression underfits a credit dataset where risk depends on nonlinear interactions between income, utilization, and delinquency history.', solution: 'A small MLP with one or two hidden layers captures those interactions directly instead of requiring hand-engineered interaction features.', risk: 'A shallow MLP is harder to explain to a regulator than logistic regression; without SHAP-style tooling (1.9), reason codes for declined applications become harder to produce.'},
+    {title: 'Transaction fraud flagging on tabular features', problem: 'Fraud patterns involve nonlinear combinations of transaction amount, merchant category, location, and recency that a linear model misses.', solution: 'An MLP trained on engineered tabular features (1.7) scores each transaction in real time against those nonlinear patterns.', risk: 'A model that only ever sees historical fraud patterns can miss a genuinely new fraud technique until enough new fraud accumulates to retrain on.'},
+    {title: 'Insurance claim severity prediction', problem: 'The relationship between policy, claimant, and incident features and eventual claim payout is not well fit by a straight line.', solution: 'An MLP regression head (linear output, no activation) predicts expected claim severity for reserving purposes.', risk: 'An MLP trained on historical claims can inherit any systematic under- or over-reserving pattern present in that history.'},
+    {title: 'Early-stage anomaly detection on account activity', problem: 'Account takeover often shows up as a subtle combination of login velocity, device change, and transaction pattern shifts, not any single flagged event.', solution: 'An MLP autoencoder (trained to reconstruct normal activity) flags accounts whose activity the network reconstructs poorly as anomalous.', risk: 'A model tuned only on past takeover patterns can be blind to new account-takeover tactics until retrained on labeled examples of them.'},
+  ]}
+  healthcare={[
+    {title: 'Readmission risk from structured EHR features', problem: 'Thirty-day readmission risk depends on nonlinear interactions among diagnosis codes, prior admissions, and lab values that a linear risk score underfits.', solution: 'An MLP trained on structured EHR features estimates readmission risk to prioritize discharge-planning resources.', risk: 'Structured EHR data reflects who historically received which tests, so a model can encode access-to-care disparities as if they were purely clinical signal (1.9).'},
+    {title: 'Triage priority scoring from vital signs', problem: 'Deciding which patients need immediate attention depends on nonlinear combinations of vital signs that simple threshold rules handle poorly.', solution: 'An MLP trained on vital-sign trends outputs a triage priority score that a nurse reviews rather than acts on automatically.', risk: 'A false negative (a genuinely urgent case scored low) carries a materially different cost than a false positive, so the decision threshold needs clinical, not just statistical, calibration.'},
+    {title: 'Length-of-stay prediction for capacity planning', problem: 'Hospital bed and staffing plans need an estimate of how long an admitted patient is likely to stay, a target with nonlinear dependence on admission features.', solution: 'An MLP regression model estimates expected length of stay from admission-time features to support daily capacity planning.', risk: 'A model trained on historical length-of-stay data absorbs whatever historical discharge practices (not just clinical need) shaped those numbers.'},
+    {title: 'Medication dosage support from patient covariates', problem: 'Selecting an appropriate starting dose for some medications depends on nonlinear interactions among weight, age, renal function, and comorbidities.', solution: 'An MLP-based decision-support tool suggests a starting-dose range for a clinician to confirm, rather than prescribing directly.', risk: 'A dosage model trained predominantly on one demographic subgroup can generalize poorly to patients underrepresented in that training data (1.9).'},
+  ]}
+  telecom={[
+    {title: 'Customer churn scoring from usage and billing features', problem: 'Churn depends on nonlinear combinations of usage trend, billing changes, and support-ticket history that a linear model captures only partially.', solution: 'An MLP churn model scores every active customer monthly, feeding retention-offer targeting.', risk: 'The same feedback-loop risk covered in 1.9 applies here: retention offers change the very behavior the model is trying to predict for its next training round.'},
+    {title: 'Network fault prediction from telemetry features', problem: 'Equipment failure risk depends on nonlinear interactions among temperature, load, and error-rate telemetry that threshold-based alerting misses.', solution: 'An MLP trained on rolling telemetry windows scores fault risk per network element to prioritize preventive maintenance.', risk: 'Telemetry gaps from under-instrumented older equipment can make that equipment look artificially low-risk simply because less data is being reported.'},
+    {title: 'Call-drop root-cause classification', problem: 'Classifying why a call dropped (congestion, handoff failure, coverage gap, equipment fault) from network KPIs is not linearly separable.', solution: 'An MLP classifier assigns a most-likely root-cause category per dropped call to route the ticket to the right team.', risk: 'A misclassified root cause routes the fix effort to the wrong team, delaying resolution of the actual problem.'},
+    {title: 'Bandwidth demand forecasting per cell site', problem: 'Short-term demand at a cell site depends on nonlinear combinations of time-of-day, event calendars, and recent trend that simple seasonal models underfit.', solution: 'An MLP regression model forecasts near-term demand per site to guide dynamic capacity allocation.', risk: 'A model trained on typical demand patterns can underforecast sharply during atypical events (outages elsewhere, large public gatherings) it has not seen enough examples of.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why can a single perceptron not learn the XOR function, and what specifically about an MLP fixes it?', answer: 'A single perceptron can only separate its input space with one straight line (or hyperplane), and XOR\'s positive and negative examples are diagonally interleaved so no single line separates them. An MLP fixes this by adding a hidden layer: each hidden unit draws its own line, and the output unit combines them into a folded, non-linear boundary that can carve out the diagonal region XOR needs.'},
+    {question: 'Why does stacking layers with no nonlinear activation function fail to add any expressive power?', answer: 'A linear transformation followed by another linear transformation is algebraically still just one linear transformation. Without a nonlinear activation function between layers, any depth of stacked layers collapses to the same expressive power as a single layer, so the nonlinearity, not the stacking itself, is what makes depth useful.'},
+    {question: 'What does the universal approximation theorem actually guarantee, and what does it not guarantee?', answer: 'It guarantees that a feedforward network with a single hidden layer and enough hidden units can approximate any continuous function on a bounded input region to arbitrary precision. It does not guarantee how many hidden units are actually needed for a specific function, and it says nothing about whether gradient descent will successfully find the weights that achieve that approximation.'},
+    {question: 'Why does initializing every weight in a network to the same value break training, and what is the standard fix?', answer: 'If every weight in a layer starts identical, every unit in that layer computes the same output and receives the same gradient update, so they remain identical through every training step, a failure called the symmetry problem. The standard fix is initializing weights to small random values, typically scaled to the layer\'s number of inputs so activation variance neither explodes nor collapses across layers.'},
+    {question: 'Why did ReLU replace sigmoid as the default hidden-layer activation in deep networks?', answer: 'Nair and Hinton showed ReLU units train faster than sigmoid or tanh units in deep architectures, largely because ReLU\'s gradient does not shrink toward zero for positive inputs the way sigmoid\'s does across many stacked layers, which chapter 2.2 covers in full as the vanishing gradient problem.'},
+  ]}
+/>

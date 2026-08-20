@@ -1,0 +1,116 @@
+<svg width="1300" height="700" viewBox="0 0 1300 700" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-nn desc-nn">
+  <title id="title-nn">A single perceptron cannot separate XOR; a multilayer perceptron with one hidden layer can</title>
+  <desc id="desc-nn">Top row: a single perceptron computes one weighted sum and draws one straight decision line, which cannot separate the diagonally interleaved XOR classes. Bottom row: a multilayer perceptron with a hidden layer of three units combines several lines into a folded boundary that correctly separates the same four XOR points.</desc>
+  <rect width="1300" height="700" fill="#fcfcfb"/>
+
+  <text x="650" y="38" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">A hidden layer turns straight lines into a folded boundary</text>
+
+  <defs>
+    <marker id="arrNN" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#52514e"/>
+    </marker>
+  </defs>
+
+  <!-- ===== ROW 1: SINGLE PERCEPTRON ===== -->
+  <text x="60" y="88" font-size="14" font-weight="700" fill="#a33a2f">SINGLE PERCEPTRON — one straight decision line</text>
+
+  <!-- network diagram -->
+  <g>
+    <circle cx="110" cy="140" r="20" fill="#86b6ef"/>
+    <text x="110" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="#0b0b0b">x1</text>
+    <circle cx="110" cy="200" r="20" fill="#86b6ef"/>
+    <text x="110" y="205" text-anchor="middle" font-size="11" font-weight="700" fill="#0b0b0b">x2</text>
+    <circle cx="110" cy="260" r="20" fill="#cde2fb"/>
+    <text x="110" y="265" text-anchor="middle" font-size="10" font-weight="700" fill="#0b0b0b">b</text>
+
+    <line x1="130" y1="140" x2="260" y2="190" stroke="#898781" stroke-width="1.5"/>
+    <line x1="130" y1="200" x2="260" y2="197" stroke="#898781" stroke-width="1.5"/>
+    <line x1="130" y1="260" x2="260" y2="205" stroke="#898781" stroke-width="1.5"/>
+
+    <rect x="260" y="165" width="150" height="65" rx="8" fill="#184f95"/>
+    <text x="335" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">z = Σ wi xi + b</text>
+    <text x="335" y="210" text-anchor="middle" font-size="10" fill="#cde2fb">weighted sum</text>
+
+    <line x1="410" y1="197" x2="460" y2="197" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrNN)"/>
+
+    <circle cx="500" cy="197" r="26" fill="#0d2c4e"/>
+    <text x="500" y="193" text-anchor="middle" font-size="9.5" fill="#ffffff">step /</text>
+    <text x="500" y="205" text-anchor="middle" font-size="9.5" fill="#ffffff">φ(z)</text>
+  </g>
+
+  <!-- XOR scatter, failing -->
+  <g>
+    <rect x="620" y="90" width="380" height="230" rx="10" fill="#ffffff" stroke="#e3e1db" stroke-width="1.5"/>
+    <text x="810" y="115" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0b0b0b">XOR: (x1, x2) &#8594; class</text>
+    <line x1="700" y1="290" x2="700" y2="130" stroke="#898781" stroke-width="1"/>
+    <line x1="700" y1="290" x2="960" y2="290" stroke="#898781" stroke-width="1"/>
+    <text x="695" y="305" text-anchor="middle" font-size="9" fill="#898781">0</text>
+    <text x="945" y="305" text-anchor="middle" font-size="9" fill="#898781">x1=1</text>
+    <text x="680" y="140" text-anchor="middle" font-size="9" fill="#898781">x2=1</text>
+
+    <!-- points: (0,0)->0 bottom-left, (1,1)->0 top-right, (0,1)->1 top-left, (1,0)->1 bottom-right -->
+    <circle cx="700" cy="290" r="8" fill="#184f95"/>
+    <circle cx="940" cy="150" r="8" fill="#184f95"/>
+    <circle cx="700" cy="150" r="8" fill="#a33a2f"/>
+    <circle cx="940" cy="290" r="8" fill="#a33a2f"/>
+
+    <line x1="670" y1="270" x2="970" y2="170" stroke="#a33a2f" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="810" y="335" text-anchor="middle" font-size="11" font-weight="700" fill="#a33a2f">No straight line separates blue from red</text>
+  </g>
+
+  <line x1="60" y1="360" x2="1240" y2="360" stroke="#e3e1db" stroke-width="1.5"/>
+
+  <!-- ===== ROW 2: MLP ===== -->
+  <text x="60" y="405" font-size="14" font-weight="700" fill="#184f95">MULTILAYER PERCEPTRON — hidden layer folds the boundary</text>
+
+  <g>
+    <circle cx="90" cy="460" r="18" fill="#86b6ef"/>
+    <text x="90" y="465" text-anchor="middle" font-size="10" font-weight="700" fill="#0b0b0b">x1</text>
+    <circle cx="90" cy="540" r="18" fill="#86b6ef"/>
+    <text x="90" y="545" text-anchor="middle" font-size="10" font-weight="700" fill="#0b0b0b">x2</text>
+
+    <circle cx="230" cy="420" r="20" fill="#5598e7"/>
+    <text x="230" y="425" text-anchor="middle" font-size="9" fill="#ffffff">h1</text>
+    <circle cx="230" cy="500" r="20" fill="#5598e7"/>
+    <text x="230" y="505" text-anchor="middle" font-size="9" fill="#ffffff">h2</text>
+    <circle cx="230" cy="580" r="20" fill="#5598e7"/>
+    <text x="230" y="585" text-anchor="middle" font-size="9" fill="#ffffff">h3</text>
+
+    <line x1="106" y1="460" x2="212" y2="425" stroke="#898781" stroke-width="1.3"/>
+    <line x1="106" y1="460" x2="212" y2="497" stroke="#898781" stroke-width="1.3"/>
+    <line x1="106" y1="460" x2="212" y2="575" stroke="#898781" stroke-width="1.3"/>
+    <line x1="106" y1="540" x2="212" y2="425" stroke="#898781" stroke-width="1.3"/>
+    <line x1="106" y1="540" x2="212" y2="503" stroke="#898781" stroke-width="1.3"/>
+    <line x1="106" y1="540" x2="212" y2="580" stroke="#898781" stroke-width="1.3"/>
+
+    <circle cx="400" cy="500" r="24" fill="#0d2c4e"/>
+    <text x="400" y="496" text-anchor="middle" font-size="9" fill="#ffffff">ReLU</text>
+    <text x="400" y="508" text-anchor="middle" font-size="9" fill="#ffffff">sum</text>
+
+    <line x1="250" y1="420" x2="378" y2="492" stroke="#898781" stroke-width="1.3"/>
+    <line x1="250" y1="500" x2="376" y2="500" stroke="#898781" stroke-width="1.3"/>
+    <line x1="250" y1="580" x2="378" y2="508" stroke="#898781" stroke-width="1.3"/>
+
+    <line x1="424" y1="500" x2="470" y2="500" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrNN)"/>
+    <circle cx="505" cy="500" r="22" fill="#104281"/>
+    <text x="505" y="504" text-anchor="middle" font-size="9" fill="#ffffff">out</text>
+  </g>
+
+  <!-- XOR scatter, succeeding -->
+  <g>
+    <rect x="620" y="410" width="380" height="230" rx="10" fill="#ffffff" stroke="#e3e1db" stroke-width="1.5"/>
+    <text x="810" y="435" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0b0b0b">Same four XOR points</text>
+    <line x1="700" y1="610" x2="700" y2="450" stroke="#898781" stroke-width="1"/>
+    <line x1="700" y1="610" x2="960" y2="610" stroke="#898781" stroke-width="1"/>
+
+    <ellipse cx="700" cy="605" rx="44" ry="28" fill="#cde2fb" fill-opacity="0.7" stroke="#184f95" stroke-width="2.5"/>
+    <ellipse cx="940" cy="475" rx="44" ry="28" fill="#cde2fb" fill-opacity="0.7" stroke="#184f95" stroke-width="2.5"/>
+
+    <circle cx="700" cy="610" r="8" fill="#184f95"/>
+    <circle cx="940" cy="470" r="8" fill="#184f95"/>
+    <circle cx="700" cy="470" r="8" fill="#a33a2f"/>
+    <circle cx="940" cy="610" r="8" fill="#a33a2f"/>
+
+    <text x="810" y="655" text-anchor="middle" font-size="11" font-weight="700" fill="#184f95">Folded boundary separates blue from red exactly</text>
+  </g>
+</svg>
