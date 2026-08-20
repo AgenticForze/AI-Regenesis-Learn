@@ -226,9 +226,13 @@
    },
    {
     "id": "2.5",
-    "title": "The Transformer Architecture — Deep Dive",
+    "title": "The Transformer Architecture: A Deep Dive",
     "tags": [],
-    "hours": 4
+    "hours": 4,
+    "url": "../docs/deep-learning-foundations/2-5-transformer-architecture",
+    "summary": "An RNN (2.4), even with LSTM or GRU gating, still processes a sequence one step at a time: step 50 cannot start until step 49 finishes, and information connecting two distant positions still has to travel through every step in between. The Transformer removes recurrence entirely and replaces it with **self-attention**: every position looks directly at every other position in a single step, so the path length between any two positions is constant regardless of distance, and every position in a sequence can be processed in parallel during training. Because attention alone has no built-in sense of order, a **positional encoding** is added to each token's representation so the model can recover word order. **Multi-head attention** runs several attention computations in parallel with different learned projections, letting the model attend to different kinds of relationships (say, syntactic agreement and topical relevance) at once. Stacked layers of attention and a position-wise feedforward network, each wrapped in a residual connection (2.3) and layer normalization, form the encoder and decoder stacks that make up the full architecture (Vaswani et al., 2017).",
+    "published": true,
+    "presentationUrl": "../slides/2.5-Transformer-Architecture-Slides.pptx"
    },
    {
     "id": "2.6",

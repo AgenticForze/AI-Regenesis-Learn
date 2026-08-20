@@ -1,0 +1,237 @@
+---
+title: "The Transformer Architecture: A Deep Dive"
+sidebar_label: "2.5 The Transformer Architecture"
+sidebar_position: 5
+phase: 2
+chapter: "2.5"
+lms_presentation: "2.5-Transformer-Architecture-Slides.pptx"
+prerequisites: ["2.2", "2.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+An RNN (2.4), even with LSTM or GRU gating, still processes a sequence one step at a time: step 50
+cannot start until step 49 finishes, and information connecting two distant positions still has to
+travel through every step in between. The Transformer removes recurrence entirely and replaces it
+with **self-attention**: every position looks directly at every other position in a single step,
+so the path length between any two positions is constant regardless of distance, and every
+position in a sequence can be processed in parallel during training. Because attention alone has no
+built-in sense of order, a **positional encoding** is added to each token's representation so the
+model can recover word order. **Multi-head attention** runs several attention computations in
+parallel with different learned projections, letting the model attend to different kinds of
+relationships (say, syntactic agreement and topical relevance) at once. Stacked layers of
+attention and a position-wise feedforward network, each wrapped in a residual connection (2.3) and
+layer normalization, form the encoder and decoder stacks that make up the full architecture
+(Vaswani et al., 2017).
+
+## High-Level Explanation
+
+**Self-attention** lets every word in a sequence directly weigh how relevant every other word is to
+understanding it, and then builds a new representation for that word as a weighted combination of
+all the others, weighted by that relevance. Reading "the animal didn't cross the street because it
+was too tired," resolving what "it" refers to means the word "it" needs to attend strongly to
+"animal" and weakly to everything else; self-attention computes exactly this kind of relevance
+score between every pair of words in the sequence, all at once, rather than relying on a hidden
+state that has been carried step by step from wherever "animal" appeared.
+
+**Multi-head attention** runs this relevance-and-combine process several times in parallel, each
+with its own learned set of projections, so different heads can specialize in different kinds of
+relationships. One head might learn to track subject-verb agreement, another might track
+coreference like the "it" example above, and another might track topical similarity; the model
+learns what each head specializes in during training, nothing is hand-assigned.
+
+Because self-attention treats a sequence as a set of positions to compare rather than a chain
+processed in order, it has no inherent notion of which word came first, second, or last: shuffling
+the input words would produce the same set of pairwise comparisons. A **positional encoding** is
+added to each word's embedding before the first attention layer, injecting a signal that varies
+with position so the model can recover order and relative distance between words.
+
+The full architecture is organized as an **encoder** and a **decoder**. The encoder reads the
+entire input sequence and builds a contextual representation of it, with every position attending
+to every other input position. The decoder generates the output sequence one token at a time; at
+each step it attends to the tokens it has already generated (masked so it cannot look ahead at
+tokens it hasn't produced yet) and separately attends to the encoder's output, pulling in relevant
+information from the input.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-5-attention-intuition.svg').default}
+    alt="A sentence showing self-attention: the word 'it' is connected by attention weight lines of varying thickness to every other word in the sentence, with the thickest line connecting 'it' to 'animal', showing that self-attention resolves which earlier word a pronoun refers to by directly attending to it, rather than carrying that information through a chain of intermediate hidden states."
+  />
+  <figcaption>Self-attention lets "it" connect directly to "animal" in one step, regardless of how many words separate them.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Scaled dot-product attention, formally.** Every input position's embedding is linearly projected
+into three vectors: a query Q, a key K, and a value V, using three learned weight matrices (W_Q,
+W_K, W_V) shared across positions. Attention output is computed as:
+
+Attention(Q, K, V) = softmax(QK^T / √d_k) · V
+
+QK^T computes a similarity score between every query and every key (a dot product: higher when the
+two vectors point in a similar direction), producing an n x n matrix of raw relevance scores for a
+sequence of length n. Dividing by √d_k, where d_k is the dimensionality of the key vectors,
+counteracts a specific problem: as d_k grows, dot products tend to grow large in magnitude purely
+from summing more terms, which pushes the softmax into a region where its gradient is very small,
+the same kind of saturated-gradient problem chapter 2.1 introduced for sigmoid activations. Scaling
+keeps the values in a range where softmax gradients stay informative. Softmax then converts each
+row of scores into a probability distribution over positions to attend to, and the result is a
+weighted sum of value vectors V using those probabilities as weights.
+
+**Multi-head attention** runs h independent copies of this computation in parallel, each with its
+own W_Q, W_K, W_V projecting into a smaller dimension (d_model / h), then concatenates all h
+outputs and applies one more learned projection W_O:
+
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h) · W_O, where head_i = Attention(Q·W_Q_i, K·W_K_i, V·W_V_i)
+
+Splitting into h smaller heads costs roughly the same total compute as one large head, but gives
+the model h separate subspaces in which to learn distinct relevance patterns rather than one
+averaged pattern (Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser, and Polosukhin,
+[*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), NeurIPS, 2017). This mechanism
+builds on an earlier, RNN-based attention mechanism that first showed a model could learn to focus
+on relevant input positions rather than compressing an entire sequence into one fixed vector
+(Bahdanau, Cho, and Bengio,
+[*Neural Machine Translation by Jointly Learning to Align and Translate*](https://arxiv.org/abs/1409.0473),
+ICLR, 2015); the Transformer's contribution was showing that attention alone, without any
+recurrence at all, is sufficient.
+
+**Positional encoding.** The original Transformer adds a fixed, deterministic signal to each
+position's embedding using sine and cosine functions at different frequencies:
+
+PE(pos, 2i) = sin(pos / 10000^(2i/d)), PE(pos, 2i+1) = cos(pos / 10000^(2i/d))
+
+where pos is the position in the sequence and i indexes the embedding dimension. Because sine and
+cosine at a fixed frequency have the property that PE(pos+k) can be expressed as a linear function
+of PE(pos), the model can in principle learn to attend by relative position, not just absolute
+position. Later Transformer variants often use learned positional embeddings or other schemes
+instead, but the underlying requirement, that some position-dependent signal must be injected
+since attention itself has none, holds across all of them.
+
+**Masking.** The decoder's self-attention must not let a position attend to positions after it,
+since at generation time those tokens do not exist yet. This is enforced by adding negative
+infinity to the disallowed entries of the QK^T score matrix before the softmax, so their attention
+weight becomes exactly zero. This is called a causal mask, and it is what makes decoder training
+consistent with autoregressive generation at inference time.
+
+**The full block.** Each encoder layer applies multi-head self-attention followed by a
+position-wise feedforward network (two linear layers with a nonlinearity between them, applied
+identically to every position), and both sublayers are wrapped in a residual connection (2.3) and
+followed by layer normalization: output = LayerNorm(x + Sublayer(x)). Layer normalization
+normalizes across a single position's feature dimensions rather than across a batch, which makes it
+independent of batch size and well suited to sequences of varying length (Ba, Kiros, and Hinton,
+[*Layer Normalization*](https://arxiv.org/abs/1607.06450), 2016). A decoder layer has the same two
+sublayers plus a third: cross-attention, where queries come from the decoder's own
+representation but keys and values come from the encoder's output, which is how the decoder pulls
+information from the input sequence. The original architecture stacks 6 encoder layers and 6
+decoder layers, though later models vary this substantially. Before any of this, raw text is split
+into subword tokens (commonly by byte-pair encoding) so that both common whole words and rare or
+unseen words can be represented from a fixed, manageable vocabulary (Sennrich, Haddow, and Birch,
+[*Neural Machine Translation of Rare Words with Subword Units*](https://aclanthology.org/P16-1162/),
+ACL, 2016).
+
+**Compute tradeoff.** Self-attention's cost per layer scales as O(n^2 · d) for a sequence of length
+n and dimension d, since every position compares against every other position, versus an RNN
+layer's O(n · d^2). For the sequence lengths common in the original Transformer's experiments this
+favored attention, since it runs in parallel across positions rather than n sequential steps; for
+very long sequences the quadratic term in n becomes the dominant cost, which is why long-context
+efficiency became an active research area in the years after this architecture was introduced.
+
+```python
+import numpy as np
+
+def softmax(x, axis=-1):
+    x = x - np.max(x, axis=axis, keepdims=True)  # numerical stability
+    e = np.exp(x)
+    return e / np.sum(e, axis=axis, keepdims=True)
+
+def scaled_dot_product_attention(Q, K, V, mask=None):
+    """Q, K, V: arrays of shape (seq_len, d_k). mask: optional (seq_len, seq_len) of 0/1."""
+    d_k = Q.shape[-1]
+    scores = Q @ K.T / np.sqrt(d_k)          # (seq_len, seq_len) raw relevance scores
+    if mask is not None:
+        scores = np.where(mask == 0, -np.inf, scores)   # causal mask: block future positions
+    weights = softmax(scores, axis=-1)        # each row sums to 1
+    return weights @ V, weights               # weighted sum of values, and the weights themselves
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['RNN / LSTM / GRU (2.4)', 'Transformer']}
+  rows={[
+    {aspect: 'Path length between any two positions', values: ['O(n): information travels through every intermediate step', 'O(1): every position attends directly to every other position'], decisive: true},
+    {aspect: 'Parallelization across sequence positions during training', values: ['Limited: step t needs step t-1’s output', 'Full: all positions processed simultaneously'], },
+    {aspect: 'Compute cost per layer', values: ['O(n · d^2)', 'O(n^2 · d), quadratic in sequence length'], },
+    {aspect: 'How order is represented', values: ['Implicit in the order of recurrent steps', 'Explicit positional encoding added to embeddings'], },
+  ]}
+  caption="The Transformer trades an RNN's sequential-but-cheaper-per-token computation for a fully parallel but quadratic-in-length computation, and trades an implicit sense of order for an explicit one."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The Transformer encoder-decoder stack"
+  mermaid={`
+flowchart TB
+  IN[Input tokens] --> EMB[Input embedding + positional encoding]
+  EMB --> ENC1[Encoder layer: self-attention, then feedforward, each with residual + layer norm]
+  ENC1 --> ENCN[... x N encoder layers]
+  ENCN --> ENCOUT[Encoder output representations]
+  OUT[Output tokens so far] --> DEMB[Output embedding + positional encoding]
+  DEMB --> DEC1[Decoder layer: masked self-attention, then cross-attention to encoder output, then feedforward]
+  ENCOUT --> DEC1
+  DEC1 --> DECN[... x N decoder layers]
+  DECN --> LIN[Linear projection to vocabulary size]
+  LIN --> SOFT[Softmax: probability of next token]
+`}
+  components={[
+    {name: 'Input/output embedding + positional encoding', responsibility: 'Converts tokens to vectors and injects a position-dependent signal, since attention alone carries no notion of order.'},
+    {name: 'Encoder layer', responsibility: 'Self-attention over the whole input sequence, then a position-wise feedforward network, each wrapped in a residual connection and layer normalization.'},
+    {name: 'Decoder layer', responsibility: 'Masked self-attention over tokens generated so far, cross-attention to the encoder\'s output, then a feedforward network, each wrapped in a residual connection and layer normalization.'},
+    {name: 'Linear + softmax', responsibility: 'Projects the final decoder representation to a probability distribution over the vocabulary for the next token.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Long-document contract and filing analysis', problem: 'Legal and compliance teams need to extract obligations and flag anomalous clauses across lengthy contracts and regulatory filings.', solution: 'A Transformer-based model processes the full document with self-attention connecting relevant clauses regardless of how far apart they appear, unlike an RNN that would need to carry that context step by step.', risk: 'Very long documents can exceed a model\'s context window or push into the quadratic-cost region, requiring chunking that can split apart genuinely related clauses.'},
+    {title: 'Financial research summarization', problem: 'Analysts need condensed summaries of lengthy earnings calls, filings, and research notes without losing material details.', solution: 'A Transformer-based summarization model generates a summary by attending across the entire source document at each generation step.', risk: 'A fluent summary can quietly drop a material qualifier or caveat that changes the interpretation of a financial statement.'},
+    {title: 'Customer service and advisory chat assistants', problem: 'Customers expect natural-language answers to account and product questions without waiting for a human agent.', solution: 'A Transformer-based conversational model, grounded in account data and product documentation, handles routine inquiries and escalates complex ones.', risk: 'A model can produce fluent, confident-sounding answers on topics like specific account terms where it should defer to verified data instead.'},
+    {title: 'Cross-lingual client communications', problem: 'Global institutions need to translate client communications and disclosures accurately across languages.', solution: 'A Transformer-based machine translation model, the architecture\'s original application domain, translates communications while preserving financial terminology.', risk: 'Domain-specific financial or legal terms can be mistranslated in ways that are not obvious without bilingual review.'},
+  ]}
+  healthcare={[
+    {title: 'Clinical note summarization', problem: 'Clinicians need a concise summary of a long, multi-visit patient history without re-reading every note.', solution: 'A Transformer-based summarization model attends across the full note history to produce a structured summary for the current visit.', risk: 'A summary can omit an infrequently mentioned but clinically important detail if it does not recur across enough of the source notes.'},
+    {title: 'Medical literature question answering', problem: 'Clinicians and researchers need fast, accurate answers grounded in a large and constantly growing body of medical literature.', solution: 'A Transformer-based model, often paired with retrieval over a literature database, answers questions citing the specific supporting passages.', risk: 'A model can generate a plausible-sounding but unsupported claim if not tightly constrained to only its retrieved sources.'},
+    {title: 'Clinical documentation drafting from visit transcripts', problem: 'Clinicians spend significant time converting a spoken patient encounter into structured documentation.', solution: 'A Transformer-based model drafts structured clinical notes from a visit transcript for clinician review and signoff.', risk: 'An error in a drafted note can persist into the permanent record if not caught during clinician review.'},
+    {title: 'Genomic and protein sequence modeling', problem: 'Understanding function from long biological sequences requires capturing dependencies between distant positions in the sequence.', solution: 'Transformer variants adapted for biological sequences use self-attention to relate distant positions directly, an approach that has been applied to protein structure prediction.', risk: 'A sequence model\'s predictions still require experimental validation before being used in clinical or drug-development decisions.'},
+  ]}
+  telecom={[
+    {title: 'Customer support chat and ticket triage', problem: 'Support organizations need to route and often directly resolve a high volume of customer inquiries in natural language.', solution: 'A Transformer-based conversational model classifies intent and drafts or delivers responses grounded in account and product data.', risk: 'A model confidently answering outside its grounded knowledge can give a customer inaccurate account or billing information.'},
+    {title: 'Network incident report summarization', problem: 'Operations teams need to quickly understand long incident logs and postmortem reports spanning many systems and timestamps.', solution: 'A Transformer-based summarization model condenses incident timelines and root-cause discussion into a structured summary.', risk: 'A summary can misattribute a root cause if the model weighs a coincidental correlation in the log text too heavily.'},
+    {title: 'Multilingual customer communications', problem: 'Global carriers need to support customer communications and documentation across many languages.', solution: 'A Transformer-based translation model handles customer-facing communications across supported languages.', risk: 'Mistranslation of a billing or contract term can create a customer dispute or a regulatory disclosure gap.'},
+    {title: 'Code generation and review assistance for network automation', problem: 'Network engineering teams write and maintain large volumes of automation scripts and configuration code.', solution: 'A Transformer-based code model, trained on code as a token sequence like any other, assists with drafting and reviewing automation scripts.', risk: 'Generated configuration code that looks syntactically correct can still contain a logic error that only surfaces in production.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What specific limitation of RNNs (2.4) does self-attention remove, and how?', answer: 'An RNN must process a sequence step by step, so the path length between two positions grows with the distance between them and every position must wait for the previous one to finish. Self-attention lets every position attend directly to every other position in a single step, making the path length constant (O(1)) regardless of distance, and allows all positions to be processed in parallel during training.'},
+    {question: 'Why is attention scaled by the square root of the key dimension (√d_k) before the softmax?', answer: 'As the key dimension grows, dot products between queries and keys tend to grow large in magnitude simply from summing more terms. Without scaling, this pushes the softmax into a region where its gradient is very small (a saturated-gradient problem similar to sigmoid saturation from chapter 2.1), which slows or stalls learning. Dividing by √d_k keeps the scores in a range where softmax gradients stay informative.'},
+    {question: 'What does multi-head attention add beyond a single attention computation?', answer: 'Multi-head attention runs several attention computations in parallel, each with its own learned query, key, and value projections into a smaller subspace, then concatenates the results and applies one more projection. This gives the model several separate subspaces in which to learn distinct kinds of relationships (for example, syntactic agreement in one head and coreference in another) rather than averaging everything into one pattern.'},
+    {question: 'Why does the Transformer need an explicit positional encoding, and why don\'t RNNs need one?', answer: 'Self-attention compares a sequence as a set of positions rather than processing it in order, so on its own it has no notion of which token came first, second, or last, shuffling the input would not change the pairwise comparisons. A positional encoding injects a position-dependent signal into each token\'s embedding so order can be recovered. An RNN does not need this because its recurrence inherently processes tokens in sequence order.'},
+    {question: 'What is the causal mask in a decoder\'s self-attention, and why is it necessary?', answer: 'The causal mask sets the attention score to negative infinity for any position after the current one, before the softmax, so a decoder position cannot attend to tokens that have not been generated yet. This is necessary because at inference time those future tokens do not exist yet, and training must match that same autoregressive constraint or the model would learn to rely on information it will not have when actually generating text.'},
+  ]}
+/>
