@@ -24,7 +24,8 @@ to propose or draft one. Check the [Recently Added](/docs) page for what has shi
 - [1.6 Evaluation Metrics: Accuracy, Precision/Recall, F1, ROC-AUC, and RMSE](./1-6-evaluation-metrics.mdx)
 - [1.7 Data Foundations: Pipelines, Feature Engineering, and Data Quality](./1-7-data-foundations.mdx)
 - [1.8 Math Refresher for AI: Linear Algebra, Probability, Statistics, and Optimization](./1-8-math-refresher.mdx)
+- [1.9 Ethics & Responsible AI Foundations: Bias, Fairness, and Explainability](./1-9-ethics-responsible-ai.mdx)
 
 ## Planned chapters
 
-- 1.9 Ethics & Responsible AI Foundations (Bias, Fairness, Explainability Primer)
+Phase 1 is complete. See the [Contribution Guide](/docs/capstones-and-contributing) to propose new chapters.

@@ -1,0 +1,91 @@
+<svg width="1300" height="640" viewBox="0 0 1300 640" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-bf desc-bf">
+  <title id="title-bf">A pipeline showing where bias enters and where it must be caught before deployment</title>
+  <desc id="desc-bf">Bias enters at the training data stage through historical, representation, measurement, and label bias, then propagates through model training. Before deployment, two checks run in parallel: per-group fairness metrics and an explainability report. A human deployment decision weighs both. A dashed feedback loop shows how a deployed model's own decisions can shape the next round of training data.</desc>
+  <rect width="1300" height="640" fill="#fcfcfb"/>
+
+  <text x="650" y="40" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Where bias enters, and where it must be caught</text>
+
+  <!-- Training Data -->
+  <rect x="40" y="90" width="220" height="130" rx="10" fill="#86b6ef"/>
+  <text x="150" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#0b0b0b">STAGE 1</text>
+  <text x="150" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="#0b0b0b">Training Data</text>
+  <text x="150" y="165" text-anchor="middle" font-size="10" fill="#184f95">historical bias</text>
+  <text x="150" y="181" text-anchor="middle" font-size="10" fill="#184f95">representation bias</text>
+  <text x="150" y="197" text-anchor="middle" font-size="10" fill="#184f95">measurement / label bias</text>
+
+  <!-- Bias Audit -->
+  <rect x="320" y="90" width="220" height="130" rx="10" fill="#5598e7"/>
+  <text x="430" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">STAGE 2</text>
+  <text x="430" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Bias Audit</text>
+  <text x="430" y="165" text-anchor="middle" font-size="10" fill="#eaf2fc">representation checks</text>
+  <text x="430" y="181" text-anchor="middle" font-size="10" fill="#eaf2fc">proxy-variable screening</text>
+  <text x="430" y="197" text-anchor="middle" font-size="10" fill="#eaf2fc">before training starts</text>
+
+  <!-- Model Training -->
+  <rect x="600" y="90" width="220" height="130" rx="10" fill="#2a78d6"/>
+  <text x="710" y="118" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">STAGE 3</text>
+  <text x="710" y="142" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Model Training</text>
+  <text x="710" y="165" text-anchor="middle" font-size="10" fill="#cde2fb">bias not screened out here</text>
+  <text x="710" y="181" text-anchor="middle" font-size="10" fill="#cde2fb">propagates into the model</text>
+  <text x="710" y="197" text-anchor="middle" font-size="10" fill="#cde2fb">unless caught downstream</text>
+
+  <defs>
+    <marker id="arrBF" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#52514e"/>
+    </marker>
+    <marker id="arrBFred" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#a33a2f"/>
+    </marker>
+  </defs>
+
+  <line x1="260" y1="155" x2="315" y2="155" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+  <line x1="540" y1="155" x2="595" y2="155" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+
+  <!-- Split into two checks: two independent orthogonal routes, offset in x so they never overlap -->
+  <line x1="820" y1="120" x2="860" y2="120" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="860" y1="120" x2="860" y2="107" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="860" y1="107" x2="895" y2="107" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+
+  <line x1="820" y1="190" x2="860" y2="190" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="860" y1="190" x2="860" y2="317" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="860" y1="317" x2="895" y2="317" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+
+  <!-- Per-Group Fairness Metrics, shifted down from the title to guarantee clearance -->
+  <rect x="900" y="60" width="230" height="95" rx="10" fill="#184f95"/>
+  <text x="1015" y="88" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">CHECK A</text>
+  <text x="1015" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Per-Group Fairness Metrics</text>
+  <text x="1015" y="134" text-anchor="middle" font-size="10" fill="#9fb8d6">confusion matrix, per protected group</text>
+
+  <!-- Explainability Report -->
+  <rect x="900" y="270" width="230" height="95" rx="10" fill="#184f95"/>
+  <text x="1015" y="298" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">CHECK B</text>
+  <text x="1015" y="322" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Explainability Report</text>
+  <text x="1015" y="344" text-anchor="middle" font-size="10" fill="#9fb8d6">local (SHAP / LIME) and global</text>
+
+  <!-- Deployment Decision -->
+  <rect x="500" y="330" width="260" height="110" rx="10" fill="#0d2c4e"/>
+  <text x="630" y="360" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">STAGE 4</text>
+  <text x="630" y="384" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Deployment Decision</text>
+  <text x="630" y="406" text-anchor="middle" font-size="10" fill="#9fb8d6">human review, weighs both checks</text>
+  <text x="630" y="422" text-anchor="middle" font-size="10" fill="#9fb8d6">neither check alone is sufficient</text>
+
+  <!-- Check A bottom edge down to deployment decision top edge -->
+  <line x1="1015" y1="155" x2="1015" y2="250" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="1015" y1="250" x2="660" y2="250" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="660" y1="250" x2="660" y2="325" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+
+  <!-- Check B bottom edge down to deployment decision right edge -->
+  <line x1="1015" y1="365" x2="1015" y2="405" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="1015" y1="405" x2="765" y2="405" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrBF)"/>
+
+  <!-- Feedback loop, dashed, back to Training Data -->
+  <path d="M 500 400 C 300 500, 150 480, 150 225" fill="none" stroke="#a33a2f" stroke-width="2" stroke-dasharray="6,5" marker-end="url(#arrBFred)"/>
+  <rect x="130" y="450" width="270" height="60" rx="8" fill="#fdecea" stroke="#a33a2f" stroke-width="1.5"/>
+  <text x="265" y="474" text-anchor="middle" font-size="11" font-weight="700" fill="#a33a2f">Feedback loop</text>
+  <text x="265" y="492" text-anchor="middle" font-size="10" fill="#a33a2f">a deployed model's decisions can</text>
+  <text x="265" y="504" text-anchor="middle" font-size="10" fill="#a33a2f" font-weight="400">shape the next round of training data</text>
+
+  <rect x="60" y="560" width="1180" height="60" rx="10" fill="#fdecea" stroke="#a33a2f" stroke-width="1.5"/>
+  <text x="650" y="584" text-anchor="middle" font-size="13" font-weight="700" fill="#a33a2f">Without an audit step, bias exits the pipeline unchanged, or reinforced</text>
+  <text x="650" y="603" text-anchor="middle" font-size="11.5" fill="#a33a2f">which is why the audit must repeat on every retraining cycle, not just the first one</text>
+</svg>
