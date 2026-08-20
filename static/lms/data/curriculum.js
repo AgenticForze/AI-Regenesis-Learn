@@ -131,21 +131,33 @@ export const PHASES = [
    },
    {
     "id": "1.6",
-    "title": "Evaluation Metrics (Accuracy, Precision/Recall, F1, ROC-AUC, RMSE)",
+    "title": "Evaluation Metrics: Accuracy, Precision/Recall, F1, ROC-AUC, and RMSE",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-6-evaluation-metrics",
+    "summary": "A model's performance is not one number, it is several, and picking the wrong one hides real failures. Accuracy is the most intuitive metric and the easiest to get badly wrong, because it falls apart on the imbalanced data that shows up constantly in fraud, disease screening, and churn. Precision and recall separate two different kinds of mistakes, false alarms and missed cases, and F1 balances them into one number when both matter about equally. ROC-AUC summarizes how well a model ranks positives above negatives across every possible decision threshold. RMSE plays a similar role for regression, where the target is a number rather than a class. Choosing a metric is choosing what kind of error the business actually cares about most.",
+    "published": true,
+    "presentationUrl": "../slides/1.6-Evaluation-Metrics-Slides.pptx"
    },
    {
     "id": "1.7",
-    "title": "Data Foundations: Pipelines, Feature Engineering, Data Quality",
+    "title": "Data Foundations: Pipelines, Feature Engineering, and Data Quality",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-7-data-foundations",
+    "summary": "Most real-world machine learning problems are data problems, not algorithm problems. Before any model in chapter 1.5 can be trained, raw data has to survive a pipeline: cleaning, encoding, scaling, and validation, each stage capable of silently corrupting what the model eventually learns. Feature engineering turns raw fields into model-ready inputs. Data quality issues, missing values, duplicates, and mismatches between how a feature is computed for training versus serving, degrade a model without ever throwing an error, which is exactly what makes them dangerous.",
+    "published": true,
+    "presentationUrl": "../slides/1.7-Data-Foundations-Slides.pptx"
    },
    {
     "id": "1.8",
-    "title": "Math Refresher for AI: Linear Algebra, Probability, Statistics, Optimization",
+    "title": "Math Refresher for AI: Linear Algebra, Probability, Statistics, and Optimization",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-8-math-refresher",
+    "summary": "Four areas of math do essentially all the work behind every chapter so far and every chapter still to come. Linear algebra is the language a model's inputs and parameters are written in. Probability is how a model expresses and reasons about uncertainty. Statistics is how a practitioner decides whether a result is real or noise. Optimization is the mechanism, almost always gradient descent, by which a model actually learns. None of this requires proving theorems; it requires knowing what each tool is for well enough to recognize when a result is suspicious.",
+    "published": true,
+    "presentationUrl": "../slides/1.8-Math-Refresher-Slides.pptx"
    },
    {
     "id": "1.9",

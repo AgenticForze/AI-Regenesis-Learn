@@ -1,0 +1,201 @@
+---
+title: "Evaluation Metrics: Accuracy, Precision/Recall, F1, ROC-AUC, and RMSE"
+sidebar_label: "1.6 Evaluation Metrics"
+sidebar_position: 6
+phase: 1
+chapter: "1.6"
+lms_presentation: "1.6-Evaluation-Metrics-Slides.pptx"
+prerequisites: ["1.3", "1.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A model's performance is not one number, it is several, and picking the wrong one hides real
+failures. Accuracy is the most intuitive metric and the easiest to get badly wrong, because it
+falls apart on the imbalanced data that shows up constantly in fraud, disease screening, and
+churn. Precision and recall separate two different kinds of mistakes, false alarms and missed
+cases, and F1 balances them into one number when both matter about equally. ROC-AUC summarizes
+how well a model ranks positives above negatives across every possible decision threshold. RMSE
+plays a similar role for regression, where the target is a number rather than a class. Choosing a
+metric is choosing what kind of error the business actually cares about most.
+
+## High-Level Explanation
+
+Every classifier's predictions on a labeled test set can be sorted into a confusion matrix: cases
+the model correctly flagged as positive (true positives), cases it correctly flagged as negative
+(true negatives), cases it wrongly flagged as positive (false positives, false alarms), and cases
+it wrongly flagged as negative (false negatives, misses). Every classification metric in this
+chapter is built from just those four counts.
+
+**Accuracy**, the fraction of predictions that were correct overall, is the most natural metric to
+reach for, and the most dangerous on skewed data. If 99% of transactions are legitimate, a model
+that predicts "legitimate" for everything scores 99% accuracy while catching zero fraud. Accuracy
+treats every correct prediction as equally valuable, which is exactly wrong when one class is rare
+and the cost of missing it is high.
+
+**Precision and recall** split the failure modes apart. Precision asks: of everything the model
+flagged as positive, how much actually was? Recall asks: of everything that actually was positive,
+how much did the model catch? A model can push either one toward 1.0 trivially: flag nothing to
+get perfect precision (on the cases it does flag), or flag everything to get perfect recall. Real
+systems trade one against the other, and which one to prioritize is a business decision, not a
+modeling one: missing a fraudulent transaction and blocking a legitimate one are not equally
+costly.
+
+**F1** is the harmonic mean of precision and recall, a single number that stays low unless both
+are reasonably high. It is the standard default when neither false positives nor false negatives
+are clearly more expensive.
+
+**ROC-AUC** takes a step back from any single decision threshold. Instead of asking "is this
+particular flag right or wrong," it asks how well the model's raw scores rank actual positives
+above actual negatives across every threshold at once, summarized as a single area-under-curve
+number between 0.5 (no better than random) and 1.0 (perfect ranking).
+
+**RMSE** answers the equivalent question for regression, where the target is a continuous number
+like a price or a demand forecast rather than a class. It measures the typical size of the gap
+between predicted and actual values, in the same units as the target, with large errors penalized
+more heavily than small ones.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/1-6-confusion-matrix.svg').default}
+    alt="A two-by-two confusion matrix with predicted class on one axis and actual class on the other, labeling the four cells true positive, false positive, false negative, and true negative, with precision defined as a ratio across the predicted-positive row and recall defined as a ratio across the actual-positive column."
+  />
+  <figcaption>Every classification metric in this chapter is a different ratio computed from these four counts.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The confusion matrix, formally.** For a binary classifier with a fixed decision threshold, let TP,
+FP, FN, and TN be the counts of true positives, false positives, false negatives, and true
+negatives on the evaluation set. Every metric below is a ratio of these four counts, or of ratios
+computed across a sweep of thresholds.
+
+**Accuracy, precision, recall, and specificity.** Accuracy = (TP + TN) / (TP + TN + FP + FN).
+Precision = TP / (TP + FP): of the positive predictions, the fraction that were correct. Recall,
+also called sensitivity or the true positive rate, = TP / (TP + FN): of the actual positives, the
+fraction the model found. Specificity, the true negative rate, = TN / (TN + FP): of the actual
+negatives, the fraction correctly rejected. Precision and recall are computed over different
+denominators (predicted-positive count versus actual-positive count), which is exactly why a model
+can score high on one and low on the other.
+
+**F1 and the F-measure family.** F1 = 2 · (Precision · Recall) / (Precision + Recall), the harmonic
+mean rather than the arithmetic mean, which matters: the harmonic mean is pulled down sharply by
+whichever of the two is smaller, so a model cannot compensate for very low recall with very high
+precision and still score a high F1. This formulation, generalized to weight precision and recall
+unequally (the Fβ family), was formalized by van Rijsbergen in the information retrieval literature
+([*Information Retrieval*](https://openlib.org/home/krichel/courses/lis618/readings/rijsbergen79_infor_retriev.pdf),
+2nd edition, Butterworths, 1979). For multi-class problems, precision, recall, and F1 are computed
+per class and then averaged, either as a macro-average (unweighted mean across classes, which
+treats rare and common classes equally) or a weighted average (weighted by how often each class
+appears, which matches the class distribution of the data).
+
+**ROC curves and AUC, formally.** A classifier that outputs a score or probability, not just a
+hard label, produces a different confusion matrix at every possible decision threshold. The ROC
+(receiver operating characteristic) curve plots the true positive rate against the false positive
+rate (FPR = FP / (FP + TN)) as the threshold sweeps from one extreme to the other. The area under
+that curve (AUC) has a clean probabilistic interpretation: it equals the probability that a
+randomly chosen actual positive receives a higher score than a randomly chosen actual negative
+(Hanley and McNeil,
+[*The Meaning and Use of the Area Under a Receiver Operating Characteristic (ROC) Curve*](https://pubs.rsna.org/doi/10.1148/radiology.143.1.7063747),
+*Radiology*, 1982). An AUC of 0.5 means the model ranks positives and negatives no better than a
+coin flip; 1.0 means every actual positive outranks every actual negative. AUC's main limitation is
+that it can look reassuringly high on strongly imbalanced data even when the model is nearly
+useless at the operating threshold anyone would actually deploy, because the metric averages
+performance across thresholds few practitioners would ever use. The precision-recall curve, which
+plots precision against recall across the same threshold sweep, is the standard alternative when
+the positive class is rare, because unlike the ROC curve it is sensitive to how well the model
+does specifically on the minority class (Davis and Goadrich,
+[*The Relationship Between Precision-Recall and ROC Curves*](https://dl.acm.org/doi/10.1145/1143844.1143874),
+*ICML*, 2006).
+
+**RMSE, MAE, and R², formally.** For a regression model with predictions ŷᵢ and true values yᵢ
+over n examples, the root mean squared error is RMSE = √((1/n) · Σ(yᵢ − ŷᵢ)²): squaring each
+residual before averaging means large errors contribute disproportionately more than small ones,
+so RMSE is sensitive to outliers. The mean absolute error, MAE = (1/n) · Σ|yᵢ − ŷᵢ|, weighs every
+error in proportion to its size and is more robust to a few large misses, which is why RMSE and MAE
+can disagree about which of two models is better: a model with many small errors and one huge
+outlier can have a lower MAE but higher RMSE than a model with consistent, moderate errors. R²
+(the coefficient of determination) reframes error as 1 − (sum of squared residuals) / (total sum
+of squared deviations from the mean), interpretable as the fraction of the target's variance the
+model explains; an R² of 0 means the model does no better than always predicting the mean, and a
+negative R² means it does worse than that trivial baseline.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Accuracy', 'Precision / Recall', 'F1', 'ROC-AUC']}
+  rows={[
+    {aspect: 'What it is blind to', values: ['Class imbalance: a majority-class guess can score high', 'Precision ignores misses; recall ignores false alarms', 'The specific cost tradeoff between the two error types', 'Performance at the one threshold actually deployed'], decisive: true},
+    {aspect: 'Depends on a chosen threshold', values: ['Yes', 'Yes', 'Yes', 'No: summarizes across all thresholds'], },
+    {aspect: 'Best suited to', values: ['Roughly balanced classes, equal error costs', 'When one error type is clearly more costly', 'A single number when both errors matter', 'Comparing models\' ranking ability before a threshold is set'], },
+    {aspect: 'Reads as', values: ['Fraction correct overall', 'Two separate ratios', 'One balanced ratio', 'A probability of correct ranking'], },
+  ]}
+  caption="No single metric is sufficient on its own; the decisive question is which failure mode a metric hides, not which one is 'best.'"
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From predictions to a deployment decision"
+  mermaid={`
+flowchart LR
+  A[Model Scores on Test Set] --> B[Confusion Matrix at Threshold]
+  B --> C[Precision / Recall / F1]
+  A --> D[Threshold Sweep]
+  D --> E[ROC / PR Curve and AUC]
+  C --> F[Business Cost Weighing]
+  E --> F
+  F --> G[Chosen Operating Threshold]
+`}
+  components={[
+    {name: 'Confusion Matrix at Threshold', responsibility: 'Counts TP, FP, FN, TN at the specific cutoff a deployed system would use.'},
+    {name: 'Threshold Sweep', responsibility: 'Recomputes the confusion matrix across every possible cutoff to trace the ROC or PR curve.'},
+    {name: 'ROC / PR Curve and AUC', responsibility: 'Summarizes ranking quality independent of any one threshold, for comparing candidate models.'},
+    {name: 'Business Cost Weighing', responsibility: 'Attaches real costs to false positives and false negatives; not a modeling step.'},
+    {name: 'Chosen Operating Threshold', responsibility: 'The single cutoff the deployed system actually uses, set after cost weighing, not before.'},
+    {name: 'Regression models (not pictured)', responsibility: 'Follow the same comparison discipline without a threshold: candidates are compared directly on RMSE, MAE, and R² on the same held-out split.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Recall-first fraud detection', problem: 'A missed fraudulent transaction is far costlier than a false alarm that a human quickly clears.', solution: 'The model is tuned and thresholded to prioritize recall, accepting a lower precision to catch more true fraud.', risk: 'Recall pushed too far without a precision floor buries investigators in false alarms, and the alert queue itself becomes the bottleneck.'},
+    {title: 'AUC-based credit model comparison', problem: 'Several candidate credit-risk models need to be ranked before any deployment threshold has been decided.', solution: 'ROC-AUC compares how well each model ranks defaulters above non-defaulters, independent of a specific cutoff.', risk: 'A high AUC does not guarantee the model\'s output probabilities are well-calibrated, which matters when those probabilities feed directly into capital or pricing calculations.'},
+    {title: 'Accuracy pitfall in default prediction', problem: 'A default-prediction model reports 98% accuracy, and a naive reviewer treats that as strong performance.', solution: 'A confusion matrix breakdown reveals what the accuracy number hides: how many of the rare actual defaults were caught.', risk: 'With defaults at 2% of loans, a model that predicts "no default" for everyone matches that 98% accuracy while catching zero risk.'},
+    {title: 'RMSE for loss-severity prediction', problem: 'A model estimates expected loss severity on defaulted loans, where a few very large losses matter disproportionately to capital reserves.', solution: 'RMSE is used specifically because its outlier sensitivity aligns with the business concern: large misses are the ones that threaten reserve adequacy.', risk: 'Optimizing purely for RMSE can make a model chase the rare large-loss cases at the expense of accuracy on the typical, smaller-loss majority.'},
+  ]}
+  healthcare={[
+    {title: 'Recall-first disease screening', problem: 'A missed positive case in an early screening test delays treatment, while a false positive only triggers a follow-up test.', solution: 'The screening threshold is set to prioritize recall, treating the follow-up test as a low-cost safety net.', risk: 'Recall pushed too aggressively drives a high false-positive rate that overwhelms downstream diagnostic capacity and raises patient anxiety.'},
+    {title: 'PR curve for rare-condition diagnosis', problem: 'A diagnostic model targets a condition present in well under 1% of the screened population, where ROC-AUC can look deceptively strong.', solution: 'A precision-recall curve is used instead of the ROC curve to evaluate the model specifically on how well it performs on the rare positive class.', risk: 'Teams that report only ROC-AUC on rare-condition models can understate how many false positives the deployed threshold actually produces.'},
+    {title: 'Precision-tuned sepsis alerting', problem: 'A hospital\'s sepsis early-warning system triggered so many false alarms that clinicians began ignoring it, a well-documented failure mode called alert fatigue.', solution: 'The alert threshold is retuned to raise precision, reducing alert volume to a level clinicians will still act on.', risk: 'Raising precision by raising the threshold necessarily lowers recall, so some genuine early sepsis cases will now go unflagged.'},
+    {title: 'RMSE and MAE together for length-of-stay forecasting', problem: 'A model forecasting hospital length of stay needs to support both capacity planning, sensitive to rare extreme stays, and everyday staffing, sensitive to typical-case error.', solution: 'RMSE and MAE are reported together, since capacity planning cares about the outlier-sensitive metric and staffing cares about the typical-case metric.', risk: 'Reporting only RMSE can make everyday forecast quality look worse than it is, since RMSE is dominated by a small number of unusually long stays.'},
+  ]}
+  telecom={[
+    {title: 'Precision-tuned churn campaign targeting', problem: 'A retention team has a limited budget for discount offers and needs to spend it on customers actually likely to churn.', solution: 'The churn model is thresholded for higher precision, so a larger fraction of contacted customers are genuinely at risk.', risk: 'A precision-first threshold leaves many true churners uncontacted, understating the campaign\'s achievable impact on overall churn.'},
+    {title: 'PR-AUC for rare network anomaly detection', problem: 'True network faults are a tiny fraction of all traffic, and ROC-AUC on this kind of severe imbalance can look strong even for a weak detector.', solution: 'PR-AUC is reported alongside ROC-AUC specifically because it does not get inflated by the large, easy-to-classify majority of normal traffic.', risk: 'Teams that compare detectors on ROC-AUC alone can ship a detector that looks strong in evaluation but misses most real faults in production.'},
+    {title: 'F1-balanced spam and robocall filtering', problem: 'Blocking a legitimate call and missing a spam call are both costly to the carrier and the customer, in roughly comparable ways.', solution: 'F1 is used as the primary tuning metric because it penalizes a model that leans too far toward either precision or recall.', risk: 'Treating the two error costs as equal by default can be wrong for specific customer segments where one error type is clearly worse.'},
+    {title: 'RMSE for network demand forecasting', problem: 'Capacity planning for network infrastructure needs a forecast that is not badly wrong during rare demand spikes, such as major public events.', solution: 'RMSE is the primary forecast-accuracy metric because it penalizes the large spike-related errors that would otherwise cause under-provisioning.', risk: 'A model tuned purely to minimize RMSE can systematically over-provision for the common, low-variance case to guard against rare spikes.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'A dataset is 99% negative and 1% positive. Why can a model with 99% accuracy still be useless, and what would you check instead?', answer: 'A model that predicts the negative class for every example matches the 99% base rate without ever identifying a true positive. Accuracy alone cannot reveal this; checking the confusion matrix, and specifically recall on the positive class, would show that the model catches zero actual positives.'},
+    {question: 'What is the fundamental tradeoff between precision and recall, and what does F1 do about it?', answer: 'Precision and recall are computed over different denominators, predicted positives versus actual positives, and a model can trivially maximize one at the expense of the other by flagging almost nothing or almost everything. F1, the harmonic mean of the two, stays low unless both are reasonably high, so it cannot be gamed by pushing just one of them up.'},
+    {question: 'What does an AUC of 0.5 versus 0.9 actually mean, in terms of the model\'s predictions?', answer: 'AUC is the probability that a randomly chosen actual positive receives a higher score than a randomly chosen actual negative. An AUC of 0.5 means the model\'s scores rank positives and negatives no better than chance; an AUC of 0.9 means a randomly chosen positive outranks a randomly chosen negative 90% of the time.'},
+    {question: 'Two regression models are compared, and one has lower MAE while the other has lower RMSE. What does that disagreement tell you about their error patterns?', answer: 'Because RMSE squares each residual before averaging, it penalizes large errors far more heavily than MAE does. A model with mostly small errors and one very large outlier can have a lower MAE but a higher RMSE than a model with consistently moderate errors, so the disagreement points to a difference in how the errors are distributed, not just their average size.'},
+    {question: 'A hospital is choosing an evaluation metric for a rare-disease screening test. Walk through the reasoning for which metric to prioritize.', answer: 'Because the disease is rare, accuracy is uninformative for the same reason as any imbalanced problem. Missing a true case is typically far more costly than a false alarm that triggers a routine follow-up, which argues for prioritizing recall. Because the positive class is rare, a precision-recall curve, not a ROC curve, should be used to compare candidate models, since ROC-AUC can look strong even when precision at the realistic operating threshold is poor.'},
+  ]}
+/>

@@ -1,0 +1,69 @@
+<svg width="1300" height="640" viewBox="0 0 1300 640" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-dp desc-dp">
+  <title id="title-dp">A data pipeline forking into training and serving branches, showing how training-serving skew arises</title>
+  <desc id="desc-dp">Raw data sources flow through ingestion and validation, cleaning, and feature engineering, then into a fork: one branch feeds offline model training, the other feeds live model serving. A callout shows that if the feature engineering logic differs between the two branches, the same feature is computed differently in each, producing training-serving skew.</desc>
+  <rect width="1300" height="640" fill="#fcfcfb"/>
+
+  <text x="650" y="42" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Training-serving skew: the same pipeline, computed two different ways</text>
+
+  <!-- linear pipeline stages -->
+  <rect x="30" y="90" width="180" height="80" rx="10" fill="#898781"/>
+  <text x="120" y="125" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ffffff">Raw Data</text>
+  <text x="120" y="143" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ffffff">Sources</text>
+
+  <rect x="255" y="90" width="180" height="80" rx="10" fill="#5598e7"/>
+  <text x="345" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Ingestion and</text>
+  <text x="345" y="143" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Validation</text>
+
+  <rect x="480" y="90" width="180" height="80" rx="10" fill="#2a78d6"/>
+  <text x="570" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Cleaning</text>
+  <text x="570" y="143" text-anchor="middle" font-size="11" fill="#eaf2fc">dedupe, outliers</text>
+
+  <rect x="705" y="90" width="180" height="80" rx="10" fill="#184f95"/>
+  <text x="795" y="125" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Feature</text>
+  <text x="795" y="143" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Engineering</text>
+
+  <defs>
+    <marker id="arrDP" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#52514e"/>
+    </marker>
+  </defs>
+
+  <line x1="210" y1="130" x2="250" y2="130" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrDP)"/>
+  <line x1="435" y1="130" x2="475" y2="130" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrDP)"/>
+  <line x1="660" y1="130" x2="700" y2="130" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrDP)"/>
+
+  <!-- fork -->
+  <line x1="795" y1="170" x2="795" y2="220" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="795" y1="220" x2="410" y2="220" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="795" y1="220" x2="1180" y2="220" stroke="#52514e" stroke-width="1.5"/>
+  <line x1="410" y1="220" x2="410" y2="280" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrDP)"/>
+  <line x1="1180" y1="220" x2="1180" y2="280" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrDP)"/>
+
+  <!-- training branch -->
+  <rect x="150" y="290" width="520" height="220" rx="12" fill="#eaf2fc" stroke="#86b6ef" stroke-width="1.5"/>
+  <text x="410" y="320" text-anchor="middle" font-size="14" font-weight="700" fill="#184f95">Offline Training Branch</text>
+  <rect x="320" y="345" width="180" height="70" rx="8" fill="#5598e7"/>
+  <text x="410" y="375" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Batch feature</text>
+  <text x="410" y="393" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">computation</text>
+  <text x="410" y="440" text-anchor="middle" font-size="12" fill="#184f95">30-day rolling average,</text>
+  <text x="410" y="458" text-anchor="middle" font-size="12" fill="#184f95">computed nightly over history</text>
+  <text x="410" y="490" text-anchor="middle" font-size="13" font-weight="700" fill="#184f95">→ trains Model</text>
+
+  <!-- serving branch -->
+  <rect x="920" y="290" width="330" height="220" rx="12" fill="#0d2c4e"/>
+  <text x="1085" y="320" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Live Serving Branch</text>
+  <rect x="995" y="345" width="180" height="70" rx="8" fill="#a33a2f"/>
+  <text x="1085" y="375" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Streaming feature</text>
+  <text x="1085" y="393" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">computation</text>
+  <text x="1085" y="440" text-anchor="middle" font-size="12" fill="#ff9d8f">different window alignment,</text>
+  <text x="1085" y="458" text-anchor="middle" font-size="12" fill="#ff9d8f">a separate implementation</text>
+  <text x="1085" y="490" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">→ serves live predictions</text>
+
+  <!-- skew callout -->
+  <rect x="500" y="545" width="300" height="70" rx="10" fill="#fdecea" stroke="#a33a2f" stroke-width="1.5"/>
+  <text x="650" y="572" text-anchor="middle" font-size="13" font-weight="700" fill="#a33a2f">"Same" feature, two answers</text>
+  <text x="650" y="592" text-anchor="middle" font-size="11.5" fill="#a33a2f">= training-serving skew</text>
+
+  <line x1="500" y1="580" x2="420" y2="510" stroke="#a33a2f" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="800" y1="580" x2="1080" y2="510" stroke="#a33a2f" stroke-width="1.5" stroke-dasharray="4,4"/>
+</svg>

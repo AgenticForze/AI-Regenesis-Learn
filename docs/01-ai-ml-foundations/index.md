@@ -21,10 +21,10 @@ to propose or draft one. Check the [Recently Added](/docs) page for what has shi
 - [1.3 Machine Learning Foundations: Supervised, Unsupervised, and Reinforcement Learning](./1-3-ml-foundations.mdx)
 - [1.4 Core ML Concepts: Features, Train/Validation/Test, Bias-Variance, Overfitting](./1-4-core-ml-concepts.mdx)
 - [1.5 Classical ML Algorithms Landscape: A Comparison](./1-5-classical-ml-algorithms.mdx)
+- [1.6 Evaluation Metrics: Accuracy, Precision/Recall, F1, ROC-AUC, and RMSE](./1-6-evaluation-metrics.mdx)
+- [1.7 Data Foundations: Pipelines, Feature Engineering, and Data Quality](./1-7-data-foundations.mdx)
+- [1.8 Math Refresher for AI: Linear Algebra, Probability, Statistics, and Optimization](./1-8-math-refresher.mdx)
 
 ## Planned chapters
 
-- 1.6 Evaluation Metrics (Accuracy, Precision/Recall, F1, ROC-AUC, RMSE)
-- 1.7 Data Foundations: Pipelines, Feature Engineering, Data Quality
-- 1.8 Math Refresher for AI: Linear Algebra, Probability, Statistics, Optimization
 - 1.9 Ethics & Responsible AI Foundations (Bias, Fairness, Explainability Primer)

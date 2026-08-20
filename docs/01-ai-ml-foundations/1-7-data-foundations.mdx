@@ -1,0 +1,204 @@
+---
+title: "Data Foundations: Pipelines, Feature Engineering, and Data Quality"
+sidebar_label: "1.7 Data Foundations"
+sidebar_position: 7
+phase: 1
+chapter: "1.7"
+lms_presentation: "1.7-Data-Foundations-Slides.pptx"
+prerequisites: ["1.3", "1.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Most real-world machine learning problems are data problems, not algorithm problems. Before any
+model in chapter 1.5 can be trained, raw data has to survive a pipeline: cleaning, encoding,
+scaling, and validation, each stage capable of silently corrupting what the model eventually
+learns. Feature engineering turns raw fields into model-ready inputs. Data quality issues, missing
+values, duplicates, and mismatches between how a feature is computed for training versus serving,
+degrade a model without ever throwing an error, which is exactly what makes them dangerous.
+
+## High-Level Explanation
+
+A production data pipeline moves raw data through several stages before it ever reaches a model:
+ingestion from source systems, cleaning (deduplication, outlier handling), feature engineering
+(the transformations covered in this chapter), validation, and finally delivery to training or, in
+production, to a live model making predictions. A failure at any stage propagates forward silently,
+because a pipeline that runs without crashing gives no signal that its output is wrong.
+
+**Feature engineering** covers three recurring jobs. Encoding turns categorical values (a merchant
+category, a diagnosis code, a device type) into numbers a model can use: one-hot encoding creates a
+binary column per category, ordinal encoding assigns an integer (appropriate only when the
+categories have a genuine order), and target encoding replaces a category with a statistic of the
+target variable within that category, which is powerful but has a specific leakage risk covered in
+the Deep-Dive. Scaling puts numeric features on comparable ranges, which matters for
+distance-based methods like k-NN (chapter 1.5) and gradient-based training, but not for
+tree-based splits, which only compare values within one feature at a time. Handling missing values
+means deciding whether to drop, impute, or explicitly flag a gap, a decision that depends on why
+the data is missing in the first place.
+
+**Data quality** is usually described along a few practical dimensions: completeness (how much
+data is missing), accuracy (does the recorded value match reality), consistency (does the same
+entity look the same across sources), and timeliness (is the data current enough to be useful). A
+pipeline that looks healthy on every one of these dimensions can still fail in a way none of them
+catch: training-serving skew, where a feature is computed one way when a model is trained offline
+and a subtly different way when the same model serves live predictions, so the model sees data at
+serving time that does not match what it learned from.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/1-7-data-pipeline-quality.svg').default}
+    alt="A data pipeline flowing from raw data sources through cleaning, feature engineering, and validation to a fork feeding both offline model training and live model serving, with a callout showing that if the feature engineering logic differs between the training branch and the serving branch, the two branches see different values for what is supposed to be the same feature, causing training-serving skew."
+  />
+  <figcaption>A pipeline can pass every data-quality check and still corrupt a model, if training and serving compute a feature differently.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Missing data, formally.** Missing values fall into three categories that determine which
+handling strategy is valid, a taxonomy generally attributed to Rubin's work on statistical
+inference with missing data (Little and Rubin,
+[*Statistical Analysis with Missing Data*](https://onlinelibrary.wiley.com/doi/book/10.1002/9781119013563),
+2nd edition, Wiley, 2002). Missing Completely at Random (MCAR) means the chance a value is missing
+has nothing to do with any variable, observed or not, so simple approaches like dropping rows
+introduce no bias, only lost data. Missing at Random (MAR) means the chance of missingness depends
+on other observed variables (a customer's income is more often missing for a specific channel that
+also happens to be recorded), which model-based imputation can account for. Missing Not at Random
+(MNAR) means the chance of missingness depends on the missing value itself (sicker patients are
+more likely to have a lab value recorded at all, precisely because they are sicker), which no
+imputation method can fully correct without external information, because the data needed to
+correct it is exactly what's missing. Common imputation strategies range from mean or median
+imputation (simple, but can distort variance and correlations), to Multiple Imputation by Chained
+Equations (MICE), which models each incomplete feature as a function of the others and repeats
+across several imputed datasets to represent the remaining uncertainty (van Buuren and
+Groothuis-Oudshoorn,
+[*mice: Multivariate Imputation by Chained Equations in R*](https://www.jstatsoft.org/article/view/v045i03),
+*Journal of Statistical Software*, 2011). A missingness indicator column (a binary flag for "this
+value was imputed") is frequently added alongside any imputation, since the fact that a value was
+missing can itself be predictive. Critically, imputation statistics (the mean, the MICE model)
+must be fit on the training split only and then applied to validation and test, exactly the same
+data leakage boundary from chapter 1.4: fitting an imputer on the full dataset lets validation and
+test information leak into training.
+
+**Categorical encoding, formally.** One-hot encoding represents a category with k values as k
+binary columns, which is safe but expands dimensionality fast for high-cardinality features (a
+diagnosis code set with thousands of values). Ordinal encoding instead maps each category to a
+single integer that preserves a rank (Low, Medium, High, Premium becomes 0, 1, 2, 3), which is
+compact but only valid when that rank genuinely exists in the data; applied to a category with no
+true order (a merchant type, a device model), it introduces a spurious distance relationship, a
+model reading the integers as if the categories were evenly spaced along one axis, that isn't
+actually present in the underlying data. Target encoding (also called mean encoding) replaces
+a category with the mean of the target variable observed for that category, which is compact and
+often effective but leaks label information directly if computed on the same rows it's applied to;
+the standard mitigation is to compute it out-of-fold (using a cross-validation-style split so no
+row's own label ever contributes to its own encoded value) and to blend the per-category mean with
+the global mean when a category has few observations, so rare categories don't get an
+overconfident, high-variance estimate (Micci-Barreca,
+[*A Preprocessing Scheme for High-Cardinality Categorical Attributes in Classification and Prediction Problems*](https://dl.acm.org/doi/10.1145/507533.507538),
+*SIGKDD Explorations*, 2001). Learned embeddings, low-dimensional dense vectors trained alongside a
+neural network, are a common alternative for very high-cardinality categoricals, letting the model
+discover which categories behave similarly rather than requiring that to be specified in advance
+(Guo and Berkhahn,
+[*Entity Embeddings of Categorical Variables*](https://arxiv.org/abs/1604.06737),
+arXiv, 2016).
+
+**Feature scaling, formally.** Standardization rescales a feature to x' = (x − μ) / σ, giving it
+mean 0 and standard deviation 1; min-max normalization rescales to x' = (x − min) / (max − min),
+mapping values into [0, 1]. Both are fit on the training split only, for the same leakage reason as
+imputation. Scaling changes the numeric geometry a distance calculation or gradient descent step
+sees, so it materially affects k-NN, SVMs, and gradient-based linear and logistic regression
+(chapter 1.5), but leaves tree-based splits unaffected, because a split threshold on one feature is
+invariant to a monotonic rescaling of that feature.
+
+**Training-serving skew, formally.** A model is trained on features computed by one code path,
+often a batch job running over historical data, and served by a different code path, often a
+real-time service computing features from a live event stream. If the two code paths compute
+"the same" feature even slightly differently, for example a rolling 30-day average computed with a
+different window-alignment rule, the trained model receives inputs at serving time that don't match
+the distribution it learned from, degrading performance in a way that offline evaluation metrics
+(chapter 1.6) cannot detect, because offline evaluation runs entirely inside the training-side code
+path. This is a well-documented, specific instance of a broader pattern in which the ongoing
+maintenance cost of a machine learning system is dominated by the surrounding data infrastructure
+rather than the model itself (Sculley et al.,
+[*Hidden Technical Debt in Machine Learning Systems*](https://proceedings.neurips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html),
+*NeurIPS*, 2015). The standard mitigation is a shared feature-computation layer, often called a
+feature store, used by both the training pipeline and the serving path, so "the same feature" is
+guaranteed to mean the same code rather than two independent implementations kept in sync by hand.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['One-Hot Encoding', 'Ordinal Encoding', 'Target / Mean Encoding', 'Learned Embeddings']}
+  rows={[
+    {aspect: 'Leakage risk', values: ['None', 'None', 'High if not computed out-of-fold', 'Low, but requires enough data per category to train well'], decisive: true},
+    {aspect: 'Dimensionality impact', values: ['Grows with category count', 'None: one column', 'None: one column', 'Adds a small fixed-size vector per category'], },
+    {aspect: 'Assumes an order', values: ['No', 'Yes, often incorrectly', 'No', 'No'], },
+    {aspect: 'Best suited to', values: ['Low-cardinality categories', 'Genuinely ordinal categories', 'Medium-to-high cardinality, careful cross-validation', 'Very high cardinality, enough data to train embeddings'], },
+  ]}
+  caption="The decisive question is leakage risk, not compactness: an encoding that looks efficient but leaks the label produces a model that fails exactly when it reaches production."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A data pipeline that keeps training and serving in sync"
+  mermaid={`
+flowchart LR
+  A[Raw Data Sources] --> B[Ingestion and Validation]
+  B --> C[Cleaning: Dedupe, Outliers]
+  C --> D[Feature Engineering]
+  D --> E[Feature Store]
+  E --> F[Model Training]
+  E --> G[Model Serving]
+`}
+  components={[
+    {name: 'Ingestion and Validation', responsibility: 'Checks incoming data against an expected schema and basic quality rules before anything downstream trusts it.'},
+    {name: 'Cleaning', responsibility: 'Deduplicates records and handles outliers before feature logic runs, so both are computed on a consistent base.'},
+    {name: 'Feature Engineering', responsibility: 'Applies encoding, scaling, and imputation, fit only on the training split (chapter 1.4).'},
+    {name: 'Feature Store', responsibility: 'A single, shared feature-computation layer used by both training and serving, so the two never silently diverge.'},
+    {name: 'Model Training', responsibility: 'Trains the model offline, in batch, on features read from the shared feature store rather than a separately maintained copy of the logic.'},
+    {name: 'Model Serving', responsibility: 'Computes the same features, via the same feature store, for a live prediction request.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Model-based imputation for underwriting income data', problem: 'Applicant income is missing more often for specific channels, such as gig-economy applicants, which is not missing at random.', solution: 'MICE-style model-based imputation uses other observed applicant fields to estimate a plausible value, with a missingness indicator retained alongside it.', risk: 'Because the missingness is MNAR, tied to the very applicant segment most likely to be under-documented, even careful imputation cannot fully correct for information that was never captured.'},
+    {title: 'Out-of-fold target encoding for merchant category codes', problem: 'Merchant category is a high-cardinality categorical feature strongly predictive of fraud, but one-hot encoding it would explode the feature space.', solution: 'Target encoding computed out-of-fold, with smoothing toward the global mean for rare merchant categories, compresses the feature without leaking the fraud label.', risk: 'Computing the encoding on the full dataset before the train/test split, instead of out-of-fold, silently leaks label information into training.'},
+    {title: 'Feature store for real-time transaction scoring', problem: 'A fraud model trained on batch-computed rolling averages performed worse in production than in offline evaluation.', solution: 'A shared feature store computes the same rolling-average logic for both the training pipeline and the real-time scoring service.', risk: 'Without a shared computation layer, a batch job and a streaming job can each reimplement "the same" feature slightly differently, reintroducing skew.'},
+    {title: 'Record linkage for KYC account deduplication', problem: 'Exact-match deduplication misses fraudulent accounts opened with minor variations of the same identity details.', solution: 'Fuzzy record-linkage techniques catch near-duplicate identity records that exact matching would miss.', risk: 'Overly aggressive fuzzy matching can merge two genuinely distinct customers who happen to share similar details.'},
+  ]}
+  healthcare={[
+    {title: 'MNAR-aware handling of missing lab values', problem: 'A lab value is more likely to be recorded precisely when a clinician suspects a problem, so missingness itself carries information.', solution: 'A missingness indicator is retained as a feature in its own right, rather than treating the gap as pure noise to be imputed away.', risk: 'Treating this as ordinary MCAR missingness and applying simple mean imputation would erase the very signal the missingness carries.'},
+    {title: 'Embeddings for high-cardinality diagnosis codes', problem: 'ICD-10 diagnosis codes number in the thousands, making one-hot encoding impractical for a diagnosis-prediction model.', solution: 'Learned embeddings let the model discover which diagnosis codes behave similarly from data, rather than requiring that structure to be hand-specified.', risk: 'Rare diagnosis codes get few training examples to learn a good embedding from, so model performance can be uneven across common versus rare conditions.'},
+    {title: 'Schema-drift detection after an EHR system upgrade', problem: 'An electronic health record system upgrade silently changed how a vital-sign field is recorded, and the pipeline kept running without error.', solution: 'Automated schema and distribution checks at ingestion flag the change before it reaches feature engineering.', risk: 'Without active validation, a pipeline that keeps running gives no signal that its output has quietly changed meaning.'},
+    {title: 'Patient record deduplication across merged hospital systems', problem: 'The same patient appears as multiple records after two hospital systems merge, fragmenting their visit history.', solution: 'Record linkage matches patients across systems using multiple partially-identifying fields rather than a single exact key.', risk: 'Fragmented records understate features like visit count or prior diagnosis history, biasing any model trained on them.'},
+  ]}
+  telecom={[
+    {title: 'MNAR missing call detail records during outages', problem: 'Call detail records are more likely to be lost during exactly the high-load periods a network-health model most needs to see.', solution: 'The pipeline flags periods of record loss explicitly rather than silently treating a data gap as a period of no activity.', risk: 'Imputing a gap as zero activity would teach a network-health model the opposite of what actually happened during an outage.'},
+    {title: 'Target encoding for handset and device type in churn models', problem: 'Device type has hundreds of values and is predictive of churn, but many device categories have very few customers.', solution: 'Smoothed target encoding blends a sparse device category\'s churn rate toward the overall average, avoiding overconfident estimates from tiny samples.', risk: 'Without smoothing, rare device categories get a highly variable, overfit encoding driven by a handful of customers.'},
+    {title: 'Feature-store alignment for real-time churn scoring', problem: 'A churn model\'s live predictions drifted from its offline evaluation results after launch.', solution: 'Auditing found the streaming service computed a usage-trend feature over a different time window than the offline training job; both were moved onto a shared feature store.', risk: 'Two independently maintained implementations of "the same" feature will eventually diverge as each is updated separately.'},
+    {title: 'Customer record deduplication after a billing-system migration', problem: 'A billing-system migration created duplicate customer records, inflating usage aggregates used as churn-model features.', solution: 'Deduplication logic keyed on multiple billing identifiers, not just account number, before features are computed.', risk: 'Inflated usage aggregates from unresolved duplicates bias the churn model toward whatever pattern the duplication happens to create.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why is fitting an imputer\'s statistics (like a mean or a MICE model) on the full dataset before splitting into train and test a form of data leakage?', answer: 'Fitting on the full dataset lets information from the validation and test rows influence the imputation values used during training, the same boundary violation covered in chapter 1.4. The imputer must be fit on the training split only and then applied unchanged to validation and test.'},
+    {question: 'What is the difference between MCAR, MAR, and MNAR missingness, and why does it matter for choosing a strategy?', answer: 'MCAR means missingness is unrelated to any variable, so dropping rows loses data but adds no bias. MAR means missingness depends on other observed variables, which model-based imputation can account for. MNAR means missingness depends on the missing value itself, which no imputation method can fully correct, because the information needed to correct it is exactly what was not recorded.'},
+    {question: 'Why can target encoding a categorical variable leak label information, and how is that risk mitigated?', answer: 'Target encoding replaces a category with a statistic of the target variable for that category; if a row\'s own label contributes to its own encoded value, the encoding has effectively seen the answer. The standard mitigation is to compute the encoding out-of-fold, so no row contributes to its own encoded value, and to smooth rare categories toward the global mean.'},
+    {question: 'What is training-serving skew, and why might a model that performed well in offline evaluation still fail in production because of it?', answer: 'Training-serving skew happens when a feature is computed differently by the training pipeline than by the live serving system, so the model receives inputs at serving time that do not match what it learned from. Offline evaluation metrics cannot detect this, because they run entirely inside the training-side code path and never exercise the serving path.'},
+    {question: 'Why does real-world deduplication usually require more than exact-match comparison?', answer: 'The same real-world entity, a customer or a patient, is frequently recorded with small variations, typos, formatting differences, or partial fields, across different source systems. Exact-match comparison misses these near-duplicates, so record linkage techniques that compare multiple partially-identifying fields are needed instead.'},
+  ]}
+/>

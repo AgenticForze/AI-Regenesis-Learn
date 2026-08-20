@@ -1,0 +1,196 @@
+---
+title: "Math Refresher for AI: Linear Algebra, Probability, Statistics, and Optimization"
+sidebar_label: "1.8 Math Refresher"
+sidebar_position: 8
+phase: 1
+chapter: "1.8"
+lms_presentation: "1.8-Math-Refresher-Slides.pptx"
+prerequisites: ["1.3", "1.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Four areas of math do essentially all the work behind every chapter so far and every chapter still
+to come. Linear algebra is the language a model's inputs and parameters are written in. Probability
+is how a model expresses and reasons about uncertainty. Statistics is how a practitioner decides
+whether a result is real or noise. Optimization is the mechanism, almost always gradient descent,
+by which a model actually learns. None of this requires proving theorems; it requires knowing what
+each tool is for well enough to recognize when a result is suspicious.
+
+## High-Level Explanation
+
+**Linear algebra** is how data is represented. A single example, a house's square footage, bedroom
+count, and age, is a vector: an ordered list of numbers. A full dataset is a matrix: one row per
+example, one column per feature. A model's parameters (the weights in linear regression, chapter
+1.5, or a neural network layer) are also vectors and matrices, and a prediction is usually computed
+as a matrix multiplication between the two. Two operations recur constantly: the dot product, which
+measures how aligned two vectors are, and matrix multiplication, which is really many dot products
+computed at once.
+
+**Probability** is how a model represents not knowing something for certain. A classifier's output
+is not "spam" or "not spam", it is a probability, such as 0.92, that the email is spam. Bayes'
+theorem is the formal rule for updating a probability estimate when new evidence arrives, and it
+underlies Naive Bayes (chapter 1.2), Bayesian approaches to A/B testing, and the reasoning a
+clinician uses when interpreting a diagnostic test result.
+
+**Statistics** is how a practitioner decides whether an observed difference is real. If model B
+scores 0.2 percentage points higher than model A on a test set, is that a genuine improvement or
+random variation from which examples happened to land in the test split? Descriptive statistics
+(mean, variance, correlation) summarize data; inferential statistics (hypothesis tests, confidence
+intervals) quantify how much an estimate could plausibly be due to chance.
+
+**Optimization** is how learning actually happens. Training a model means searching for the
+parameter values that minimize a loss function, a number that measures how wrong the model's
+predictions currently are. Gradient descent is the standard search procedure: compute the
+direction that most steeply increases the loss (the gradient), then take a small step in the
+opposite direction, repeatedly, until the loss stops improving.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/1-8-math-pipeline.svg').default}
+    alt="A training pipeline showing where each of the four math areas does its work: linear algebra represents the data and parameters as vectors and matrices, a probability-based loss function scores how wrong the current predictions are, gradient descent (optimization) updates the parameters to reduce that loss, and statistics is used afterward to evaluate whether the resulting model is genuinely better than the one it replaced."
+  />
+  <figcaption>Each math area does a distinct job in the same loop: represent, score, update, evaluate.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Linear algebra, formally.** A vector x in ℝᵈ is an ordered list of d real numbers. The dot
+product of two vectors, x · y = Σᵢ xᵢyᵢ, is large and positive when the vectors point in similar
+directions, near zero when they are roughly perpendicular (unrelated), and negative when they point
+in opposite directions. Cosine similarity, x · y / (‖x‖‖y‖), normalizes the dot product by each
+vector's length, so it measures direction alone, independent of magnitude, which is why it is the
+standard similarity measure for text and recommendation embeddings regardless of how long a
+document is. Matrix multiplication generalizes the dot product: multiplying a data matrix X (rows
+are examples, columns are features) by a weight vector w computes every example's weighted sum in
+one operation, which is exactly how linear regression, logistic regression, and a single neural
+network layer compute their output. Eigenvectors and eigenvalues decompose a square matrix into the
+directions it stretches (eigenvectors) and by how much (eigenvalues); Principal Component Analysis
+uses the eigenvectors of a dataset's covariance matrix to find the directions of greatest variance,
+the basis for dimensionality reduction. The L1 and L2 norms, ‖w‖₁ = Σ|wᵢ| and ‖w‖₂ = √(Σwᵢ²),
+measure a vector's overall size and are exactly what L1 and L2 regularization (chapter 1.4) penalize
+to control model complexity.
+
+**Probability, formally.** Bayes' theorem states P(A | B) = P(B | A) · P(A) / P(B): the probability
+of A given evidence B equals the probability of that evidence given A, weighted by how likely A was
+before seeing any evidence (the prior), normalized by how likely the evidence is overall. The
+counterintuitive case that trips up even careful reasoning is a rare-condition diagnostic test:
+even a test with 99% sensitivity and 99% specificity produces mostly false positives when the
+condition's true prevalence (the prior) is very low, because the number of healthy people
+multiplied by a 1% false-positive rate can exceed the number of truly sick people multiplied by a
+99% true-positive rate. This is the same base-rate reasoning that makes accuracy misleading on
+imbalanced classes (chapter 1.6). A random variable's expectation, E[X] = Σₓ x · P(X = x), is its
+long-run average value, and its variance, Var(X) = E[(X − E[X])²], measures how spread out it is
+around that average, the same variance that appears in the bias-variance tradeoff (chapter 1.4).
+The Gaussian (normal) distribution recurs constantly because many real-world quantities that result
+from summing many small independent effects converge to it (the Central Limit Theorem), and because
+several standard loss functions, including mean squared error, are the mathematically correct
+choice specifically when a model's errors are assumed to be Gaussian-distributed.
+
+**Statistics, formally.** A p-value is the probability of observing a difference at least as
+extreme as the one measured, if there were actually no true difference at all; a small p-value
+(conventionally below 0.05) is evidence against "no difference," not proof of a specific effect
+size. A confidence interval gives a range of plausible values for the true effect and is often more
+useful than a p-value alone, because a statistically significant result can still have a
+practically tiny effect size, and a wide confidence interval signals that a point estimate is
+unreliable even if it clears the significance threshold. Correlation, the standardized covariance
+between two variables scaled to [−1, 1], measures a linear relationship, not causation; two
+variables can be strongly correlated because one causes the other, because both are driven by a
+third factor, or by coincidence in a small sample. Model comparison in production, deciding whether
+a new model actually outperforms the one it replaces, is a direct application of hypothesis testing
+to the evaluation metrics from chapter 1.6, and is exactly why A/B tests need a large enough sample
+before a result is trustworthy.
+
+**Optimization, formally.** Gradient descent updates parameters with the rule θ ← θ − η∇L(θ), where
+∇L(θ) is the gradient of the loss function with respect to the parameters (the direction of
+steepest increase) and η (eta) is the learning rate, a small positive number controlling step size.
+Too large a learning rate causes the loss to oscillate or diverge instead of decreasing; too small a
+learning rate converges reliably but slowly. Stochastic Gradient Descent (SGD) computes the
+gradient on a small random batch of examples rather than the full dataset at every step, trading a
+noisier gradient estimate for dramatically faster iteration, and that noise can itself help the
+search escape shallow local minima. A convex loss surface (linear regression's squared-error loss
+is convex) has exactly one minimum, so gradient descent is guaranteed to find it; a non-convex loss
+surface (the loss landscape of a deep neural network) can have many local minima and saddle points,
+so where training starts and how it is regularized materially affects where it ends up.
+Backpropagation, the algorithm that trains neural networks, is not a separate technique from
+gradient descent, it is the chain rule from calculus applied systematically to compute ∇L(θ) for
+every parameter in a multi-layer network efficiently.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Linear Algebra', 'Probability', 'Statistics', 'Optimization']}
+  rows={[
+    {aspect: 'Core question it answers', values: ['How is data represented and transformed?', 'How certain is the model?', 'Is this result real or noise?', 'How does the model actually learn?'], decisive: true},
+    {aspect: 'Key object', values: ['Vectors and matrices', 'Distributions and Bayes\' theorem', 'p-values and confidence intervals', 'The gradient and the learning rate'], },
+    {aspect: 'Where it shows up in this curriculum', values: ['Feature vectors (1.4), embeddings, PCA', 'Naive Bayes (1.2), Bayesian A/B testing', 'Evaluating whether model B beats model A (1.6)', 'Training loop for every model in 1.5'], },
+    {aspect: 'Common failure mode if ignored', values: ['Treating unrelated features as comparable in scale', 'Ignoring the prior in a rare-event estimate', 'Declaring a noisy difference "significant"', 'A learning rate that diverges instead of converges'], },
+  ]}
+  caption="These four areas are not competing techniques to choose between, they are different jobs in the same pipeline, and a chapter's real math content usually needs all four at once."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where each math area does its work in a training loop"
+  mermaid={`
+flowchart LR
+  A[Feature Vectors and Matrices] --> B[Model Computes Predictions]
+  B --> C[Probability-Based Loss Function]
+  C --> D[Gradient Descent: Optimization]
+  D --> E[Updated Parameters]
+  E --> B
+  D --> F[Statistical Evaluation of the Result]
+`}
+  components={[
+    {name: 'Feature Vectors and Matrices', responsibility: 'Linear algebra representation: every example is a vector, every dataset is a matrix (chapter 1.7).'},
+    {name: 'Model Computes Predictions', responsibility: 'Matrix multiplication between the data and the current parameters produces a prediction for every example at once.'},
+    {name: 'Probability-Based Loss Function', responsibility: 'Scores how wrong the current predictions are, usually under an explicit or implicit probability assumption about the errors.'},
+    {name: 'Gradient Descent', responsibility: 'Computes the direction that most reduces the loss and takes a step of size set by the learning rate.'},
+    {name: 'Updated Parameters', responsibility: 'Feed back into the next round of predictions; this loop repeats until the loss stops meaningfully improving.'},
+    {name: 'Statistical Evaluation', responsibility: 'After training, hypothesis testing decides whether the resulting model is genuinely better than its predecessor, not a separate step inside the training loop itself.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Covariance-matrix eigen-decomposition for portfolio risk', problem: 'A portfolio\'s total risk depends on how its assets move together, not just each asset\'s individual volatility.', solution: 'Eigen-decomposing the asset covariance matrix identifies the dominant, correlated risk factors driving the portfolio, the basis of modern portfolio optimization.', risk: 'Correlations estimated from a calm historical period can shift sharply during a market crisis, understating true tail risk.'},
+    {title: 'Bayesian updating of credit default probability', problem: 'A borrower\'s default risk at origination is a single prior estimate that becomes stale as new repayment behavior arrives.', solution: 'Bayes\' theorem formally updates the default probability as each new payment or missed payment is observed.', risk: 'A prior built on a historical population that does not match a new applicant segment biases every subsequent update.'},
+    {title: 'Hypothesis testing before a fraud model rollout', problem: 'A new fraud model shows a lower false-positive rate than the current one on a test sample, which could be real or could be noise.', solution: 'A significance test on the difference, with a confidence interval on the effect size, determines whether the improvement is large enough and certain enough to justify replacing a production model.', risk: 'Rolling out on an underpowered sample can lock in a change that looked significant by chance.'},
+    {title: 'Gradient descent tuning for a loan-pricing model', problem: 'Retraining a loan-pricing model on a new data window produced a loss curve that oscillated instead of converging.', solution: 'Lowering the learning rate stabilizes the descent, at the cost of more training iterations to reach the same loss.', risk: 'An untuned learning rate that appears to converge can still have settled into a poor local optimum rather than a genuinely low-loss solution.'},
+  ]}
+  healthcare={[
+    {title: 'PCA on gene-expression data', problem: 'A gene-expression dataset can have far more features (genes measured) than samples (patients), making direct modeling unreliable.', solution: 'The eigenvectors of the expression covariance matrix reveal a small number of dominant expression patterns, reducing dimensionality before modeling.', risk: 'The top principal components maximize variance, not necessarily the specific signal a clinical model actually needs to predict.'},
+    {title: 'Bayesian reasoning for diagnostic test interpretation', problem: 'A positive result on a screening test for a rare condition is often misread as strong evidence the patient has the condition.', solution: 'Applying Bayes\' theorem with the condition\'s true prevalence as the prior gives the actual post-test probability, not just the test\'s advertised accuracy.', risk: 'Ignoring the low prior for a rare condition leads clinicians and patients to badly overestimate the chance of true disease after one positive result.'},
+    {title: 'Hypothesis testing in a clinical trial', problem: 'A new treatment shows a better outcome than the control group, and the trial must establish whether that gap reflects a real treatment effect.', solution: 'A pre-registered hypothesis test and confidence interval on the effect size determine statistical and clinical significance before any claim is made.', risk: 'A statistically significant result with a tiny effect size can be clinically meaningless despite clearing the significance threshold.'},
+    {title: 'Constrained optimization for radiotherapy dose planning', problem: 'A radiotherapy plan must maximize dose to a tumor while keeping surrounding healthy tissue below a safety limit.', solution: 'The plan is computed as a constrained optimization problem, searching for the dose distribution that best satisfies both objectives at once.', risk: 'A solver can converge to a locally optimal dose distribution that satisfies the constraints on paper but is clinically suboptimal.'},
+  ]}
+  telecom={[
+    {title: 'Matrix factorization for network routing', problem: 'A large network\'s routing and capacity-planning decisions depend on relationships between thousands of interconnected nodes.', solution: 'Representing the network as a matrix and factorizing it exposes structure, such as clusters of heavily interdependent nodes, that guides capacity decisions.', risk: 'A factorization computed on a stale network topology snapshot can recommend routing that no longer matches current infrastructure.'},
+    {title: 'Markov-chain modeling of customer state transitions', problem: 'Predicting churn requires modeling how a customer moves between engagement states over time, not just a single snapshot.', solution: 'A Markov chain models the probability of transitioning between states like active, at-risk, and churned, using only the current state.', risk: 'The Markov assumption, that the next state depends only on the current one, breaks down for customers whose churn risk depends on a longer history.'},
+    {title: 'Hypothesis testing for a new pricing plan', problem: 'A new pricing plan shows a lower churn rate in a pilot region than the standard plan.', solution: 'A significance test compares churn rates between plan and control, confirming the difference is unlikely to be due to regional variation alone.', risk: 'A pilot run in a single, non-representative region can produce a significant-looking result that does not replicate nationally.'},
+    {title: 'Optimization for cell tower capacity allocation', problem: 'Allocating limited capacity upgrades across a large number of cell towers to maximize coverage improvement is a large constrained optimization problem.', solution: 'A gradient-based or heuristic optimizer searches the allocation space for a high-quality, though not necessarily perfectly optimal, capacity plan.', risk: 'A heuristic solver can settle into a plan that is a local optimum, leaving a materially better allocation undiscovered.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does the dot product of two vectors measure, and why does cosine similarity divide it by the vectors\' lengths?', answer: 'The dot product is large when two vectors point in similar directions and near zero when they are roughly unrelated, but its value also grows with each vector\'s magnitude. Cosine similarity divides by both vectors\' lengths so it measures direction alone, which is why it is used to compare embeddings regardless of how long a document or how large a magnitude is.'},
+    {question: 'In the classic rare-disease diagnostic test example, why can a test with 99% sensitivity and 99% specificity still produce mostly false positives?', answer: 'When the condition is rare, the prior probability of having it is very low, so even a small false-positive rate applied to the much larger healthy population produces more false positives than true positives from the small sick population. Bayes\' theorem, which weights the test\'s accuracy by the prior, gives the correct post-test probability; ignoring the prior badly overstates it.'},
+    {question: 'What is the difference between a p-value and a confidence interval, and what does a small p-value fail to guarantee?', answer: 'A p-value is the probability of seeing a difference at least this extreme if there were truly no effect; a confidence interval gives a range of plausible values for the actual effect size. A small p-value shows evidence against "no difference," but it does not guarantee the effect is large or practically meaningful, since a tiny, unimportant effect can still be statistically significant with enough data.'},
+    {question: 'In one step of gradient descent, what does the gradient tell you, and what happens if the learning rate is set too high?', answer: 'The gradient points in the direction of steepest increase in the loss, so gradient descent steps in the opposite direction to reduce it. If the learning rate is too high, each step overshoots and the loss can oscillate or diverge instead of decreasing; too low a learning rate converges reliably but slowly.'},
+    {question: 'Why does it matter whether a loss surface is convex or non-convex?', answer: 'A convex loss surface has exactly one minimum, so gradient descent is guaranteed to reach it regardless of where it starts. A non-convex surface, like a deep neural network\'s loss landscape, can have many local minima and saddle points, so the starting point, regularization, and optimizer choice all affect which solution training ends up at.'},
+  ]}
+/>
