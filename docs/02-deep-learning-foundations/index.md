@@ -18,10 +18,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 
 - [2.1 Neural Networks 101: From Perceptron to MLP](./2-1-neural-networks-101.mdx)
 - [2.2 Backpropagation & Optimization](./2-2-backpropagation-optimization.mdx)
+- [2.3 Convolutional Neural Networks: Architecture & Use Cases](./2-3-convolutional-neural-networks.mdx)
 
 ## Planned chapters
 
-- 2.3 Convolutional Neural Networks: Architecture & Use Cases
 - 2.4 Sequence Models Before Transformers: RNN, LSTM, GRU
 - 2.5 The Transformer Architecture — Deep Dive
 - 2.6 Transfer Learning & the Pretrain-Then-Adapt Paradigm

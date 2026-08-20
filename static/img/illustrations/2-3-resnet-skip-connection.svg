@@ -1,0 +1,60 @@
+<svg width="1100" height="520" viewBox="0 0 1100 520" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-rn desc-rn">
+  <title id="title-rn">A plain stacked block versus a residual block with a skip connection</title>
+  <desc id="desc-rn">Left: a plain block where input x passes through two convolution and ReLU layers to directly produce output H(x), with no shortcut. Right: a residual block where the same two convolutional layers compute a residual F(x), which is then added to the unchanged input x via a skip connection before a final ReLU, so output equals F(x) plus x.</desc>
+  <rect width="1100" height="520" fill="#fcfcfb"/>
+  <text x="550" y="38" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">A skip connection lets a block default to "pass through"</text>
+
+  <defs>
+    <marker id="arrRN" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#52514e"/>
+    </marker>
+  </defs>
+
+  <!-- LEFT: plain block -->
+  <text x="150" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#a33a2f">PLAIN BLOCK</text>
+  <rect x="70" y="100" width="160" height="46" rx="8" fill="#86b6ef"/>
+  <text x="150" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#0b0b0b">input x</text>
+  <line x1="150" y1="146" x2="150" y2="176" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="70" y="180" width="160" height="46" rx="8" fill="#5598e7"/>
+  <text x="150" y="208" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Conv + ReLU</text>
+  <line x1="150" y1="226" x2="150" y2="256" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="70" y="260" width="160" height="46" rx="8" fill="#2a78d6"/>
+  <text x="150" y="288" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Conv</text>
+  <line x1="150" y1="306" x2="150" y2="336" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="70" y="340" width="160" height="46" rx="8" fill="#0d2c4e"/>
+  <text x="150" y="368" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">output H(x)</text>
+
+  <rect x="50" y="410" width="200" height="80" rx="8" fill="#fdecea" stroke="#a33a2f" stroke-width="1.5"/>
+  <text x="150" y="435" text-anchor="middle" font-size="11" font-weight="700" fill="#a33a2f">must learn the full</text>
+  <text x="150" y="452" text-anchor="middle" font-size="11" font-weight="700" fill="#a33a2f">mapping H(x) directly,</text>
+  <text x="150" y="469" text-anchor="middle" font-size="11" font-weight="700" fill="#a33a2f">even "do nothing"</text>
+
+  <!-- RIGHT: residual block -->
+  <text x="750" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="#184f95">RESIDUAL BLOCK</text>
+  <rect x="670" y="100" width="160" height="46" rx="8" fill="#86b6ef"/>
+  <text x="750" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#0b0b0b">input x</text>
+  <line x1="750" y1="146" x2="750" y2="176" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="670" y="180" width="160" height="46" rx="8" fill="#5598e7"/>
+  <text x="750" y="208" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Conv + ReLU</text>
+  <line x1="750" y1="226" x2="750" y2="256" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="670" y="260" width="160" height="46" rx="8" fill="#2a78d6"/>
+  <text x="750" y="288" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Conv &#8594; F(x)</text>
+
+  <!-- skip path -->
+  <path d="M 830 123 C 980 123, 980 300, 862 322" fill="none" stroke="#184f95" stroke-width="2.5" marker-end="url(#arrRN)"/>
+  <rect x="850" y="222" width="230" height="42" fill="#fcfcfb"/>
+  <text x="860" y="240" font-size="11" font-weight="700" fill="#184f95">skip connection</text>
+  <text x="860" y="256" font-size="11" font-weight="700" fill="#184f95">(identity, unchanged x)</text>
+
+  <circle cx="750" cy="322" r="18" fill="#ffffff" stroke="#184f95" stroke-width="2.5"/>
+  <text x="750" y="328" text-anchor="middle" font-size="16" font-weight="700" fill="#184f95">+</text>
+  <line x1="750" y1="306" x2="750" y2="313" stroke="#52514e" stroke-width="2"/>
+
+  <line x1="750" y1="340" x2="750" y2="370" stroke="#52514e" stroke-width="2" marker-end="url(#arrRN)"/>
+  <rect x="670" y="374" width="160" height="46" rx="8" fill="#0d2c4e"/>
+  <text x="750" y="402" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">output F(x) + x</text>
+
+  <rect x="650" y="430" width="200" height="60" rx="8" fill="#eaf2fc" stroke="#184f95" stroke-width="1.5"/>
+  <text x="750" y="455" text-anchor="middle" font-size="11" font-weight="700" fill="#184f95">only needs to learn F(x) = 0</text>
+  <text x="750" y="472" text-anchor="middle" font-size="11" font-weight="700" fill="#184f95">to pass x through unchanged</text>
+</svg>

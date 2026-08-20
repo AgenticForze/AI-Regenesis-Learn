@@ -1,0 +1,206 @@
+---
+title: "Convolutional Neural Networks: Architecture & Use Cases"
+sidebar_label: "2.3 Convolutional Neural Networks"
+sidebar_position: 3
+phase: 2
+chapter: "2.3"
+lms_presentation: "2.3-Convolutional-Neural-Networks-Slides.pptx"
+prerequisites: ["2.1", "2.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+The fully connected MLP from 2.1 treats every input feature as independent, which is wasteful for
+images: a photo's pixels have spatial structure, and the pattern that makes something an edge or a
+texture looks the same whether it appears in the top-left or bottom-right corner. A convolutional
+neural network (CNN) exploits that structure with a small filter that slides across the entire
+image, reusing the same weights at every position instead of learning a separate weight for every
+pixel location. This parameter sharing makes CNNs dramatically more efficient than a fully
+connected network on image-like data, and stacking convolution and pooling layers builds a
+hierarchy of features automatically, from edges, to textures, to object parts, to whole objects.
+
+## High-Level Explanation
+
+A **convolution** slides a small grid of learned numbers, called a filter or kernel (commonly 3x3
+or 5x5), across the input image. At each position, it multiplies the filter's values against the
+pixels underneath it, sums the results, and produces one output value; sliding the filter across
+every position produces a full 2D grid of outputs called a **feature map**. Each filter learns to
+detect one specific local pattern, an edge at a particular angle, a corner, a patch of a specific
+texture, and because the same filter is reused at every position, the network learns that pattern
+once and can recognize it anywhere in the image. A convolutional layer typically applies many
+filters in parallel, each producing its own feature map, so the layer's output has many "channels,"
+one per filter.
+
+**Pooling** downsamples a feature map, most commonly by taking the maximum value in each small
+non-overlapping region (max pooling). This reduces the spatial size of the data flowing through the
+network, cuts the amount of computation needed in later layers, and gives the network some
+tolerance to a pattern shifting by a few pixels, since the same maximum survives a small
+translation. A typical CNN alternates convolution (plus a nonlinear activation, chapter 2.1) and
+pooling several times: each stage's feature maps become the next stage's input, so early layers
+detect simple local patterns like edges, and later layers, working on the already-simplified output
+of earlier layers, combine those into progressively more complex patterns: textures, then object
+parts, then whole objects.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-3-convolution-operation.svg').default}
+    alt="A small 3x3 filter sliding across a larger input grid. At each position, the filter's values are multiplied against the pixels underneath and summed into a single output value in the feature map. The same filter, with the same weights, is reused at every position across the entire image."
+  />
+  <figcaption>The same small filter is reused at every position, which is why a CNN needs far fewer parameters than a fully connected layer would to process the same image.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The convolution operation, formally.** For a filter K of size FxF and an input region of the
+same size starting at position (i, j), the output feature map value is
+output[i,j] = Σm Σn input[i+m, j+n]·K[m,n] + b, summing over every offset (m, n) inside the filter,
+followed by an activation function exactly as in chapter 2.1's z = Σwx + b. Two settings control how the
+filter moves: **stride**, the number of pixels the filter shifts between positions (stride 1 moves
+one pixel at a time; stride 2 skips every other position, halving the output size), and
+**padding**, whether zeros are added around the input's border so the filter can be centered on
+edge pixels ("same" padding, which keeps the output the same spatial size as the input) or not
+("valid" padding, which shrinks the output). The output size along one dimension is
+floor((W - F + 2P) / S) + 1, where W is the input size, F the filter size, P the padding, and S the
+stride.
+
+**Parameter sharing is the entire efficiency argument.** A fully connected layer mapping a modest
+224x224x3 image to a single 1,000-unit hidden layer needs 224x224x3x1000, over
+150 million weights, for that one layer alone. A convolutional layer with 64 filters of size 3x3
+over the same 3-channel input needs only 3x3x3x64 + 64, about 1,792 weights, regardless of
+how large the input image is, because the same filter weights are reused at every spatial position
+rather than each position getting its own independent set of weights. This is a strong inductive
+bias (1.5): the network assumes a useful local pattern is worth detecting the same way everywhere in
+the image, which is true for most natural images and is exactly the assumption a fully connected
+layer does not make.
+
+**Receptive field.** A single unit in a feature map several layers deep is not looking at the whole
+original image directly; it is a function of a specific, growing region of the input, called its
+receptive field. Each additional convolution or pooling layer expands the receptive field of the
+units that follow it, which is why early layers detect small, local patterns (edges) and later
+layers, whose units each depend on a much larger region of the original image, detect larger, more
+composite patterns (object parts, whole objects).
+
+**LeNet-5**, one of the earliest successful CNNs, applied this alternating convolution-and-pooling
+structure to handwritten digit recognition, trained end-to-end with backpropagation (2.2), and
+demonstrated that a network could learn its own feature detectors directly from pixels rather than
+requiring hand-engineered features (LeCun, Bottou, Bengio, and Haffner,
+[*Gradient-Based Learning Applied to Document Recognition*](https://ieeexplore.ieee.org/document/726791),
+*Proceedings of the IEEE*, 1998). **AlexNet** scaled the same core idea substantially deeper and
+wider, trained on GPUs, and won the 2012 ImageNet competition by a wide margin over
+non-deep-learning approaches, using ReLU activations (2.1) instead of sigmoid/tanh and dropout for
+regularization; its result is widely credited with triggering the deep learning boom in computer
+vision (Krizhevsky, Sutskever, and Hinton,
+[*ImageNet Classification with Deep Convolutional Neural Networks*](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks),
+NeurIPS, 2012). Simply stacking more convolutional layers eventually stopped helping and started
+hurting accuracy, even on the training set, a degradation problem distinct from overfitting.
+**ResNet** solved this with residual (skip) connections: instead of forcing a stack of layers to
+learn a full output mapping H(x) directly, each block learns a residual F(x) = H(x) - x that is
+added back to its own input, output = F(x) + x, so a block that has nothing useful to add can more
+easily learn to approximate zero and pass its input through unchanged, which is much closer to what
+gradient descent starting from a near-zero initialization has to reach anyway (He, Zhang, Ren, and
+Sun,
+[*Deep Residual Learning for Image Recognition*](https://arxiv.org/abs/1512.03385),
+CVPR, 2016). This let networks scale to over a hundred layers deep and improve accuracy further,
+where plain stacked convolutional networks had already stopped improving.
+
+```python
+import numpy as np
+
+def conv2d_single_channel(image, kernel, stride=1, padding=0):
+    """A minimal, unoptimized 2D convolution for one input channel, one filter."""
+    if padding > 0:
+        image = np.pad(image, padding)
+    h, w = image.shape
+    kh, kw = kernel.shape
+    out_h = (h - kh) // stride + 1
+    out_w = (w - kw) // stride + 1
+    output = np.zeros((out_h, out_w))
+    for i in range(out_h):
+        for j in range(out_w):
+            region = image[i*stride:i*stride+kh, j*stride:j*stride+kw]
+            output[i, j] = np.sum(region * kernel)  # this is the convolution's core operation
+    return output
+
+# A 3x3 vertical-edge-detecting filter applied to a 6x6 input
+image = np.array([[0,0,0,1,1,1]]*6)
+edge_filter = np.array([[1,0,-1],[1,0,-1],[1,0,-1]])
+print(conv2d_single_channel(image, edge_filter))  # large-magnitude values mark the vertical edge column
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['CNN', 'Fully Connected MLP (2.1)', 'Classical ML + Hand Features (1.5)']}
+  rows={[
+    {aspect: 'Parameter count on image data', values: ['Low: filters are reused across positions', 'Very high: one weight per pixel per unit', 'Low, but features are hand-designed'], decisive: true},
+    {aspect: 'Exploits spatial locality', values: ['Yes, by construction', 'No, treats every pixel independently', 'Only if the hand-designed features do'], },
+    {aspect: 'Feature engineering required', values: ['No, learned end-to-end', 'No, but impractical on raw images', 'Yes, a human designs the features'], },
+    {aspect: 'Translation tolerance', values: ['Some, from pooling and shared filters', 'None, a shifted pattern looks entirely new', 'Depends on the specific features chosen'], },
+  ]}
+  caption="A CNN's inductive bias (locality and shared weights) is what makes it practical on raw images at all; a fully connected network could theoretically learn the same function but would need vastly more data and parameters to do it."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A LeNet-style CNN pipeline"
+  mermaid={`
+flowchart LR
+  A[Input Image] --> B[Conv + ReLU: filters detect local patterns]
+  B --> C[Max Pooling: downsample]
+  C --> D[Conv + ReLU: combine into larger patterns]
+  D --> E[Max Pooling: downsample]
+  E --> F[Flatten]
+  F --> G[Fully Connected + Softmax: 2.1]
+  G --> H[Class Prediction]
+`}
+  components={[
+    {name: 'Conv + ReLU', responsibility: 'Slides learned filters across the input to produce feature maps; ReLU adds nonlinearity exactly as in 2.1.'},
+    {name: 'Max Pooling', responsibility: 'Downsamples each feature map, reducing computation and adding tolerance to small shifts.'},
+    {name: 'Flatten', responsibility: 'Reshapes the final, small feature maps into a single vector so a standard fully connected layer can consume it.'},
+    {name: 'Fully Connected + Softmax', responsibility: 'Combines the extracted features into a final class prediction, the same output mechanism as chapter 2.1.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Check and remittance document image processing', problem: 'Automated check deposit needs to read handwritten and printed amounts from scanned or photographed check images at high accuracy.', solution: 'A CNN trained on labeled check images extracts and classifies the amount and signature regions before downstream OCR.', risk: 'A CNN trained mostly on clean scans can perform noticeably worse on mobile-phone photos taken at odd angles or in poor lighting.'},
+    {title: 'Signature verification for high-value transactions', problem: 'Manual signature comparison for large wire transfers is slow and inconsistent across reviewers.', solution: 'A CNN-based similarity model compares a new signature image against a customer\'s reference signatures on file.', risk: 'A forged signature that is visually close to genuine ones can still pass, so the model is a screening aid, not a sole authorization gate.'},
+    {title: 'Counterfeit currency and document detection', problem: 'Physical currency and identity documents carry subtle visual security features that are hard to check manually at volume.', solution: 'A CNN trained on genuine and counterfeit examples flags documents with visual inconsistencies for manual review.', risk: 'Counterfeiting techniques evolve, so a model trained on past counterfeit patterns can miss a genuinely new forgery technique.'},
+    {title: 'Branch and ATM security camera anomaly detection', problem: 'Reviewing security footage manually for suspicious activity around ATMs and branches does not scale.', solution: 'A CNN-based video anomaly model flags unusual activity patterns for human security review rather than continuous manual monitoring.', risk: 'A model tuned on one branch\'s typical foot traffic and lighting can generate excess false alerts at a visually different location.'},
+  ]}
+  healthcare={[
+    {title: 'Diagnostic imaging classification (X-ray, CT)', problem: 'Radiologists face a high volume of imaging studies and benefit from a triage signal for studies likely to show a critical finding.', solution: 'A CNN trained on labeled imaging studies flags high-suspicion cases for prioritized radiologist review, not as a standalone diagnosis.', risk: 'A model trained predominantly on one scanner manufacturer\'s image characteristics can underperform on images from a different scanner or protocol.'},
+    {title: 'Dermatology image classification for skin lesions', problem: 'Early identification of concerning skin lesions benefits from a consistent, scalable first-pass visual assessment.', solution: 'A CNN trained on dermoscopic images provides a risk score that supports, rather than replaces, a dermatologist\'s exam.', risk: 'Models trained on image datasets skewed toward lighter skin tones have documented accuracy gaps on darker skin tones, a well-known fairness (1.9) failure mode in this domain.'},
+    {title: 'Digital pathology tissue slide analysis', problem: 'Manually reviewing every region of a high-resolution digitized tissue slide for abnormal cells is extremely time-consuming.', solution: 'A CNN scans slide regions and flags areas with a high likelihood of abnormal tissue for pathologist review.', risk: 'A model can be confidently wrong on a tissue preparation or staining variation it saw little of during training.'},
+    {title: 'Diabetic retinopathy screening from retinal images', problem: 'Diabetic retinopathy screening at scale is limited by the number of ophthalmologists available to review retinal images.', solution: 'A CNN trained on labeled retinal images provides an automated screening pass, referring flagged cases for specialist review.', risk: 'Image quality varies with the camera and technician, and a model not robust to that variation can miss real disease or over-refer healthy patients.'},
+  ]}
+  telecom={[
+    {title: 'Cell tower and infrastructure visual inspection', problem: 'Manually inspecting cell towers and infrastructure for damage or wear requires costly site visits and climbs.', solution: 'A CNN analyzes drone-captured imagery to flag towers showing visible signs of damage or corrosion for prioritized maintenance.', risk: 'A model trained on inspection images from one climate or tower design can miss damage patterns specific to a different environment.'},
+    {title: 'Spectrogram-based anomaly detection in network signals', problem: 'Some network interference and equipment fault patterns are easier to distinguish visually as a spectrogram than as a raw time series.', solution: 'Treating spectrograms as images, a CNN classifies interference or fault types for faster root-cause triage.', risk: 'A spectrogram-based model trained on one frequency band or equipment generation can generalize poorly to another.'},
+    {title: 'Optical fiber and connector visual defect detection', problem: 'Manually inspecting fiber connectors and splices for contamination or damage does not scale across a large network footprint.', solution: 'A CNN trained on microscope images of connector end-faces flags contamination or physical damage for rework before installation.', risk: 'A defect type absent from training images will not reliably be flagged, so the model complements rather than replaces spot-check manual inspection.'},
+    {title: 'Retail store and warehouse camera analytics', problem: 'Telecom retail and logistics operations want visibility into store traffic patterns and inventory shelf conditions without manual review of camera feeds.', solution: 'A CNN-based analytics pipeline counts foot traffic and flags low-stock shelf conditions from existing camera feeds.', risk: 'Camera placement and lighting differences across locations can degrade accuracy in ways that are not obvious until a specific site is checked.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is parameter sharing in a convolutional layer, and why does it make CNNs so much more parameter-efficient than a fully connected layer on image data?', answer: 'The same filter weights are reused at every spatial position across the image, rather than each position having its own independent set of weights. A fully connected layer would need a separate weight for every input pixel and every output unit, which grows enormous for realistic image sizes, while a convolutional layer\'s parameter count depends only on the filter size and channel counts, not the image size.'},
+    {question: 'What does max pooling do, and what two benefits does it provide?', answer: 'Max pooling takes the maximum value in each small non-overlapping region of a feature map, reducing its spatial size. This reduces the computation needed in later layers and adds some tolerance to a pattern shifting by a small number of pixels, since the same maximum value often survives a small translation.'},
+    {question: 'What is a receptive field, and why do later layers in a CNN detect more complex patterns than earlier layers?', answer: 'A unit\'s receptive field is the region of the original input image its value depends on. Each convolution or pooling layer expands the receptive field of the units that follow it, so later-layer units depend on a larger region of the original image and can combine simpler patterns detected earlier into more complex, composite ones.'},
+    {question: 'What problem did ResNet\'s residual connections solve that simply stacking more convolutional layers did not?', answer: 'Beyond a certain depth, stacking more plain convolutional layers caused accuracy to degrade, even on the training set, a problem distinct from overfitting. Residual connections let each block learn a residual function added back to its own input, so a block with nothing useful to add can more easily learn to pass its input through unchanged, which let networks scale to over a hundred layers while still improving.'},
+    {question: 'How do stride and padding each affect the output size of a convolutional layer?', answer: 'Stride controls how many pixels the filter shifts between positions; a larger stride skips more positions and produces a smaller output. Padding adds pixels (typically zeros) around the input\'s border; "same" padding keeps the output the same spatial size as the input, while "valid" padding (no padding) shrinks the output based on the filter size.'},
+  ]}
+/>
