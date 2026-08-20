@@ -1,0 +1,196 @@
+---
+title: "Sequence Models Before Transformers: RNN, LSTM, GRU"
+sidebar_label: "2.4 Sequence Models (RNN, LSTM, GRU)"
+sidebar_position: 4
+phase: 2
+chapter: "2.4"
+lms_presentation: "2.4-Sequence-Models-Slides.pptx"
+prerequisites: ["2.1", "2.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A CNN (2.3) exploits spatial structure by reusing a filter across positions in an image. A
+recurrent neural network (RNN) applies the same idea to time: it reuses the same weights at every
+step of a sequence, carrying a running summary forward from one step to the next called the hidden
+state. This makes RNNs a natural fit for text, time series, and sensor data, anything where order
+matters. Plain RNNs struggle to remember information from many steps earlier, because
+backpropagating through a long sequence multiplies the same shrinking or growing gradient factor
+from chapter 2.2 many times over. LSTM and GRU cells add gating mechanisms specifically designed to
+keep that gradient flowing over long sequences, which is why they, not plain RNNs, were the
+practical default for sequence modeling for two decades before the Transformer (2.5).
+
+## High-Level Explanation
+
+A **recurrent neural network** processes a sequence one element at a time, and at each step it
+combines the current input with a **hidden state** carried over from the previous step, producing a
+new hidden state to pass forward. The same weights are reused at every time step, exactly as a
+CNN's filter is reused at every spatial position, so the network learns one update rule and applies
+it repeatedly rather than learning a separate rule for position 1, position 2, and so on. This
+hidden state is the network's working memory: reading a sentence word by word, it is the running
+summary of everything read so far, updated with each new word.
+
+Plain RNNs are unreliable at carrying information across long gaps. Because the same recurrence is
+applied at every step, "unrolling" a sequence of length T for training is mathematically like
+having a T-layer-deep network (chapter 2.2's backpropagation runs through all T steps, called
+backpropagation through time), and the vanishing/exploding gradient problem from 2.2 compounds over
+however many steps separate a relevant piece of information from where it is needed. A plain RNN
+trying to connect a pronoun to a subject mentioned forty words earlier is fighting the same
+shrinking-gradient problem a 40-layer plain feedforward network would face. **LSTM** and **GRU**
+cells were designed specifically to fix this by adding gates: small learned sub-networks that
+control what information the cell keeps, discards, and outputs at each step, giving the gradient a
+much more direct path across long sequences.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-4-rnn-unrolled.svg').default}
+    alt="A recurrent neural network cell unrolled across four time steps. The same cell, with the same weights, is applied at each step. At each step it takes the current input and the previous hidden state, and produces a new hidden state that is passed to the next step and optionally used to produce an output at that step."
+  />
+  <figcaption>The same cell and the same weights are reused at every time step; only the hidden state carried between steps changes.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The plain RNN recurrence, formally.** At each time step t, a simple recurrent network computes
+h_t = φ(W_hh·h_(t-1) + W_xh·x_t + b), where h_(t-1) is the previous hidden state, x_t is the current
+input, W_hh and W_xh are weight matrices shared across every time step, and φ is typically tanh
+(chapter 2.1). An output y_t, when one is needed at that step, is a further linear transformation of
+h_t. This structure, a hidden state fed back into the same weights at the next step, was introduced
+as the simple recurrent network for modeling sequential structure in language (Elman,
+[*Finding Structure in Time*](https://onlinelibrary.wiley.com/doi/abs/10.1207/s15516709cog1402_1),
+*Cognitive Science*, 1990). Training unrolls the recurrence across all T steps of a sequence and
+applies backpropagation (2.2) through the resulting T-step computation graph, so the same weights
+receive a gradient contribution from every time step, summed together.
+
+**LSTM (Long Short-Term Memory)** adds a separate cell state c_t that runs through the sequence
+largely unchanged except for gated additions and removals, alongside the hidden state h_t. Three
+gates, each a sigmoid-activated function of the current input and previous hidden state (so each
+gate outputs values between 0 and 1, acting as a soft on/off switch per dimension), control it: the
+**forget gate** f_t = σ(W_f·[h_(t-1), x_t] + b_f) decides what fraction of the existing cell state to
+keep; the **input gate** i_t = σ(W_i·[h_(t-1), x_t] + b_i) decides how much of a new candidate value
+to add; and the **output gate** o_t = σ(W_o·[h_(t-1), x_t] + b_o) decides how much of the cell state
+to expose as the hidden state. The cell state update, c_t = f_t·c_(t-1) + i_t·c~_t (where
+c~_t is a tanh-activated candidate value), is largely additive rather than repeatedly multiplying
+through a nonlinearity at every step, which gives the gradient a much shorter, more direct path
+backward through time than a plain RNN's repeated matrix multiplication provides, directly
+addressing the vanishing gradient problem chapter 2.2 introduced (Hochreiter and Schmidhuber,
+[*Long Short-Term Memory*](https://dl.acm.org/doi/10.1162/neco.1997.9.8.1735),
+*Neural Computation*, 1997).
+
+**GRU (Gated Recurrent Unit)** simplifies this with two gates instead of three, and no separate cell
+state: an **update gate** z_t controls how much of the previous hidden state to keep versus replace
+with a new candidate, and a **reset gate** r_t controls how much of the previous hidden state
+influences that new candidate. With fewer parameters than an LSTM cell of the same hidden size, a
+GRU trains faster and often reaches comparable accuracy, though which one wins is task-dependent
+enough that both remained common choices in practice (Cho, van Merrienboer, Gulcehre, Bahdanau,
+Bougares, Schwenk, and Bengio,
+[*Learning Phrase Representations Using RNN Encoder-Decoder for Statistical Machine Translation*](https://aclanthology.org/D14-1179/),
+EMNLP, 2014).
+
+**Bidirectional RNNs.** A standard RNN only sees a sequence in one direction, left to right, so its
+hidden state at step t reflects everything before t but nothing after it. For tasks where the whole
+sequence is available at once, rather than being generated one step at a time (classifying a
+sentence's sentiment, tagging each word's part of speech), a bidirectional RNN runs two separate
+RNNs, one forward and one backward over the sequence, and concatenates their hidden states at each
+position, so every position's representation reflects context from both directions.
+
+```python
+import numpy as np
+
+def rnn_step(x_t, h_prev, W_xh, W_hh, b):
+    """One plain RNN time step: h_t = tanh(W_hh @ h_prev + W_xh @ x_t + b)."""
+    return np.tanh(W_hh @ h_prev + W_xh @ x_t + b)
+
+def lstm_step(x_t, h_prev, c_prev, params):
+    """One LSTM time step, following the standard gate equations."""
+    z = np.concatenate([h_prev, x_t])
+    f_t = sigmoid(params['W_f'] @ z + params['b_f'])   # forget gate
+    i_t = sigmoid(params['W_i'] @ z + params['b_i'])   # input gate
+    o_t = sigmoid(params['W_o'] @ z + params['b_o'])   # output gate
+    c_candidate = np.tanh(params['W_c'] @ z + params['b_c'])
+    c_t = f_t * c_prev + i_t * c_candidate             # mostly additive cell update
+    h_t = o_t * np.tanh(c_t)
+    return h_t, c_t
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Plain RNN', 'LSTM', 'GRU']}
+  rows={[
+    {aspect: 'Long-range dependency handling', values: ['Poor: gradient vanishes over many steps', 'Strong: additive cell state preserves gradient', 'Strong: additive update, simpler than LSTM'], decisive: true},
+    {aspect: 'Gates', values: ['None', '3: forget, input, output', '2: update, reset'], },
+    {aspect: 'Parameters per hidden unit', values: ['Fewest', 'Most', 'Fewer than LSTM, more than plain RNN'], },
+    {aspect: 'Typical choice today', values: ['Rarely used alone in production', 'Common where long dependencies matter most', 'Common where training speed matters and LSTM is not clearly better'], },
+  ]}
+  caption="LSTM and GRU differ mainly in how many gates control the update; both address the plain RNN's core weakness, and choosing between them is usually an empirical question for a given dataset and sequence length."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="An RNN/LSTM processing a sequence, unrolled across time"
+  mermaid={`
+flowchart LR
+  X1[x_1] --> C1[Cell, h_0 to h_1]
+  H0[h_0: initial hidden state] --> C1
+  C1 --> C2[Cell, h_1 to h_2]
+  X2[x_2] --> C2
+  C2 --> C3[Cell, h_2 to h_3]
+  X3[x_3] --> C3
+  C3 --> H3[Final hidden state h_3]
+  H3 --> Y[Output: classification, next-step prediction, etc.]
+`}
+  components={[
+    {name: 'Cell', responsibility: 'The same weights (plain RNN recurrence, or LSTM/GRU gates) applied at every time step; only the hidden (and for LSTM, cell) state changes between steps.'},
+    {name: 'Hidden state (h)', responsibility: 'Carries a running summary of the sequence so far forward to the next step.'},
+    {name: 'Cell state (LSTM only)', responsibility: 'A largely additive memory channel that gives gradients a more direct path across many time steps.'},
+    {name: 'Output', responsibility: 'Built from the final hidden state (sequence classification) or from every step\'s hidden state (sequence tagging, next-step prediction).'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Transaction sequence fraud detection', problem: 'Fraud often shows up as a suspicious pattern across a sequence of transactions, not any single transaction in isolation.', solution: 'An LSTM processes a customer\'s recent transaction sequence, using its hidden state to flag accounts whose recent pattern deviates from their own history.', risk: 'A model trained on historical fraud sequences can miss a genuinely new multi-step fraud pattern it has not seen examples of.'},
+    {title: 'Short-horizon cash flow forecasting', problem: 'Treasury teams need a near-term cash position forecast built from a sequence of past inflows and outflows.', solution: 'A GRU-based forecasting model trained on historical ledger sequences produces a rolling short-horizon cash flow estimate.', risk: 'A sequence model trained on stable historical patterns can underforecast around unusual one-off events it saw few examples of.'},
+    {title: 'Customer service conversation sentiment tracking', problem: 'Understanding how a customer\'s sentiment shifts over the course of a support conversation requires modeling the conversation as an ordered sequence.', solution: 'A bidirectional LSTM processes the conversation transcript turn by turn to track sentiment shifts and flag conversations trending negative.', risk: 'Sentiment models trained on one channel\'s language patterns (chat) can transfer poorly to another (phone transcripts) with different phrasing norms.'},
+    {title: 'Sequential credit behavior scoring', problem: 'A borrower\'s payment behavior over a sequence of billing cycles carries more signal than any single cycle\'s snapshot.', solution: 'An LSTM trained on sequences of payment history produces a risk score that updates as new cycles complete.', risk: 'A model that weighs recent behavior heavily can be slow to reflect a genuine, sudden improvement in a borrower\'s situation.'},
+  ]}
+  healthcare={[
+    {title: 'ICU deterioration prediction from vital-sign sequences', problem: 'Early signs of patient deterioration often appear as a trend across a sequence of vital-sign readings rather than any single abnormal reading.', solution: 'An LSTM trained on sequential vital-sign data produces a rolling deterioration risk score to support earlier clinical intervention.', risk: 'A missed or delayed vital-sign reading changes the sequence a model sees, and gaps in monitoring data need explicit handling, not silent interpolation.'},
+    {title: 'Clinical note sequence tagging for medication extraction', problem: 'Identifying medication mentions and dosages within free-text clinical notes requires labeling each word in the context of the words around it.', solution: 'A bidirectional LSTM tagger, a standard pre-Transformer approach to this task, labels each word in the note as part of a medication mention or not.', risk: 'A tagger trained on one institution\'s note-writing conventions can perform noticeably worse on another institution\'s documentation style.'},
+    {title: 'ECG waveform sequence classification', problem: 'Classifying an ECG reading for arrhythmia requires interpreting a continuous waveform sequence over time, not a single point measurement.', solution: 'An RNN-based model processes the waveform sequence to classify likely rhythm abnormalities for cardiologist review.', risk: 'Sensor and lead placement variation across devices can shift the waveform characteristics a model was trained on.'},
+    {title: 'Disease progression modeling from visit sequences', problem: 'Modeling how a chronic condition is likely to progress uses the sequence and timing of a patient\'s past clinical visits and measurements.', solution: 'A sequence model trained on visit histories estimates progression trajectories to support care planning conversations.', risk: 'Irregular visit spacing carries information itself (a gap can reflect access barriers, not stability), and a model that ignores timing can misread the sequence.'},
+  ]}
+  telecom={[
+    {title: 'Network traffic anomaly detection', problem: 'Distinguishing a genuine network anomaly from normal traffic fluctuation requires modeling the recent traffic sequence, not a single snapshot reading.', solution: 'An LSTM trained on historical traffic sequences flags patterns that deviate meaningfully from the learned normal sequence behavior.', risk: 'A model trained on one network segment\'s traffic patterns can generate excess false alerts on a segment with a genuinely different normal pattern.'},
+    {title: 'Call center intent modeling across dialogue turns', problem: 'A caller\'s intent often only becomes clear after several turns of a conversation, not from the first utterance alone.', solution: 'An RNN-based dialogue model updates its intent estimate turn by turn as the conversation progresses, routing the call once confidence is high enough.', risk: 'A model that commits to an early, wrong intent estimate can misroute a call before enough turns have accumulated to correct it.'},
+    {title: 'Predictive maintenance from sequential sensor telemetry', problem: 'Equipment failure is often preceded by a gradual, sequential drift in sensor telemetry rather than a single anomalous reading.', solution: 'A GRU-based model trained on historical telemetry sequences flags equipment showing a drift pattern consistent with past pre-failure sequences.', risk: 'A genuinely novel failure mode without a similar pattern in training history will not be reliably flagged by a model trained only on past failure sequences.'},
+    {title: 'Churn prediction from sequential usage-event streams', problem: 'Churn risk often builds up as a sequence of usage-event changes (falling data use, more support contacts) rather than appearing in a single snapshot.', solution: 'An LSTM trained on sequences of usage events produces a churn risk score that updates as new events occur.', risk: 'The same feedback-loop risk covered in 1.9 applies here: retention actions taken on flagged customers change the very event sequences the model is trained on next.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does an RNN reuse across time steps, and what is the hidden state\'s role?', answer: 'An RNN reuses the same weights (W_hh and W_xh) at every time step, exactly as a CNN reuses the same filter at every spatial position. The hidden state is the network\'s running summary of the sequence so far, updated at each step and carried forward to the next.'},
+    {question: 'Why do plain RNNs struggle with long-range dependencies, and what specifically causes this?', answer: 'Training unrolls the recurrence across all T steps of a sequence, so backpropagation through time runs through what is effectively a T-layer-deep network. The vanishing/exploding gradient problem from chapter 2.2 compounds over however many steps separate relevant information from where it is needed, making it hard for a plain RNN to learn dependencies spanning many steps.'},
+    {question: 'What is the key structural difference that lets an LSTM\'s cell state carry a gradient over long sequences better than a plain RNN\'s hidden state?', answer: 'The LSTM cell state update is largely additive (c_t = f_t times c_(t-1) plus i_t times a candidate value), controlled by gates, rather than being repeatedly passed through a nonlinearity via matrix multiplication at every step the way a plain RNN\'s hidden state is. This additive path gives the gradient a much more direct route backward through time.'},
+    {question: 'What are the three LSTM gates, and what does each one control?', answer: 'The forget gate controls what fraction of the existing cell state to keep; the input gate controls how much of a new candidate value to add to the cell state; the output gate controls how much of the cell state to expose as the hidden state at that step.'},
+    {question: 'How does a GRU differ structurally from an LSTM, and what is the practical tradeoff?', answer: 'A GRU has two gates (update and reset) instead of an LSTM\'s three, and no separate cell state, only a hidden state. This gives it fewer parameters and typically faster training, often with comparable accuracy, though which one performs better is task-dependent rather than settled in GRU\'s favor generally.'},
+  ]}
+/>

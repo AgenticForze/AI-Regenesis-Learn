@@ -161,9 +161,13 @@ export const PHASES = [
    },
    {
     "id": "1.9",
-    "title": "Ethics & Responsible AI Foundations (Bias, Fairness, Explainability Primer)",
+    "title": "Ethics & Responsible AI Foundations: Bias, Fairness, and Explainability",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/ai-ml-foundations/1-9-ethics-responsible-ai",
+    "summary": "A model trained on data that reflects historical or societal bias reproduces that bias, and can amplify it through feedback loops that neither an accuracy metric nor a training log will surface. Fairness is not one property a model either has or lacks: there are several mathematically reasonable definitions of \"fair,\" and when groups have different base rates, some of the most natural ones are provably impossible to satisfy at the same time. Explainability closes the loop by giving stakeholders, developers, auditors, and the people a decision affects, a way to see why a model produced a specific output, which is necessary for debugging, trust, and increasingly, for regulatory compliance.",
+    "published": true,
+    "presentationUrl": "../slides/1.9-Ethics-Responsible-AI-Slides.pptx"
    }
   ]
  },
@@ -184,25 +188,41 @@ export const PHASES = [
     "id": "2.1",
     "title": "Neural Networks 101: From Perceptron to MLP",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-1-neural-networks-101",
+    "summary": "A neural network is built from a simple unit, the perceptron, that takes a weighted sum of its inputs, adds a bias, and passes the result through an activation function. One perceptron alone can only separate data with a straight line, so it cannot even learn the XOR function. Stacking perceptrons into layers, an architecture called a multilayer perceptron (MLP), and giving each unit a nonlinear activation function, lets the network bend that straight line into an arbitrarily complex decision boundary. This single change, adding a hidden layer with a nonlinearity, is the mechanical difference between a model that can only draw lines and one that, per the universal approximation theorem, can approximate essentially any continuous function given enough hidden units.",
+    "published": true,
+    "presentationUrl": "../slides/2.1-Neural-Networks-101-Slides.pptx"
    },
    {
     "id": "2.2",
-    "title": "Backpropagation & Optimization (Gradient Descent, Momentum, Adam, LR Schedules)",
+    "title": "Backpropagation & Optimization: How Networks Actually Learn",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-2-backpropagation-optimization",
+    "summary": "Chapter 2.1 covered the forward pass: features go in, a prediction comes out. Backpropagation is how a network learns from being wrong. It runs the chain rule backward through the network, starting at the loss and working toward the input layer, to compute exactly how much each individual weight contributed to the error. Gradient descent then nudges every weight in the direction that reduces that error. Plain gradient descent is slow and easily gets stuck, so in practice almost nobody uses it unmodified: momentum smooths the update direction using recent history, and Adam, the most widely used optimizer in deep learning today, adapts the step size separately for every single parameter.",
+    "published": true,
+    "presentationUrl": "../slides/2.2-Backpropagation-Optimization-Slides.pptx"
    },
    {
     "id": "2.3",
     "title": "Convolutional Neural Networks: Architecture & Use Cases",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-3-convolutional-neural-networks",
+    "summary": "The fully connected MLP from 2.1 treats every input feature as independent, which is wasteful for images: a photo's pixels have spatial structure, and the pattern that makes something an edge or a texture looks the same whether it appears in the top-left or bottom-right corner. A convolutional neural network (CNN) exploits that structure with a small filter that slides across the entire image, reusing the same weights at every position instead of learning a separate weight for every pixel location. This parameter sharing makes CNNs dramatically more efficient than a fully connected network on image-like data, and stacking convolution and pooling layers builds a hierarchy of features automatically, from edges, to textures, to object parts, to whole objects.",
+    "published": true,
+    "presentationUrl": "../slides/2.3-Convolutional-Neural-Networks-Slides.pptx"
    },
    {
     "id": "2.4",
     "title": "Sequence Models Before Transformers: RNN, LSTM, GRU",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-4-sequence-models-rnn-lstm-gru",
+    "summary": "A CNN (2.3) exploits spatial structure by reusing a filter across positions in an image. A recurrent neural network (RNN) applies the same idea to time: it reuses the same weights at every step of a sequence, carrying a running summary forward from one step to the next called the hidden state. This makes RNNs a natural fit for text, time series, and sensor data, anything where order matters. Plain RNNs struggle to remember information from many steps earlier, because backpropagating through a long sequence multiplies the same shrinking or growing gradient factor from chapter 2.2 many times over. LSTM and GRU cells add gating mechanisms specifically designed to keep that gradient flowing over long sequences, which is why they, not plain RNNs, were the practical default for sequence modeling for two decades before the Transformer (2.5).",
+    "published": true,
+    "presentationUrl": "../slides/2.4-Sequence-Models-Slides.pptx"
    },
    {
     "id": "2.5",
