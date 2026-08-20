@@ -1,0 +1,220 @@
+---
+title: "Backpropagation & Optimization: How Networks Actually Learn"
+sidebar_label: "2.2 Backpropagation & Optimization"
+sidebar_position: 2
+phase: 2
+chapter: "2.2"
+lms_presentation: "2.2-Backpropagation-Optimization-Slides.pptx"
+prerequisites: ["2.1", "1.8"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 2.1 covered the forward pass: features go in, a prediction comes out. Backpropagation is
+how a network learns from being wrong. It runs the chain rule backward through the network,
+starting at the loss and working toward the input layer, to compute exactly how much each
+individual weight contributed to the error. Gradient descent then nudges every weight in the
+direction that reduces that error. Plain gradient descent is slow and easily gets stuck, so in
+practice almost nobody uses it unmodified: momentum smooths the update direction using recent
+history, and Adam, the most widely used optimizer in deep learning today, adapts the step size
+separately for every single parameter.
+
+## High-Level Explanation
+
+The forward pass (2.1) computes a prediction, and a **loss function** compares that prediction to
+the true label with a single number: how wrong was the network. **Backpropagation** answers the
+next question: for each individual weight in the network, if I nudged it slightly, would the loss
+go up or down, and by how much? It answers this efficiently by starting at the loss and working
+backward, layer by layer, reusing the arithmetic from the forward pass rather than recomputing
+everything from scratch for every single weight. The name comes directly from this direction: error
+information propagates backward, from the output layer toward the input layer, which is the
+opposite direction the forward pass ran in.
+
+Once every weight has a gradient (a number saying "increasing this weight increases the loss by
+this much"), an **optimizer** decides how to actually update the weights. The simplest choice,
+gradient descent, moves every weight a small step in the direction that reduces the loss, and
+repeats this thousands or millions of times. In practice, plain gradient descent converges slowly
+and can get stuck in flat regions or oscillate in narrow valleys of the loss surface, which is why
+virtually every production training run instead uses a variant that adds memory of past updates
+(momentum) or adapts the step size per parameter (Adam and its relatives).
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-2-forward-backward-pass.svg').default}
+    alt="A network diagram showing the forward pass moving left to right through input, hidden, and output layers to produce a prediction and a loss value, and the backward pass moving right to left along the same connections, computing a gradient for every weight via the chain rule before an optimizer step updates each weight."
+  />
+  <figcaption>The forward pass computes a prediction and a loss. The backward pass reuses that same computation graph in reverse to compute a gradient for every weight.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The chain rule, applied layer by layer.** For a single weight w feeding into a unit with
+pre-activation z, activation a = φ(z), and eventual loss L, the chain rule gives
+∂L/∂w = (∂L/∂a) · (∂a/∂z) · (∂z/∂w). The key efficiency trick is that ∂L/∂a for a hidden unit is
+itself built from the gradients already computed for every unit in the next layer that this unit
+feeds into, so the algorithm computes each layer's gradients once, moving backward, and reuses them
+rather than re-deriving the chain rule from the loss all the way down for every single weight
+independently. Rumelhart, Hinton, and Williams popularized this technique for training multilayer
+networks and showed it could discover useful internal hidden-layer representations without those
+representations being hand-specified (Rumelhart, Hinton, and Williams,
+[*Learning Representations by Back-Propagating Errors*](https://www.nature.com/articles/323533a0),
+*Nature*, 1986). Modern frameworks (PyTorch, TensorFlow, JAX, covered in 2.7) implement this
+automatically as reverse-mode automatic differentiation: every operation in the forward pass is
+recorded, and the framework walks that record backward to compute every gradient, so a practitioner
+essentially never derives ∂L/∂w by hand for a real model.
+
+**Vanishing and exploding gradients.** Because the chain rule multiplies terms together across
+every layer, a deep network's earliest-layer gradients are a product of many factors, one per
+layer. If those factors are consistently smaller than 1 (as sigmoid and tanh's gradients are away
+from z=0), the product shrinks toward zero as depth increases, so early layers receive a gradient
+too small to learn from at any reasonable learning rate, the vanishing gradient problem. If the
+factors are consistently larger than 1, the product grows unboundedly instead, causing unstable,
+divergent updates, the exploding gradient problem. Bengio, Simard, and Frasconi formally analyzed
+why gradient-based training struggles to learn dependencies that span many steps for exactly this
+reason (Bengio, Simard, and Frasconi,
+[*Learning Long-Term Dependencies with Gradient Descent Is Difficult*](https://dl.acm.org/doi/10.1109/72.279181),
+*IEEE Transactions on Neural Networks*, 1994). This is precisely why chapter 2.1's activation
+choice matters at training time, not just at inference: ReLU's gradient is exactly 1 for any
+positive input, so it does not contribute a shrinking factor the way sigmoid and tanh do, and why
+weight initialization scale matters (2.1): He initialization scales a layer's initial weights by
+√(2/fan_in) specifically to keep activation variance roughly stable through a deep ReLU network
+(He, Zhang, Ren, and Sun,
+[*Delving Deep into Rectifiers*](https://openaccess.thecvf.com/content_iccv_2015/papers/He_Delving_Deep_into_ICCV_2015_paper.pdf),
+ICCV, 2015), extending the earlier Glorot/Xavier scheme derived for sigmoid and tanh networks
+(Glorot and Bengio,
+[*Understanding the Difficulty of Training Deep Feedforward Neural Networks*](https://proceedings.mlr.press/v9/glorot10a.html),
+AISTATS, 2010). Exploding gradients are commonly handled directly at training time with gradient
+clipping: capping the gradient's norm before applying the update, regardless of what caused the
+spike.
+
+**From gradient to update: gradient descent variants.** Batch gradient descent computes the
+gradient over the entire training set before taking one step, which is accurate but slow and
+memory-heavy for large datasets. Stochastic gradient descent (SGD) takes a step after every single
+example, which is fast per step but noisy. Mini-batch gradient descent, the practical default,
+computes the gradient over a small batch (commonly 32 to 512 examples) as a compromise between the
+two. **Momentum** keeps a running exponentially-weighted average of past gradients, v, and updates
+weights using that average rather than the raw current gradient: v ← β·v − η·∇L(θ), θ ← θ + v,
+where β (typically around 0.9) controls how much past gradients still influence the current step.
+This smooths out noisy per-batch gradients and accelerates movement through consistently
+downhill directions, the same technique Rumelhart, Hinton, and Williams included in their original
+1986 backpropagation formulation.
+
+**Adam** (Adaptive Moment Estimation) combines momentum with a second idea: giving every individual
+parameter its own effective learning rate, scaled down for parameters that have historically had
+large gradients and left larger for parameters with small, infrequent gradients. It tracks both a
+first moment estimate (like momentum) and a second moment estimate (an exponentially-weighted
+average of squared gradients), applies a bias correction to both because they start at zero, and
+divides the step by the square root of the second moment so that per-parameter step size adapts
+automatically (Kingma and Ba,
+[*Adam: A Method for Stochastic Optimization*](https://arxiv.org/pdf/1412.6980),
+ICLR, 2015). Adam is the default optimizer for most deep learning workloads today because it
+converges reliably with comparatively little manual learning-rate tuning, though plain SGD with
+momentum and a well-tuned schedule can still generalize slightly better on some large-scale vision
+tasks.
+
+**Learning rate schedules.** The learning rate η controls how large each update step is; too high
+causes the loss to oscillate or diverge, too low wastes compute converging slowly (chapter 1.8
+covered this same tradeoff for a single gradient-descent step). A schedule changes η over the
+course of training rather than fixing it: step decay drops η by a fixed factor every N epochs,
+cosine annealing smoothly decreases η following a cosine curve toward a minimum, and warm-up
+gradually increases η from near zero over the first several hundred steps before the main schedule
+takes over, which stabilizes early training when a network's weights are still close to their
+random initialization and large steps are more likely to diverge.
+
+```python
+import numpy as np
+
+def adam_step(theta, grad, m, v, t, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8):
+    """One Adam update step. m and v are the running first/second moment estimates."""
+    m = beta1 * m + (1 - beta1) * grad
+    v = beta2 * v + (1 - beta2) * (grad ** 2)
+    m_hat = m / (1 - beta1 ** t)   # bias correction: m, v start at 0
+    v_hat = v / (1 - beta2 ** t)
+    theta = theta - lr * m_hat / (np.sqrt(v_hat) + eps)
+    return theta, m, v
+
+theta, m, v = np.array([0.5]), np.array([0.0]), np.array([0.0])
+for t in range(1, 6):
+    grad = np.array([2 * theta[0]])   # gradient of a toy loss L(theta) = theta^2
+    theta, m, v = adam_step(theta, grad, m, v, t)
+print(theta)  # theta moves toward 0, the minimum of L(theta) = theta^2
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Batch Gradient Descent', 'SGD (mini-batch)', 'SGD + Momentum', 'Adam']}
+  rows={[
+    {aspect: 'Gradient computed over', values: ['Entire training set', 'Small random batch', 'Small random batch', 'Small random batch'], },
+    {aspect: 'Per-parameter learning rate', values: ['No, one global rate', 'No, one global rate', 'No, one global rate', 'Yes, adapted per parameter'], decisive: true},
+    {aspect: 'Convergence behavior', values: ['Accurate but slow, memory-heavy', 'Fast per step, noisy', 'Smoother than plain SGD', 'Fast, reliable with default settings'], },
+    {aspect: 'Typical use', values: ['Small datasets, convex problems', 'Rare alone in deep learning', 'Large-scale vision, careful tuning', 'Default first choice for most deep learning'], },
+  ]}
+  caption="Adam's main practical advantage is the per-parameter adaptive learning rate; well-tuned SGD with momentum can still edge out Adam on generalization for some large image-classification tasks, at the cost of more manual tuning."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="One training step: forward pass, loss, backward pass, optimizer update"
+  mermaid={`
+flowchart LR
+  A[Forward Pass: 2.1] --> B[Loss Function]
+  B --> C[Backward Pass: chain rule, layer by layer]
+  C --> D[Gradient for every weight]
+  D --> E[Optimizer: SGD, Momentum, or Adam]
+  E --> F[Updated Weights]
+  F -.-> A
+`}
+  components={[
+    {name: 'Forward Pass', responsibility: 'Computes a prediction from the current weights, exactly as in chapter 2.1.'},
+    {name: 'Loss Function', responsibility: 'Reduces the prediction and true label to a single number measuring how wrong the network was.'},
+    {name: 'Backward Pass', responsibility: 'Applies the chain rule from the loss backward through every layer, reusing forward-pass computations.'},
+    {name: 'Gradient', responsibility: 'One number per weight: how much that specific weight contributed to the loss.'},
+    {name: 'Optimizer', responsibility: 'Turns each gradient into an actual weight update; SGD, momentum, and Adam differ in exactly how.'},
+    {name: 'Updated Weights (dashed)', responsibility: 'Feed back into the next training step\'s forward pass; this loop repeats for every mini-batch, every epoch.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Diagnosing a stalled loss curve on a fraud model', problem: 'A fraud-detection MLP\'s training loss plateaus early and validation accuracy stays flat across epochs.', solution: 'The team checks the learning rate first, then activation saturation and gradient magnitude per layer, before assuming the model architecture itself is the problem.', risk: 'Increasing model capacity to fix what is actually an optimization problem wastes compute and can make the real cause harder to diagnose.'},
+    {title: 'Gradient clipping for a deep risk-scoring network', problem: 'A deep credit-risk network occasionally produces a loss spike that derails an otherwise stable training run.', solution: 'Clipping the gradient norm before each optimizer step caps the size of any single bad update without changing the overall training procedure.', risk: 'Clipping too aggressively can silently slow learning on batches that legitimately need a larger update, masking the issue instead of fixing its root cause.'},
+    {title: 'Choosing Adam vs. tuned SGD for a production credit model', problem: 'A team must pick an optimizer for a model that will be retrained regularly as new transaction data arrives, under a fixed compute and tuning budget.', solution: 'Adam is chosen as the default given limited tuning time; SGD with momentum is reserved for a later accuracy push if Adam\'s generalization proves insufficient.', risk: 'An optimizer choice tuned for one data distribution can silently underperform after a retraining cycle if the new data has meaningfully different scale or noise characteristics.'},
+    {title: 'Learning-rate warm-up for a large tabular ensemble network', problem: 'A wide, deep tabular network diverges in the first few hundred training steps when trained with the same learning rate used for a smaller prior model.', solution: 'A short learning-rate warm-up period stabilizes early training before the main schedule takes over.', risk: 'Skipping warm-up on a scaled-up architecture is a common, easy-to-miss cause of an otherwise inexplicable early divergence.'},
+  ]}
+  healthcare={[
+    {title: 'Vanishing gradients in a deep patient-outcome network', problem: 'A deep sigmoid-activation network predicting patient outcomes trains well in its last few layers but its earliest layers barely change during training.', solution: 'Switching hidden layers to ReLU and applying He initialization restores gradient flow to the earliest layers.', risk: 'A model that appears to have converged can actually have several early layers stuck near their random initialization, contributing little beyond noise.'},
+    {title: 'Batch size tradeoffs for a clinical imaging model', problem: 'Memory constraints on clinical imaging hardware limit how large a training batch can be, and small batches produce noisy gradient estimates.', solution: 'Momentum-based optimization smooths the noisy per-batch gradients that a memory-constrained small batch size produces.', risk: 'Too small a batch, even with momentum, can still produce update noise that meaningfully slows or destabilizes convergence on a hard clinical target.'},
+    {title: 'Reproducibility of a regulatory-submission model\'s training run', problem: 'A model submitted as part of a regulatory filing must have a training process a reviewer can reproduce and audit.', solution: 'The optimizer, learning-rate schedule, and random seed are documented explicitly as part of the model\'s training record, not left as ambient defaults.', risk: 'An undocumented optimizer or schedule change between training runs can produce a materially different model that regulatory reviewers cannot reconcile with prior submissions.'},
+    {title: 'Cosine annealing for a long-running genomic prediction model', problem: 'A genomic prediction model trains for many epochs and needs to fine-tune to a precise minimum without oscillating late in training.', solution: 'A cosine annealing schedule smoothly lowers the learning rate over the full training run, letting later epochs make finer adjustments than earlier ones.', risk: 'An ill-chosen annealing schedule length can end training with the learning rate still too high, leaving accuracy on the table.'},
+  ]}
+  telecom={[
+    {title: 'Exploding gradients in a deep network-anomaly model', problem: 'A deep network-telemetry anomaly model occasionally produces NaN loss values partway through training.', solution: 'Gradient norm clipping combined with a lower initial learning rate eliminates the divergent updates causing the NaN losses.', risk: 'Treating NaN losses as a data problem rather than an optimization problem can lead to discarding perfectly valid training data unnecessarily.'},
+    {title: 'Retraining cadence and optimizer state for churn models', problem: 'A churn model is retrained weekly on a rolling data window, and the team must decide whether to warm-start optimizer state or reset it each time.', solution: 'Optimizer state (Adam\'s moment estimates) is reset on each retrain since the underlying data distribution shifts week to week, rather than carried over.', risk: 'Warm-starting Adam\'s moment estimates across a materially shifted data distribution can bias early updates in the new training run in a stale direction.'},
+    {title: 'Learning rate selection for a resource-constrained edge model', problem: 'A network-anomaly model destined for on-device inference at cell sites must be trained under a tight compute and iteration budget.', solution: 'Adam\'s fast, reliable convergence with minimal tuning fits the limited iteration budget better than a carefully hand-tuned SGD schedule would.', risk: 'A model that trains fast under Adam can still generalize worse than a more carefully tuned alternative if validation performance is not checked, not just training loss.'},
+    {title: 'Diagnosing a capacity-forecasting model that overfits early', problem: 'A bandwidth-demand forecasting network\'s training loss keeps dropping while validation loss starts rising after just a few epochs.', solution: 'The team distinguishes this overfitting pattern (1.4) from an optimization problem by checking that both losses are actually decreasing together at first, then diverging, rather than assuming a learning-rate issue.', risk: 'Misdiagnosing overfitting as an optimization failure and lowering the learning rate further does not fix the actual problem and wastes a retraining cycle.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why is backpropagation more efficient than computing each weight\'s gradient independently from scratch?', answer: 'Backpropagation computes each layer\'s gradients once, moving backward from the loss, and reuses those results for every weight feeding into that layer via the chain rule. Recomputing the full chain rule from the loss down to each individual weight independently would repeat the same arithmetic many times over.'},
+    {question: 'What causes the vanishing gradient problem, and why does ReLU help with it?', answer: 'Because the chain rule multiplies a factor for every layer, if those factors are consistently below 1 (as sigmoid and tanh gradients are away from zero), the product shrinks toward zero as depth increases, leaving early layers with too small a gradient to learn from. ReLU\'s gradient is exactly 1 for any positive input, so it does not contribute a shrinking factor the way sigmoid and tanh do.'},
+    {question: 'What two things does Adam track, and what does each one do?', answer: 'Adam tracks a first moment estimate (an exponentially-weighted average of past gradients, like momentum, which smooths the update direction) and a second moment estimate (an exponentially-weighted average of squared gradients, which scales the effective learning rate down for parameters that have historically had large gradients).'},
+    {question: 'Why does a learning-rate warm-up period help stabilize early training in a large network?', answer: 'A network\'s weights start close to their random initialization, where a large update step is more likely to push the network into an unstable or divergent region of the loss surface. Gradually increasing the learning rate from near zero over the first steps lets the network settle before the main, larger-step schedule takes over.'},
+    {question: 'What is the practical difference between batch gradient descent, stochastic gradient descent, and mini-batch gradient descent?', answer: 'Batch gradient descent computes the gradient over the entire training set before each step, which is accurate but slow and memory-heavy. Stochastic gradient descent updates after every single example, which is fast per step but noisy. Mini-batch gradient descent, the practical default, computes the gradient over a small batch as a middle ground between the two.'},
+  ]}
+/>

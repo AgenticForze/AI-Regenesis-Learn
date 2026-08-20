@@ -1,0 +1,39 @@
+<svg width="1200" height="480" viewBox="0 0 1200 480" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-ad desc-ad">
+  <title id="title-ad">Adam combines a first-moment (momentum-like) estimate and a second-moment (adaptive scale) estimate</title>
+  <desc id="desc-ad">The current gradient feeds into two running estimates computed in parallel: the first moment, an exponentially-weighted average of past gradients that behaves like momentum, and the second moment, an exponentially-weighted average of squared gradients that scales down the step for parameters with historically large gradients. Both are bias-corrected, then combined into the final per-parameter weight update.</desc>
+  <rect width="1200" height="480" fill="#fcfcfb"/>
+  <text x="600" y="38" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Adam: two running estimates, combined per parameter</text>
+
+  <rect x="520" y="70" width="160" height="70" rx="10" fill="#0d2c4e"/>
+  <text x="600" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Gradient</text>
+  <text x="600" y="120" text-anchor="middle" font-size="10" fill="#9fb8d6">&#8706;L/&#8706;&#952; this step</text>
+
+  <defs>
+    <marker id="arrAD" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#52514e"/>
+    </marker>
+  </defs>
+
+  <line x1="560" y1="140" x2="300" y2="200" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrAD)"/>
+  <line x1="640" y1="140" x2="900" y2="200" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrAD)"/>
+
+  <rect x="130" y="205" width="340" height="110" rx="10" fill="#5598e7"/>
+  <text x="300" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">First moment (momentum-like)</text>
+  <text x="300" y="255" text-anchor="middle" font-size="11.5" fill="#eaf2fc">m &#8592; &#946;1&#183;m + (1-&#946;1)&#183;grad</text>
+  <text x="300" y="275" text-anchor="middle" font-size="10" fill="#eaf2fc">running average of recent gradients</text>
+  <text x="300" y="292" text-anchor="middle" font-size="10" fill="#eaf2fc">smooths the update direction</text>
+
+  <rect x="730" y="205" width="340" height="110" rx="10" fill="#2a78d6"/>
+  <text x="900" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">Second moment (adaptive scale)</text>
+  <text x="900" y="255" text-anchor="middle" font-size="11.5" fill="#eaf2fc">v &#8592; &#946;2&#183;v + (1-&#946;2)&#183;grad&#178;</text>
+  <text x="900" y="275" text-anchor="middle" font-size="10" fill="#eaf2fc">running average of squared gradients</text>
+  <text x="900" y="292" text-anchor="middle" font-size="10" fill="#eaf2fc">shrinks step for noisy/large-grad params</text>
+
+  <line x1="300" y1="315" x2="500" y2="370" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrAD)"/>
+  <line x1="900" y1="315" x2="700" y2="370" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrAD)"/>
+
+  <rect x="380" y="375" width="440" height="80" rx="10" fill="#0d2c4e"/>
+  <text x="600" y="402" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ffffff">&#952; &#8592; &#952; - lr &#183; m&#770; / (&#8730;v&#770; + &#949;)</text>
+  <text x="600" y="422" text-anchor="middle" font-size="10.5" fill="#9fb8d6">m&#770;, v&#770; are bias-corrected (both start at 0)</text>
+  <text x="600" y="438" text-anchor="middle" font-size="10.5" fill="#9fb8d6">Kingma and Ba, ICLR 2015</text>
+</svg>

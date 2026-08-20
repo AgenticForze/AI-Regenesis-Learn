@@ -1,0 +1,36 @@
+<svg width="1000" height="560" viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-mp desc-mp">
+  <title id="title-mp">Plain SGD zigzags across a narrow loss valley; momentum smooths the path to the minimum</title>
+  <desc id="desc-mp">A contour plot of a narrow elliptical loss valley. A red zigzag path shows plain stochastic gradient descent oscillating back and forth across the steep sides of the valley while making slow net progress toward the minimum. A blue smoother path shows momentum-based gradient descent, which builds up velocity along the valley's length and reaches the minimum in fewer, more direct steps.</desc>
+  <rect width="1000" height="560" fill="#fcfcfb"/>
+  <text x="500" y="38" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Momentum smooths the path across a narrow valley</text>
+
+  <rect x="60" y="70" width="880" height="430" fill="#ffffff" stroke="#e3e1db" stroke-width="1.5"/>
+
+  <!-- contour ellipses, narrow valley oriented diagonally -->
+  <g fill="none" stroke="#cde2fb" stroke-width="2">
+    <ellipse cx="500" cy="285" rx="380" ry="90" transform="rotate(-18 500 285)"/>
+    <ellipse cx="500" cy="285" rx="290" ry="65" transform="rotate(-18 500 285)"/>
+    <ellipse cx="500" cy="285" rx="200" ry="42" transform="rotate(-18 500 285)"/>
+    <ellipse cx="500" cy="285" rx="110" ry="22" transform="rotate(-18 500 285)"/>
+  </g>
+  <circle cx="500" cy="285" r="6" fill="#184f95"/>
+  <text x="500" y="265" text-anchor="middle" font-size="11" font-weight="700" fill="#184f95">minimum</text>
+
+  <!-- plain SGD: red zigzag starting from top-left, oscillating -->
+  <polyline fill="none" stroke="#a33a2f" stroke-width="2.5"
+    points="160,140 260,205 190,225 280,275 215,290 295,325 235,335 305,362 258,368 320,388 285,392 500,285"/>
+  <text x="170" y="128" font-size="12" font-weight="700" fill="#a33a2f">Plain SGD</text>
+
+  <!-- momentum: blue smoother, more direct path -->
+  <path d="M 160 440 C 260 400, 340 350, 420 315 C 460 298, 480 290, 500 285"
+        fill="none" stroke="#184f95" stroke-width="2.5"/>
+  <text x="170" y="462" font-size="12" font-weight="700" fill="#184f95">SGD + Momentum</text>
+
+  <circle cx="160" cy="140" r="5" fill="#a33a2f"/>
+  <circle cx="160" cy="440" r="5" fill="#184f95"/>
+  <text x="130" y="120" font-size="10" fill="#52514e">start</text>
+  <text x="130" y="460" font-size="10" fill="#52514e">start</text>
+
+  <rect x="60" y="520" width="880" height="0" fill="none"/>
+  <text x="500" y="535" text-anchor="middle" font-size="12" fill="#52514e">Both start from a similar point; momentum reaches the minimum in far fewer oscillations</text>
+</svg>

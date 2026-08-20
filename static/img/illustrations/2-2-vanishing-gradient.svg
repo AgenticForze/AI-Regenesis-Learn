@@ -1,0 +1,49 @@
+<svg width="1100" height="560" viewBox="0 0 1100 560" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-labelledby="title-vg desc-vg">
+  <title id="title-vg">Gradient magnitude by layer depth: sigmoid network shrinks toward zero, ReLU network stays roughly constant</title>
+  <desc id="desc-vg">A grouped bar chart with six layers from the output (layer 6) back to the earliest hidden layer (layer 1). For a sigmoid-activation network, gradient magnitude shrinks sharply at each earlier layer, nearly reaching zero by layer 1. For a ReLU-activation network, gradient magnitude stays roughly constant across all six layers.</desc>
+  <rect width="1100" height="560" fill="#fcfcfb"/>
+  <text x="550" y="38" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0b0b">Gradient magnitude by layer: sigmoid shrinks, ReLU does not</text>
+
+  <rect x="100" y="70" width="900" height="380" fill="#ffffff" stroke="#e3e1db" stroke-width="1.5"/>
+  <line x1="100" y1="410" x2="1000" y2="410" stroke="#898781" stroke-width="1.2"/>
+  <text x="80" y="95" text-anchor="end" font-size="10" fill="#898781">high</text>
+  <text x="80" y="410" text-anchor="end" font-size="10" fill="#898781">0</text>
+  <text x="550" y="440" text-anchor="middle" font-size="12" fill="#52514e">layer (6 = output-adjacent, 1 = earliest / closest to input)</text>
+
+  <!-- sigmoid bars: shrinking from layer6 to layer1, values relative height -->
+  <!-- layer positions left to right: 6,5,4,3,2,1 -->
+  <g>
+    <!-- sigmoid (red), left bar of each pair -->
+    <rect x="150" y="120" width="45" height="290" fill="#a33a2f"/>
+    <rect x="290" y="185" width="45" height="225" fill="#a33a2f"/>
+    <rect x="430" y="250" width="45" height="160" fill="#a33a2f"/>
+    <rect x="570" y="320" width="45" height="90" fill="#a33a2f"/>
+    <rect x="710" y="368" width="45" height="42" fill="#a33a2f"/>
+    <rect x="850" y="398" width="45" height="12" fill="#a33a2f"/>
+
+    <!-- relu (navy), right bar of each pair -->
+    <rect x="200" y="145" width="45" height="265" fill="#184f95"/>
+    <rect x="340" y="150" width="45" height="260" fill="#184f95"/>
+    <rect x="480" y="148" width="45" height="262" fill="#184f95"/>
+    <rect x="620" y="152" width="45" height="258" fill="#184f95"/>
+    <rect x="760" y="147" width="45" height="263" fill="#184f95"/>
+    <rect x="900" y="150" width="45" height="260" fill="#184f95"/>
+  </g>
+
+  <text x="197" y="428" text-anchor="middle" font-size="11" fill="#52514e">6</text>
+  <text x="337" y="428" text-anchor="middle" font-size="11" fill="#52514e">5</text>
+  <text x="477" y="428" text-anchor="middle" font-size="11" fill="#52514e">4</text>
+  <text x="617" y="428" text-anchor="middle" font-size="11" fill="#52514e">3</text>
+  <text x="757" y="428" text-anchor="middle" font-size="11" fill="#52514e">2</text>
+  <text x="897" y="428" text-anchor="middle" font-size="11" fill="#52514e">1</text>
+
+  <!-- legend -->
+  <rect x="720" y="90" width="16" height="16" fill="#a33a2f"/>
+  <text x="742" y="103" font-size="12" fill="#0b0b0b">Sigmoid network</text>
+  <rect x="720" y="112" width="16" height="16" fill="#184f95"/>
+  <text x="742" y="125" font-size="12" fill="#0b0b0b">ReLU network</text>
+
+  <rect x="100" y="475" width="900" height="65" rx="8" fill="#fdecea" stroke="#a33a2f" stroke-width="1.5"/>
+  <text x="550" y="500" text-anchor="middle" font-size="12.5" font-weight="700" fill="#a33a2f">By layer 1, the sigmoid network's gradient has nearly vanished</text>
+  <text x="550" y="519" text-anchor="middle" font-size="11.5" fill="#a33a2f">its earliest layers barely update, no matter how many training steps run</text>
+</svg>
