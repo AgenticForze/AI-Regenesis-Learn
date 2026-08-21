@@ -258,7 +258,11 @@
     "id": "2.8",
     "title": "Hardware for AI: GPUs, TPUs, and Training vs. Inference Compute Economics",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-8-hardware-for-ai-gpus-tpus-compute-economics",
+    "summary": "Every framework in chapter 2.7 ultimately runs its forward pass, backward pass, and optimizer step (2.2) as matrix multiplications on physical hardware, and the choice of hardware changes what a model costs to train and to run. **GPUs**, originally built for graphics, became the default deep learning accelerator because their thousands of simple parallel cores suit the same matrix operation repeated across many data points at once; modern GPUs also add dedicated Tensor Cores for fast mixed-precision matrix multiply-accumulate. **TPUs** are Google's custom chips, built around a systolic array purpose-designed for matrix multiplication, trading general-purpose flexibility for efficiency on exactly the operations deep learning needs most. Training and inference stress this hardware differently: large-batch training tends to be compute-bound, while small-batch inference tends to be memory-bandwidth-bound, and because inference runs continuously against live traffic while training is a comparatively bounded, front-loaded cost, inference typically dominates a widely-deployed model's total lifetime compute cost.",
+    "published": true,
+    "presentationUrl": "../slides/2.8-Hardware-for-AI-Slides.pptx"
    }
   ]
  },

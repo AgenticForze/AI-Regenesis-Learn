@@ -1,0 +1,214 @@
+---
+title: "Hardware for AI: GPUs, TPUs, and Training vs. Inference Compute Economics"
+sidebar_label: "2.8 Hardware for AI"
+sidebar_position: 8
+phase: 2
+chapter: "2.8"
+lms_presentation: "2.8-Hardware-for-AI-Slides.pptx"
+prerequisites: ["2.2", "2.7"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every framework in chapter 2.7 ultimately runs its forward pass, backward pass, and optimizer step
+(2.2) as matrix multiplications on physical hardware, and the choice of hardware changes what a
+model costs to train and to run. **GPUs**, originally built for graphics, became the default deep
+learning accelerator because their thousands of simple parallel cores suit the same matrix
+operation repeated across many data points at once; modern GPUs also add dedicated Tensor Cores for
+fast mixed-precision matrix multiply-accumulate. **TPUs** are Google's custom chips, built around a
+systolic array purpose-designed for matrix multiplication, trading general-purpose flexibility for
+efficiency on exactly the operations deep learning needs most. Training and inference stress this
+hardware differently: large-batch training tends to be compute-bound, while small-batch inference
+tends to be memory-bandwidth-bound, and because inference runs continuously against live traffic
+while training is a comparatively bounded, front-loaded cost, inference typically dominates a
+widely-deployed model's total lifetime compute cost.
+
+## High-Level Explanation
+
+The forward and backward passes chapter 2.2 derived by hand are, at scale, overwhelmingly matrix
+multiplications: a layer's weighted sum is a matrix-vector or matrix-matrix product, and
+backpropagation's chain rule steps are more matrix multiplications. A CPU has a small number of
+complex cores, each optimized to run one instruction stream with branches and varied logic as fast
+as possible, which suits general-purpose code but wastes most of a chip's area on control logic that
+a repetitive matrix multiply does not need. A GPU instead packs thousands of much simpler cores that
+all execute the same instruction across many data elements at once, a design called SIMT
+(single instruction, multiple threads), which is a close match for applying the same multiply-add
+operation across every element of a large matrix. This raw parallelism, not a higher clock speed, is
+why a GPU can train a neural network far faster than a CPU running the identical arithmetic.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-8-cpu-vs-gpu-architecture.svg').default}
+    alt="A diagram contrasting CPU and GPU chip design. The CPU panel shows a small number of large, complex cores, each capable of running different instructions with branching logic, well suited to varied general-purpose code. The GPU panel shows thousands of small, simple cores, all executing the same instruction across many data elements simultaneously, well suited to the repetitive matrix multiplications that dominate deep learning."
+  />
+  <figcaption>A CPU optimizes for one complex instruction stream; a GPU optimizes for the same simple instruction applied to thousands of data points at once.</figcaption>
+</figure>
+
+The frameworks from chapter 2.7 all target this same underlying hardware through different paths:
+PyTorch and TensorFlow dispatch tensor operations to GPU kernels through NVIDIA's CUDA platform, and
+TensorFlow and JAX can also compile through XLA, the same linear-algebra compiler that targets both
+GPUs and TPUs. Understanding the hardware underneath explains why some choices in chapter 2.7,
+such as JAX's tight fit with TPUs or mixed-precision training's popularity on modern GPUs, exist in
+the first place.
+
+## Deep-Dive Explanation
+
+**GPU architecture for deep learning.** A modern NVIDIA GPU combines general-purpose CUDA cores,
+which handle ordinary floating-point arithmetic, with dedicated Tensor Cores, introduced with the
+Volta architecture, which perform a fused multiply-accumulate on small matrix tiles directly in
+hardware at much higher throughput than the same operation run on CUDA cores. Tensor Cores are
+built to run fastest in reduced precision (FP16 or BF16) rather than full FP32, which motivated
+**mixed-precision training**: keeping a master copy of the weights in FP32 for numerical stability
+while running the forward and backward pass in FP16, and using loss scaling, multiplying the loss by
+a constant before the backward pass and dividing it back out afterward, to keep small gradient
+values from underflowing to zero in FP16's narrower range (Micikevicius, Narang, Alben, Diamos,
+Elsen, Garcia, Ginsburg, Houston, Kuchaiev, Venkatesh, and Wu,
+[*Mixed Precision Training*](https://arxiv.org/abs/1710.03740), ICLR, 2018). A GPU's memory
+hierarchy matters just as much as its cores: high-bandwidth memory (HBM) holds the full model and
+activations but is comparatively slow to access relative to the GPU's on-chip SRAM and cache, so a
+model's speed is often limited by how fast data can move from HBM to the cores rather than by how
+fast the cores can compute, a distinction the roofline model below makes precise. Multiple GPUs are
+connected by a high-speed interconnect (NVLink, or Ethernet/InfiniBand across machines) that carries
+the gradient synchronization chapter 2.7's `pmap` and other distributed-training tools rely on.
+
+**TPU architecture.** A Tensor Processing Unit is an application-specific integrated circuit (ASIC):
+a chip designed for one job rather than general-purpose parallel compute. That job is matrix
+multiplication, implemented as a large **systolic array**, a grid of simple processing elements
+where each element holds one value, multiplies it against a value flowing through, and passes a
+partial sum to its neighbor, so an entire matrix multiplication flows through the grid in a tightly
+pipelined wave rather than being orchestrated instruction by instruction the way a GPU's cores are
+(Jouppi, Young, Patil, Patterson, and 71 further co-authors,
+[*In-Datacenter Performance Analysis of a Tensor Processing Unit*](https://arxiv.org/abs/1704.04760),
+ISCA, 2017). Because the systolic array is fixed in hardware for matrix multiplication specifically,
+a TPU is less flexible than a GPU (it is a poor fit for code that is not dominated by matrix
+multiplies), but it can be substantially more efficient per watt and per dollar on the workload it
+was built for. TPUs are typically deployed in large interconnected clusters called pods, and are
+tightly integrated with XLA, which is why JAX, itself built around XLA, is a common choice for
+large-scale TPU training.
+
+**The roofline model: compute-bound versus memory-bound.** A workload's **arithmetic intensity** is
+the number of floating-point operations it performs per byte moved from memory: FLOPs / bytes
+moved. The roofline model plots achievable performance against arithmetic intensity: at low
+arithmetic intensity, performance is capped by how fast bytes can be moved from memory (the
+memory-bound region, a rising diagonal line), and at high arithmetic intensity, performance is
+capped by the hardware's peak compute throughput (the compute-bound region, a flat ceiling); the
+point where these two lines meet is the hardware's ridge point (Williams, Waterman, and Patterson,
+[*Roofline: An Insightful Visual Performance Model for Multicore Architectures*](https://dl.acm.org/doi/10.1145/1498765.1498785),
+Communications of the ACM, 52(4), 2009). This directly explains a practical difference between
+training and inference: training processes a large batch of examples through the same weights, so
+the cost of moving those weights from memory is amortized (spread) across many examples, pushing
+arithmetic intensity up toward the compute-bound region. A single inference request, especially at
+batch size 1, reuses those same weights for comparatively little computation, keeping arithmetic
+intensity low and the workload memory-bound, meaning inference speed is often limited by how fast
+weights can be read from memory rather than by how many multiply-adds the hardware could otherwise
+perform per second.
+
+```python
+# Illustrative: arithmetic intensity of the same linear layer (y = Wx from chapter 2.1)
+# at two different batch sizes, showing why batching raises arithmetic intensity.
+d_in, d_out = 4096, 4096          # a fixed weight matrix W of shape (d_out, d_in)
+bytes_per_value = 2               # FP16/BF16, this chapter's mixed-precision Deep-Dive
+
+def arithmetic_intensity(batch_size):
+    flops = 2 * d_out * d_in * batch_size            # multiply-add per output, per example
+    weight_bytes = d_out * d_in * bytes_per_value     # W is loaded once, reused across the batch
+    io_bytes = batch_size * (d_in + d_out) * bytes_per_value
+    bytes_moved = weight_bytes + io_bytes
+    return flops / bytes_moved
+
+print(arithmetic_intensity(1))     # low: weight-loading cost dominates a single request
+print(arithmetic_intensity(128))   # much higher: the same weight load is amortized over 128 examples
+```
+
+**Training versus inference compute economics.** Training a large model is a large but comparatively
+bounded, front-loaded cost: it happens some finite number of times, on hardware chosen and
+provisioned in advance for maximum throughput at large batch size. Inference, by contrast, runs
+continuously for as long as a model stays deployed, once per user request, so its total cost scales
+with usage rather than with training runs; for a model serving meaningful production traffic over
+its deployment lifetime, cumulative inference cost commonly exceeds the one-time training cost.
+Because inference is often memory-bound at low batch size, the standard levers for controlling its
+cost target arithmetic intensity and memory footprint directly: batching multiple requests together
+before running them raises arithmetic intensity the same way a larger training batch does, and
+**quantization**, representing weights in an even lower-precision integer format (INT8 or INT4)
+than mixed-precision training's FP16, shrinks the bytes that must move from memory per request,
+directly increasing arithmetic intensity and throughput at some cost to numerical precision. Sizing
+hardware to the workload matters too: a data-center training GPU provisioned for a low-traffic
+inference endpoint is typically far more capacity, and cost, than that workload needs.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['CPU', 'GPU', 'TPU']}
+  rows={[
+    {aspect: 'Core design', values: ['Few complex cores, optimized for varied, branchy instruction streams', 'Thousands of simple cores executing one instruction across many data points (SIMT), plus dedicated Tensor Cores', 'A systolic array of processing elements purpose-built for matrix multiplication'], decisive: true},
+    {aspect: 'Flexibility', values: ['General-purpose: runs any code well', 'General-purpose parallel: runs most deep learning workloads well', 'Purpose-built: highly efficient on matrix-multiply-heavy workloads, a poor fit otherwise'], },
+    {aspect: 'Typical role in a deep learning pipeline', values: ['Data loading, preprocessing, and orchestrating the accelerator', 'Default accelerator for both training and inference across most organizations', 'Large-scale training, especially on Google Cloud, tightly coupled to XLA'], },
+    {aspect: 'Best suited for', values: ['Control-flow-heavy, non-parallelizable code', 'The broadest range of training and inference workloads', 'Very large-scale, matrix-multiply-dominated training runs'], },
+  ]}
+  caption="Every deep learning workload eventually runs on one of these three; the right choice depends on how matrix-multiply-heavy the workload is and how much general-purpose flexibility it needs."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where a training step actually runs, across host and accelerator"
+  mermaid={`
+flowchart LR
+  DATA[Data loader: host CPU] --> XFER[Host-to-device transfer]
+  XFER --> FWD[Forward pass: GPU or TPU]
+  FWD --> LOSS[Loss]
+  LOSS --> BACK[Backward pass: GPU or TPU]
+  BACK --> SYNC[Gradient sync across devices: NVLink or interconnect]
+  SYNC --> OPT[Optimizer step: GPU or TPU]
+  OPT --> DATA
+`}
+  components={[
+    {name: 'Data loader (host CPU)', responsibility: 'Reads and preprocesses the next batch on the CPU, since this step is branchy, I/O-bound work a CPU handles well.'},
+    {name: 'Host-to-device transfer', responsibility: 'Moves the prepared batch from host memory to accelerator (GPU/TPU) memory, a step that itself consumes memory bandwidth.'},
+    {name: 'Forward and backward pass', responsibility: 'Runs the matrix-multiplication-heavy compute from chapter 2.2 on the accelerator, using Tensor Cores or the systolic array as available.'},
+    {name: 'Gradient sync', responsibility: 'Combines gradients computed on each device in a multi-device job, over the interconnect, before any device takes an optimizer step.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'On-premise GPU cluster for market risk model training', problem: 'Regulatory and data-residency requirements keep sensitive market and position data from leaving controlled infrastructure.', solution: 'An on-premise GPU cluster trains risk models within the institution\'s own data center rather than relying on external cloud compute.', risk: 'The training infrastructure itself falls under the same model-risk-management controls as the models it produces, so idle capacity still carries ongoing audit and compliance overhead beyond its capital cost.'},
+    {title: 'Cost-optimized inference serving for real-time fraud scoring', problem: 'Fraud scoring runs on every transaction, so inference cost accumulates continuously at high volume.', solution: 'Quantization and request batching raise arithmetic intensity, lowering the per-transaction cost of high-volume fraud inference.', risk: 'Aggressive quantization can shift a fraud model\'s decision boundary enough to change which borderline transactions it flags.'},
+    {title: 'Spot capacity for overnight batch model retraining', problem: 'Periodic retraining on the prior day\'s data is not latency-sensitive and can tolerate interruption.', solution: 'Preemptible or spot-priced GPU capacity trains non-urgent overnight jobs at a lower cost than reserved, always-available hardware.', risk: 'A preempted spot job that loses checkpoint state can silently retrain on a different effective dataset than the one recorded for the model\'s audit trail, undermining the reproducibility a regulated retraining process requires.'},
+    {title: 'TPU pod training for a large alternative-data language model', problem: 'Pretraining a large language model on alternative financial data at scale needs very large matrix-multiply throughput.', solution: 'A TPU pod, tightly integrated with XLA, provides the large-scale, matrix-multiply-dominated training throughput the pretraining run needs.', risk: 'Concentrating large-scale pretraining on one cloud vendor\'s TPU infrastructure raises the kind of vendor-concentration risk financial regulators specifically expect institutions to assess for critical models.'},
+  ]}
+  healthcare={[
+    {title: 'On-device inference for a diagnostic imaging edge device', problem: 'A point-of-care imaging device has a small, fixed compute and power budget with no server round trip available.', solution: 'A quantized model reduces memory bandwidth demand enough to run within the device\'s limited on-device compute budget.', risk: 'Quantization applied without clinical validation can degrade sensitivity to subtle diagnostic findings.'},
+    {title: 'GPU cluster for training large medical imaging models', problem: '3D medical imaging volumes are large, and training on them moves substantial data through GPU memory per example.', solution: 'A GPU cluster with high memory bandwidth and multi-GPU interconnect handles the large per-example memory movement 3D imaging training requires.', risk: 'A batch size forced smaller by memory-bandwidth limits reduces the model\'s exposure to rare pathology patterns per training step, a tradeoff that needs clinical validation, not just a training-speed one.'},
+    {title: 'Latency-cost tradeoff for real-time clinical decision support', problem: 'A clinical decision support tool must return a recommendation within a clinician\'s workflow, not after a long batch delay.', solution: 'Right-sized inference hardware and light batching balance response latency against the cost of the inference service.', risk: 'Batching to reduce cost can add latency that makes a recommendation arrive after the clinical moment it was meant to support has passed.'},
+    {title: 'Federated training across hospital GPU nodes', problem: 'Multiple hospitals want to jointly train a model without moving patient data off-site, using whatever GPU hardware each site already has.', solution: 'Federated training coordinates updates across each hospital\'s own, often heterogeneous, GPU hardware.', risk: 'Hospitals with slower hardware can get dropped or truncated from aggregation rounds, systematically underrepresenting their patient population in the resulting model.'},
+  ]}
+  telecom={[
+    {title: 'Edge inference hardware at cell towers for anomaly detection', problem: 'Detecting network anomalies at the radio edge needs a response fast enough to act before the anomaly affects service, with limited power available at the site.', solution: 'A small, power-constrained edge accelerator runs a quantized anomaly-detection model directly at the tower.', risk: 'A less accurate edge model can miss anomalies that feed into carrier service-level and emergency-service reliability obligations a data-center-grade model would catch.'},
+    {title: 'GPU training cluster for network traffic forecasting', problem: 'Forecasting network traffic at national scale requires training on a very large volume of historical telemetry.', solution: 'A multi-GPU training cluster with high-bandwidth interconnect trains the forecasting model across the full telemetry history.', risk: 'Capital tied up in retraining-only compute competes directly against the network capacity buildouts the forecasts themselves are meant to inform.'},
+    {title: 'Inference cost optimization for high-volume customer service NLP', problem: 'A customer-service chatbot handles a high volume of concurrent conversations, and inference cost scales directly with that volume.', solution: 'Request batching and quantization lower the per-conversation inference cost at the chatbot\'s serving volume.', risk: 'Added latency during a traffic spike lands exactly when customers are already frustrated, often during a service outage, compounding churn risk at the worst possible moment.'},
+    {title: 'GPU versus TPU choice for telemetry pretraining infrastructure', problem: 'Committing to infrastructure for a large telemetry-model pretraining program is a significant, hard-to-reverse investment decision.', solution: 'The choice between a GPU-based and TPU-based pretraining infrastructure investment weighs raw throughput per dollar against portability and tooling flexibility.', risk: 'Locking into one accelerator\'s tooling can constrain which network-operations teams\' existing monitoring and alerting systems are able to integrate with the resulting models.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why does a GPU train a neural network faster than a CPU running the same arithmetic, given both can do floating-point math?', answer: 'A CPU has a small number of complex cores optimized for varied, branchy instruction streams, while a GPU has thousands of simple cores that all execute the same instruction across many data elements at once (SIMT). Since the forward and backward pass are dominated by the same matrix-multiply operation repeated across many data points, the GPU\'s massive parallelism, not a faster clock, is what makes it faster for this specific kind of workload.'},
+    {question: 'What is a TPU, and how does its systolic array differ from how a GPU executes a matrix multiplication?', answer: 'A TPU is an application-specific integrated circuit (ASIC) purpose-built for matrix multiplication, implemented as a systolic array: a grid of simple processing elements where values and partial sums flow through the grid in a tightly pipelined wave. A GPU instead orchestrates many independent cores executing the same instruction, which is more flexible for general parallel code but not as specialized for matrix multiplication specifically as a systolic array.'},
+    {question: 'What is arithmetic intensity, and how does the roofline model use it to distinguish compute-bound from memory-bound workloads?', answer: 'Arithmetic intensity is the number of floating-point operations performed per byte moved from memory (FLOPs / bytes moved). The roofline model plots achievable performance against arithmetic intensity: at low arithmetic intensity, performance is capped by memory bandwidth (memory-bound), and at high arithmetic intensity, performance is capped by the hardware\'s peak compute throughput (compute-bound), with the ridge point marking where the two limits meet.'},
+    {question: 'Why does large-batch training tend to be compute-bound while small-batch inference tends to be memory-bound?', answer: 'Training processes many examples through the same loaded weights at once, amortizing the cost of moving those weights from memory across a large batch and pushing arithmetic intensity up toward the compute-bound region. A single inference request, especially at batch size 1, reuses those same weights for comparatively little computation, keeping arithmetic intensity low and leaving the workload limited by how fast weights can be read from memory.'},
+    {question: 'Why does inference cost typically dominate a widely-deployed model\'s total lifetime compute cost, and what are the standard levers for controlling it?', answer: 'Training is a comparatively bounded, front-loaded cost that happens a finite number of times, while inference runs continuously for as long as the model is deployed, so its total cost scales with usage and commonly exceeds the one-time training cost at meaningful production traffic. The standard levers for controlling inference cost are batching requests to raise arithmetic intensity and quantization to shrink the bytes moved per request, both of which push a memory-bound workload back toward the compute-bound region.'},
+  ]}
+/>
