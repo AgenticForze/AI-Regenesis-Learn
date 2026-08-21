@@ -18,6 +18,21 @@
   ::selection { background:var(--color-accent-800); }
   button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--color-accent); outline-offset:2px; }
   @media print { .no-print { display:none !important; } }
+
+  /* Curriculum tree (catalog route): phases + chapters as a connected tree
+     instead of a stack of boxed cards. */
+  .tree-root { border-left:1px solid var(--color-divider); margin-left:8px; padding-left:20px; display:flex; flex-direction:column; gap:2px; }
+  .tree-phase { position:relative; }
+  .tree-phase::before { content:""; position:absolute; left:-20px; top:21px; width:16px; height:1px; background:var(--color-divider); }
+  .tree-phase-row { display:flex; gap:14px; align-items:flex-start; padding:12px 14px; border-radius:var(--radius-md); }
+  .tree-phase-row:hover { background:var(--color-surface); }
+  .tree-badge { flex:none; width:30px; height:30px; border-radius:var(--radius-sm); background:var(--color-neutral-900); border:1px solid var(--color-neutral-800); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--color-accent-300); }
+  .tree-chapters { list-style:none; margin:2px 0 10px 29px; padding:2px 0 2px 20px; border-left:1px solid var(--color-divider); }
+  .tree-leaf { position:relative; }
+  .tree-leaf::before { content:""; position:absolute; left:-20px; top:19px; width:16px; height:1px; background:var(--color-divider); }
+  .tree-leaf-row { display:flex; gap:10px; align-items:center; padding:8px 10px; border-radius:var(--radius-sm); }
+  .tree-leaf-row:hover { background:var(--color-surface); }
+  .tree-leaf-id { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; color:var(--color-accent-400); width:36px; flex:none; }
 </style>
 </helmet>
 
@@ -195,21 +210,19 @@
       <div style="font-size:13.5px;color:var(--color-neutral-400)">{{ resultLabel }}</div>
       <button onClick="{{ toggleAllOpen }}" class="btn btn-ghost" style="font-size:12.5px">{{ expandLabel }}</button>
     </div>
+    <div class="tree-root">
     <sc-for list="{{ rows }}" as="p" hint-placeholder-count="8">
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="display:flex;gap:16px;padding:16px 18px;align-items:flex-start">
-          <div style="width:44px;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;flex:none">
-            <span style="font-size:8.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-500)">Phase</span>
-            <span style="font-size:16px;font-weight:600;margin-top:2px">{{ p.num }}</span>
-          </div>
+      <div class="tree-phase">
+        <div class="tree-phase-row">
+          <div class="tree-badge">{{ p.num }}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <button onClick="{{ p.toggleOpen }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:18.5px;font-weight:500;color:var(--color-text);text-align:left">{{ p.name }}</button>
+              <button onClick="{{ p.toggleOpen }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:17px;font-weight:600;color:var(--color-text);text-align:left">{{ p.name }}</button>
               <span class="tag tag-neutral">{{ p.level }}</span>
               <span class="tag tag-outline">{{ p.kind }}</span>
             </div>
-            <p style="font-size:13.5px;line-height:1.55;color:var(--color-neutral-400);margin:6px 0 0;max-width:66em">{{ p.intro }}</p>
-            <div style="display:flex;gap:14px;margin-top:8px;font-size:12.5px;color:var(--color-neutral-500);flex-wrap:wrap">
+            <p style="font-size:13px;line-height:1.5;color:var(--color-neutral-400);margin:5px 0 0;max-width:66em">{{ p.intro }}</p>
+            <div style="display:flex;gap:14px;margin-top:7px;font-size:12px;color:var(--color-neutral-500);flex-wrap:wrap">
               <span>{{ p.chapLabel }}</span>
               <span>{{ p.hoursLabel }}</span>
               <span>{{ p.prereqLabel }}</span>
@@ -222,22 +235,25 @@
           </div>
         </div>
         <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
-        <div style="background:color-mix(in srgb, var(--color-bg) 60%, transparent);border-top:1px solid var(--color-divider);padding:4px 18px 10px">
+        <ul class="tree-chapters">
           <sc-for list="{{ p.chapters }}" as="c" hint-placeholder-count="6">
-            <div style="display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--color-divider)">
-              <span style="font-size:12.5px;color:var(--color-accent-300);width:38px;flex:none">{{ c.id }}</span>
-              <div style="flex:1;min-width:0">
-                <button onClick="{{ c.open }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:14.5px;font-weight:500;color:var(--color-text);text-align:left" style-hover="color:var(--color-accent-300)">{{ c.title }}</button>
-                <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ c.rolesLabel }}</div>
+            <li class="tree-leaf">
+              <div class="tree-leaf-row">
+                <span class="tree-leaf-id">{{ c.id }}</span>
+                <div style="flex:1;min-width:0">
+                  <button onClick="{{ c.open }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:14px;font-weight:500;color:var(--color-text);text-align:left" style-hover="color:var(--color-accent-300)">{{ c.title }}</button>
+                  <div style="font-size:11.5px;color:var(--color-neutral-500);margin-top:2px">{{ c.rolesLabel }}</div>
+                </div>
+                <span class="tag tag-neutral" style="flex:none">{{ c.hoursLabel }}</span>
+                <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="flex:none;font-size:12px;min-width:92px">{{ c.btnLabel }}</button>
               </div>
-              <span class="tag tag-neutral" style="flex:none">{{ c.hoursLabel }}</span>
-              <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="flex:none;font-size:12px;min-width:98px">{{ c.btnLabel }}</button>
-            </div>
+            </li>
           </sc-for>
-        </div>
+        </ul>
         </sc-if>
       </div>
     </sc-for>
+    </div>
   </div>
 </div>
 </sc-if>
