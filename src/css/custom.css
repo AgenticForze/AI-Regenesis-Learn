@@ -186,6 +186,7 @@ html[data-lms-embed='true'] footer,
 html[data-lms-embed='true'] .theme-doc-sidebar-container,
 html[data-lms-embed='true'] .theme-doc-breadcrumbs,
 html[data-lms-embed='true'] .theme-doc-footer,
+html[data-lms-embed='true'] .pagination-nav,
 html[data-lms-embed='true'] .theme-doc-toc-mobile { display: none !important; }
 html[data-lms-embed='true'] main { max-width: none; }
 html[data-lms-embed='true'] .docItemContainer { max-width: 100%; padding: 1.5rem 2rem 4rem; }

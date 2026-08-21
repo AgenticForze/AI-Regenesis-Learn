@@ -245,6 +245,7 @@
                   <div style="font-size:11.5px;color:var(--color-neutral-500);margin-top:2px">{{ c.rolesLabel }}</div>
                 </div>
                 <span class="tag tag-neutral" style="flex:none">{{ c.hoursLabel }}</span>
+                <sc-if value="{{ c.isLive }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent-2" style="flex:none">● Live</span></sc-if>
                 <button onClick="{{ c.toggle }}" class="{{ c.btnClass }}" style="flex:none;font-size:12px;min-width:92px">{{ c.btnLabel }}</button>
               </div>
             </li>
@@ -985,6 +986,7 @@ class Component extends DCLogic {
           const rs = this.rolesFor(c.id);
           return {
             id: c.id, title: c.title, hoursLabel: c.hours + ' hrs',
+            isLive: !!c.published,
             rolesLabel: rs.length ? 'Core for ' + rs.slice(0, 2).map(r => r.title).join(', ') + (rs.length > 2 ? ' +' + (rs.length - 2) + ' more' : '') : 'Optional depth for every role',
             btnClass: this.has(c.id) ? 'btn btn-secondary' : 'btn btn-ghost',
             btnLabel: this.has(c.id) ? '✓ In plan' : 'Add chapter',
