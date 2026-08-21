@@ -238,7 +238,11 @@ export const PHASES = [
     "id": "2.6",
     "title": "Transfer Learning & the Pretrain-Then-Adapt Paradigm",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-6-transfer-learning-pretrain-then-adapt",
+    "summary": "Training a large network from scratch, an AlexNet-scale CNN (2.3) or a Transformer (2.5), needs huge labeled datasets and enormous compute. **Transfer learning** avoids repeating that cost by starting from a model already trained on a large source task and adapting it to a new target task, rather than starting from randomly initialized weights. Two main strategies exist: **feature extraction** freezes the pretrained weights and trains only a new final layer on the target data, while **fine-tuning** continues training some or all of the pretrained weights on the target task, usually with a smaller learning rate so the model adjusts without destroying what it already learned. Naively continuing to train on a new task risks **catastrophic forgetting**, where performance on the original task degrades as the new task overwrites earlier learning. This same pattern, pretrain on a large, general dataset, then adapt to a smaller, specific one, is the paradigm behind both modern computer vision, where ImageNet-pretrained backbones are standard starting points, and modern language models, where BERT and GPT-style models are pretrained on massive unlabeled text and then adapted to downstream tasks.",
+    "published": true,
+    "presentationUrl": "../slides/2.6-Transfer-Learning-Slides.pptx"
    },
    {
     "id": "2.7",

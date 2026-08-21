@@ -1,0 +1,210 @@
+---
+title: "Transfer Learning & the Pretrain-Then-Adapt Paradigm"
+sidebar_label: "2.6 Transfer Learning & Pretrain-Then-Adapt"
+sidebar_position: 6
+phase: 2
+chapter: "2.6"
+lms_presentation: "2.6-Transfer-Learning-Slides.pptx"
+prerequisites: ["2.3", "2.5"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Training a large network from scratch, an AlexNet-scale CNN (2.3) or a Transformer (2.5), needs
+huge labeled datasets and enormous compute. **Transfer learning** avoids repeating that cost by
+starting from a model already trained on a large source task and adapting it to a new target task,
+rather than starting from randomly initialized weights. Two main strategies exist: **feature
+extraction** freezes the pretrained weights and trains only a new final layer on the target data,
+while **fine-tuning** continues training some or all of the pretrained weights on the target task,
+usually with a smaller learning rate so the model adjusts without destroying what it already
+learned. Naively continuing to train on a new task risks **catastrophic forgetting**, where
+performance on the original task degrades as the new task overwrites earlier learning. This same
+pattern, pretrain on a large, general dataset, then adapt to a smaller, specific one, is the
+paradigm behind both modern computer vision, where ImageNet-pretrained backbones are standard
+starting points, and modern language models, where BERT and GPT-style models are pretrained on
+massive unlabeled text and then adapted to downstream tasks.
+
+## High-Level Explanation
+
+A CNN's layers form a hierarchy (2.3): early layers detect generic patterns like edges and
+textures, and later layers combine those into increasingly task-specific features. The generic,
+early-layer patterns turn out to be useful across a wide range of visual tasks, not just the one
+the network was originally trained on: an edge detector learned from classifying everyday photos
+is still a useful edge detector for classifying medical images or satellite photos. Transfer
+learning exploits this by reusing a network's early, general-purpose representations instead of
+relearning them from a small target dataset, and only adapting the later, more task-specific parts
+of the network. The benefit is largest exactly when it matters most: when the target dataset is too
+small to train a large network from scratch without overfitting.
+
+There are two common ways to adapt a pretrained network. In **feature extraction**, every
+pretrained weight is frozen (held fixed, receiving no gradient updates), a new final layer suited
+to the target task is added on top, and only that new layer is trained. In **fine-tuning**, some or
+all of the pretrained weights are unfrozen and continue to be updated by backpropagation (2.2) on
+the target data, typically with a much smaller learning rate than the original training used, so
+the already-useful weights shift gradually rather than being overwritten by large, disruptive
+updates.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-6-pretrain-then-adapt.svg').default}
+    alt="A diagram showing a large source dataset feeding a pretraining phase that produces a pretrained model with general-purpose representations. That pretrained model then branches into two adaptation paths on a small target dataset: feature extraction, which freezes the pretrained weights and trains only a new head, and fine-tuning, which continues training some or all of the pretrained weights at a reduced learning rate."
+  />
+  <figcaption>Pretraining happens once on a large source dataset; adaptation happens per target task, on far less data.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Formalizing the transfer.** A source domain and task (D_s, T_s), typically a large, general
+dataset like ImageNet for vision or a large unlabeled text corpus for language, is used to train a
+model. A target domain and task (D_t, T_t), typically smaller and more specific, is what the model
+actually needs to perform well on. Transfer learning uses the parameters learned from (D_s, T_s) as
+the starting point for learning (D_t, T_t), rather than initializing weights randomly (2.1) and
+training on D_t alone.
+
+**How transferable are features, layer by layer.** A systematic study measured how much accuracy a
+network loses when its first n layers are copied from a source-task network and frozen (or
+fine-tuned), and the remaining layers are trained fresh on a target task. Two consistent findings
+emerged: transferability decreases as n increases, since later layers are more specific to the
+source task, and it also decreases as the source and target tasks become less related. The same
+study found that starting from pretrained weights and fine-tuning on the target task outperformed
+training from scratch on the target task even when enough target data was available to train from
+scratch, because pretrained weights are also a better optimization starting point, not just a
+source of extra effective data (Yosinski, Clune, Bengio, and Lipson,
+[*How Transferable Are Features in Deep Neural Networks?*](https://arxiv.org/abs/1411.1792), NIPS,
+2014).
+
+**Catastrophic forgetting.** When a network continues training on a new task, gradient descent
+(2.2) has no built-in mechanism to preserve what was useful for the old task; weights that mattered
+for the source task can be overwritten by updates that only help the target task, causing source-task
+performance to collapse even if it is never evaluated again during adaptation. This is a direct
+consequence of how gradient descent works: it moves weights in whatever direction reduces the
+current loss, with no awareness of a previous task unless something explicitly accounts for it.
+One mitigation adds a penalty term that slows down updates to weights identified as important for
+the earlier task, based on the estimated sensitivity of that task's performance to each weight
+(Kirkpatrick, Pascanu, Rabinowitz, Veness, Desjardins, Rusu, Milan, Quan, Ramalho, Grabska-Barwinska,
+Hassabis, Clopath, Kumaran, and Hadsell,
+[*Overcoming Catastrophic Forgetting in Neural Networks*](https://www.pnas.org/doi/10.1073/pnas.1611835114),
+PNAS, 2017). In practice, using a small fine-tuning learning rate and unfreezing only the later
+layers are simpler, more commonly used ways to limit how much a pretrained model's useful earlier
+representations get disturbed.
+
+**Domain adaptation versus task adaptation.** It is useful to separate two different kinds of
+mismatch between source and target. Domain adaptation covers the same task but a different data
+distribution, for example a classifier trained on daytime photos applied to nighttime photos.
+Task adaptation covers the same general domain but a different task, for example a backbone
+trained for image classification adapted to object detection. Real transfer learning problems
+often involve both at once, and the degree of mismatch on either axis is what drives how much
+fine-tuning, versus pure feature extraction, is needed.
+
+**The pretrain-then-adapt paradigm at scale.** The same freeze-or-fine-tune logic scaled up is the
+foundation of modern language models. BERT is pretrained on a large unlabeled text corpus using a
+masked-language-modeling objective (predicting words that have been randomly hidden from the
+input), producing general-purpose language representations, and is then fine-tuned on much smaller,
+labeled datasets for specific downstream tasks (Devlin, Chang, Lee, and Toutanova,
+[*BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding*](https://aclanthology.org/N19-1423/),
+NAACL, 2019). GPT instead pretrains with an autoregressive, next-token-prediction objective on a
+large text corpus and is then adapted to downstream tasks (Radford, Narasimhan, Salimans, and
+Sutskever,
+[*Improving Language Understanding by Generative Pre-Training*](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf),
+OpenAI, 2018). Both are instances of the same pattern this chapter describes: pretrain once on a
+large, general dataset, then adapt cheaply per target task. Exactly how large language models are
+pretrained and how they are adapted (fine-tuning, and prompting-based adaptation that needs no
+weight updates at all) is covered in depth in later phases of this curriculum; this chapter
+establishes the general transfer learning principle those approaches build on.
+
+```python
+# Illustrative only: which layers to freeze depends on target-task similarity
+# and target dataset size, not on framework-specific syntax (2.7 covers frameworks).
+
+def configure_transfer(layers, strategy, unfreeze_from_layer=None):
+    """layers: list of layer names from earliest to latest.
+    strategy: 'feature_extraction' or 'fine_tune'.
+    unfreeze_from_layer: for fine_tune, the earliest layer index to unfreeze;
+    later layers are more task-specific, so fine-tuning tends to start there."""
+    trainable = {}
+    for i, name in enumerate(layers):
+        if strategy == 'feature_extraction':
+            trainable[name] = False          # every pretrained layer stays frozen
+        elif strategy == 'fine_tune':
+            trainable[name] = i >= unfreeze_from_layer   # unfreeze later layers only
+    return trainable   # a new task-specific output layer is always trainable, added separately
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Train from scratch', 'Feature extraction', 'Fine-tuning']}
+  rows={[
+    {aspect: 'Target data needed', values: ['Large', 'Small to moderate', 'Moderate (small risks overfitting on unfrozen weights)'], decisive: true},
+    {aspect: 'Compute cost to adapt', values: ['Highest: trains every weight from a random start', 'Lowest: only a new final layer is trained', 'Moderate: some or all pretrained weights keep updating'], },
+    {aspect: 'Risk of catastrophic forgetting', values: ['Not applicable, no prior task to forget', 'None: pretrained weights never change', 'Present, mitigated by a small learning rate and/or partial unfreezing'], },
+    {aspect: 'Typical use case', values: ['Source task itself, or target data is genuinely large', 'Target task is very similar to the source task', 'Target task differs somewhat from the source task'], },
+  ]}
+  caption="Feature extraction and fine-tuning sit on a spectrum, not a binary choice: partial unfreezing (fine-tuning only the later layers) is a common middle ground."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Pretrain once, adapt per target task"
+  mermaid={`
+flowchart LR
+  SRC[Large source dataset] --> PRE[Pretraining: e.g. ImageNet classification, or masked/next-token language modeling]
+  PRE --> MODEL[Pretrained model: general-purpose representations]
+  MODEL --> FE[Feature extraction: freeze weights, train new head]
+  MODEL --> FT[Fine-tuning: unfreeze some/all layers, small learning rate]
+  TGT[Small target dataset] --> FE
+  TGT --> FT
+  FE --> OUT1[Target-task model]
+  FT --> OUT2[Target-task model]
+`}
+  components={[
+    {name: 'Pretraining', responsibility: 'Trains a model once on a large, general source dataset, producing broadly reusable representations.'},
+    {name: 'Feature extraction path', responsibility: 'Freezes every pretrained weight and trains only a newly added task-specific output layer.'},
+    {name: 'Fine-tuning path', responsibility: 'Continues updating some or all pretrained weights on the target data, usually at a reduced learning rate.'},
+    {name: 'Target-task model', responsibility: 'The adapted model, produced at a fraction of the data and compute cost of training from scratch.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Document image classification from a vision backbone', problem: 'Classifying scanned document types (statements, ID documents, checks) with only a modest labeled sample of each type.', solution: 'Fine-tuning an ImageNet-pretrained CNN backbone (2.3) on the smaller labeled document set reaches strong accuracy without needing millions of labeled documents.', risk: 'A backbone pretrained on natural photos can transfer imperfectly to scanned-document visual statistics, so accuracy still needs validation on real target-domain data.'},
+    {title: 'Domain-adapted financial sentiment models', problem: 'General-purpose language sentiment models are tuned on everyday text and misread finance-specific phrasing.', solution: 'A pretrained language model is fine-tuned on a smaller labeled set of finance-domain text, adapting its representations to financial terminology and tone.', risk: 'Fine-tuning on a narrow internal dataset risks catastrophic forgetting of general language understanding the model relied on for edge cases.'},
+    {title: 'Fraud detection with limited labeled fraud examples', problem: 'Confirmed fraud cases are rare, making it hard to train a large fraud-specific model from scratch.', solution: 'A model pretrained on related transaction-pattern data is fine-tuned on the institution\'s own limited labeled fraud examples.', risk: 'A small fine-tuning set can cause the model to overfit to the specific fraud patterns present in that sample and miss new patterns.'},
+    {title: 'Cross-institution model adaptation', problem: 'A model trained at one institution does not directly transfer to another institution\'s different customer base and product mix.', solution: 'Feature extraction or light fine-tuning adapts a pretrained model to the new institution\'s data with a much smaller retraining effort than starting over.', risk: 'Differences in customer population between institutions can be a domain shift large enough that light adaptation alone is insufficient.'},
+  ]}
+  healthcare={[
+    {title: 'Medical image classification from natural-image pretraining', problem: 'Labeled medical images (a specific rare condition, for instance) are far scarcer than labeled natural photos.', solution: 'A CNN pretrained on a large natural-image dataset is fine-tuned on the smaller labeled medical image set, transferring general visual features like edge and texture detectors.', risk: 'Medical images differ enough from natural photos (grayscale, different structures) that deeper fine-tuning is usually needed, not feature extraction alone.'},
+    {title: 'Clinical language model adaptation', problem: 'General-purpose language models are not tuned to clinical vocabulary, abbreviations, and documentation conventions.', solution: 'A pretrained language model is further pretrained or fine-tuned on de-identified clinical text before being adapted to a specific downstream task.', risk: 'Fine-tuning on institution-specific clinical text risks the model learning idiosyncrasies that do not generalize to other institutions.'},
+    {title: 'Rare disease prediction with limited patient data', problem: 'A rare condition may have too few historical patient records to train a dedicated model from scratch.', solution: 'A model pretrained on a related, larger patient population is fine-tuned on the smaller rare-condition cohort.', risk: 'A small target cohort makes it hard to detect if the adapted model is overfitting to that specific sample\'s characteristics.'},
+    {title: 'Cross-modality transfer for diagnostic imaging', problem: 'A new imaging modality at a facility may have far less labeled data than an established modality already used elsewhere.', solution: 'A model pretrained on the established modality is fine-tuned on the smaller new-modality dataset rather than training from scratch.', risk: 'Different imaging modalities can have different failure modes and artifacts, which fine-tuning may not fully correct if underrepresented in the target data.'},
+  ]}
+  telecom={[
+    {title: 'Network anomaly detection adapted across network segments', problem: 'A model trained on one network segment\'s traffic patterns does not directly transfer to a segment with a different normal traffic profile.', solution: 'Fine-tuning the source-segment model on a smaller sample of the new segment\'s traffic adapts it faster than training a dedicated model from scratch.', risk: 'A segment with a sufficiently different traffic profile can still need substantial fine-tuning data before it reaches acceptable accuracy.'},
+    {title: 'Customer support language model adaptation', problem: 'A general-purpose language model needs to understand carrier-specific product names, plans, and support terminology.', solution: 'A pretrained language model is fine-tuned on the carrier\'s own support transcripts and documentation.', risk: 'Fine-tuning on a narrow support-transcript dataset can degrade the model\'s general conversational ability outside that narrow domain.'},
+    {title: 'Equipment fault classification from limited labeled telemetry', problem: 'Labeled examples of specific equipment fault types are limited compared to the volume of normal operating telemetry.', solution: 'A model pretrained on a broader telemetry dataset (or a related equipment class) is fine-tuned on the smaller labeled fault dataset.', risk: 'Equipment fault classes evolve as hardware changes, so a fine-tuned model can silently degrade in accuracy as the underlying equipment population shifts.'},
+    {title: 'Multilingual customer communications adaptation', problem: 'A language model tuned mainly on one language needs to support customer communications in additional languages with limited labeled data.', solution: 'A multilingual pretrained model is fine-tuned on smaller labeled datasets per additional language, transferring shared linguistic representations.', risk: 'Low-resource languages with the least fine-tuning data available tend to see the smallest accuracy gains from adaptation.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the core idea of transfer learning, and why is it especially valuable when target data is limited?', answer: 'Transfer learning reuses a model already trained on a large source task as the starting point for a target task, instead of training from randomly initialized weights on the target data alone. It is especially valuable with limited target data because training a large network from scratch on a small dataset tends to overfit, while starting from pretrained, already-useful representations needs far less target data to reach good performance.'},
+    {question: 'What is the difference between feature extraction and fine-tuning as adaptation strategies?', answer: 'Feature extraction freezes every pretrained weight and trains only a newly added task-specific output layer. Fine-tuning unfreezes some or all of the pretrained weights and continues updating them via backpropagation on the target data, typically with a smaller learning rate so the useful pretrained weights shift gradually rather than being overwritten.'},
+    {question: 'According to the Yosinski et al. study, how does feature transferability change with layer depth, and why does fine-tuning from pretrained weights outperform training from scratch even with enough target data?', answer: 'Transferability decreases as layer depth increases, since later layers are more specific to the source task, and it also decreases as the source and target tasks become less related. Fine-tuning from pretrained weights outperforms training from scratch even with sufficient data because the pretrained weights are also a better optimization starting point, not merely a substitute for missing data.'},
+    {question: 'What is catastrophic forgetting, and why does it happen mechanically?', answer: 'Catastrophic forgetting is the collapse of a model\'s performance on a previously learned task after it continues training on a new task. It happens because gradient descent updates weights purely to reduce the current loss, with no built-in mechanism to preserve weights that mattered for a task it is no longer being trained or evaluated on, so updates useful for the new task can overwrite what was useful for the old one.'},
+    {question: 'How does the pretrain-then-adapt paradigm in modern language models (BERT, GPT) relate to the feature extraction and fine-tuning ideas described earlier in this chapter?', answer: 'BERT and GPT are pretrained once on a large, general text corpus (using masked-language-modeling and next-token-prediction objectives respectively), producing general-purpose language representations, and are then adapted to specific downstream tasks with far less task-specific data. This is the same pretrain-once, adapt-per-task pattern as feature extraction and fine-tuning, applied at a much larger scale.'},
+  ]}
+/>
