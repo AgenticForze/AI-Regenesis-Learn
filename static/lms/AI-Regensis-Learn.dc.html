@@ -332,7 +332,7 @@
 </sc-if>
 
 <sc-if value="{{ isReader }}" hint-placeholder-val="{{ false }}">
-<div style="max-width:1140px;margin:0 auto;padding:24px 24px 80px">
+<div style="max-width:1280px;margin:0 auto;padding:24px 24px 80px">
   <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <button onClick="{{ goCatalog }}" class="btn btn-ghost" style="font-size:12.5px;padding:2px 6px">← Curriculum</button>
@@ -344,7 +344,7 @@
       <button onClick="{{ chap.next }}" class="btn btn-icon btn-secondary" aria-label="Next chapter" title="{{ chap.nextLabel }}">›</button>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:start">
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:32px;align-items:start">
     <div>
       <h1 style="font-size:32px;line-height:1.12;margin-bottom:12px;text-wrap:pretty">{{ chap.title }}</h1>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:24px">
