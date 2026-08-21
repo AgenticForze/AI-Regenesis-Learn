@@ -33,6 +33,7 @@
   .tree-leaf-row { display:flex; gap:10px; align-items:center; padding:8px 10px; border-radius:var(--radius-sm); }
   .tree-leaf-row:hover { background:var(--color-surface); }
   .tree-leaf-id { font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:12px; color:var(--color-accent-400); width:36px; flex:none; }
+  .tree-live-pill { font-size:11.5px; color:#7fe3c3; background:rgba(127,227,195,0.12); border:1px solid rgba(127,227,195,0.28); padding:3px 9px; border-radius:999px; white-space:nowrap; }
 </style>
 </helmet>
 
@@ -220,6 +221,7 @@
               <button onClick="{{ p.toggleOpen }}" style="background:none;border:none;padding:0;cursor:pointer;font-size:17px;font-weight:600;color:var(--color-text);text-align:left">{{ p.name }}</button>
               <span class="tag tag-neutral">{{ p.level }}</span>
               <span class="tag tag-outline">{{ p.kind }}</span>
+              <sc-if value="{{ p.hasLive }}" hint-placeholder-val="{{ false }}"><span class="tree-live-pill">{{ p.liveLabel }}</span></sc-if>
             </div>
             <p style="font-size:13px;line-height:1.5;color:var(--color-neutral-400);margin:5px 0 0;max-width:66em">{{ p.intro }}</p>
             <div style="display:flex;gap:14px;margin-top:7px;font-size:12px;color:var(--color-neutral-500);flex-wrap:wrap">
@@ -970,9 +972,12 @@ class Component extends DCLogic {
       const inCart = ids.filter(i => this.has(i));
       const all = inCart.length === ids.length;
       const chapters = p.chapters.filter(c => !q || c.title.toLowerCase().indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0 || (p.intro || '').toLowerCase().indexOf(q) >= 0);
+      const liveCount = p.chapters.filter(c => c.published).length;
       return {
         num: p.num, name: p.name, intro: p.intro, level: p.level, kind: p.kind,
         chapLabel: ids.length + ' chapters',
+        liveLabel: liveCount + ' live',
+        hasLive: liveCount > 0,
         hoursLabel: this.hoursOf(p.chapters.map(c => ({ c }))) + ' hrs',
         prereqLabel: p.prereq.length ? 'After phase ' + p.prereq.join(', ') : 'No prerequisites',
         selectedLabel: inCart.length ? inCart.length + ' selected' : '',

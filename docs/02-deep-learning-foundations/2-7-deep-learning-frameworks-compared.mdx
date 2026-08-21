@@ -159,11 +159,11 @@ print(w.grad, b.grad)   # gradients autodiff computed, with no manual chain-rule
   title="The training loop every framework implements"
   mermaid={`
 flowchart LR
-  PARAMS[Model parameters] --> FWD[Forward pass: model(input)]
+  PARAMS[Model parameters] --> FWD["Forward pass: model(input)"]
   FWD --> PRED[Prediction]
   PRED --> LOSS[Loss: compare prediction to target]
   LOSS --> BACK[Backward pass: automatic differentiation computes every gradient]
-  BACK --> OPT[Optimizer step: SGD, momentum, or Adam (2.2) updates parameters]
+  BACK --> OPT["Optimizer step: SGD, momentum, or Adam (2.2) updates parameters"]
   OPT --> PARAMS
 `}
   components={[
