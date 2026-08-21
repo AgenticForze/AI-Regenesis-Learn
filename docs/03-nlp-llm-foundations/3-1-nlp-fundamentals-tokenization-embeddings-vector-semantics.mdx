@@ -1,0 +1,199 @@
+---
+title: "NLP Fundamentals: Tokenization, Embeddings, Vector Semantics"
+sidebar_label: "3.1 NLP Fundamentals"
+sidebar_position: 1
+phase: 3
+chapter: "3.1"
+lms_presentation: "3.1-NLP-Fundamentals-Slides.pptx"
+prerequisites: ["1.8"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every model in this curriculum from Phase 2 onward, from a small MLP to a full Transformer, computes
+on numbers, not text. **Tokenization** is the process of breaking raw text into a sequence of
+discrete units (words, sub-words, or characters), each assigned an integer ID from a fixed
+vocabulary. **Embeddings** then replace each ID with a dense vector of learned numbers, so that
+tokens used in similar contexts end up with similar vectors. This is the bridge between "the
+customer's account was overdrawn" as a string of characters and the numeric tensor a neural network
+actually consumes. The useful property that falls out of this is **vector semantics**: once words
+live in a vector space, similarity, analogy, and even simple arithmetic between word meanings become
+geometric operations, like measuring the angle between two arrows, rather than symbolic rules.
+
+## High-Level Explanation
+
+Think of a vocabulary as a phone book: every distinct token gets one fixed entry, and the tokenizer's
+job is to look up which entries a piece of text touches, in order. A **tokenizer** first normalizes
+text (lowercasing, in some pipelines, splitting punctuation) and then splits it into tokens according
+to some segmentation rule. Each token is looked up in a vocabulary table to get an integer **token
+ID**. That ID alone is not useful to a neural network, an ID of 4,521 is not "more" or "less" than
+an ID of 12, the numbers are arbitrary labels. So a second table, the **embedding matrix**, maps each
+token ID to a dense vector of, typically, a few hundred to a few thousand real numbers. The
+embedding matrix is learned: during training, tokens that tend to appear in similar contexts are
+pushed toward similar vectors, purely as a side effect of the model's training objective, with no
+one hand-labeling any word's meaning.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-1-tokenization-pipeline.svg').default}
+    alt="A pipeline diagram showing raw text being normalized, split into tokens, mapped to integer token IDs via a vocabulary lookup, and then mapped to dense embedding vectors via an embedding matrix, producing the numeric input a downstream model consumes."
+  />
+  <figcaption>Text becomes numbers in two hops: a fixed vocabulary maps text to IDs, and a learned embedding matrix maps IDs to dense vectors.</figcaption>
+</figure>
+
+The payoff for doing this well is that the resulting vectors are not arbitrary: words used in similar
+ways cluster together in the vector space, and the relationships between clusters can themselves be
+meaningful, which is what "vector semantics" refers to.
+
+## Deep-Dive Explanation
+
+**Why not just use the raw token ID, or a one-hot vector?** A one-hot vector (a vector of all zeros
+except a single 1 at the position of that token's ID) is the most literal numeric encoding of "which
+token is this," and it is a dead end for two mechanical reasons. First, its dimensionality equals
+vocabulary size, commonly 30,000 to over 100,000 entries for a subword vocabulary (3.5), so it is
+extremely high-dimensional and almost entirely zeros (sparse). Second, and more importantly, the
+cosine similarity (see the 1.8 glossary entry) between any two distinct one-hot vectors is always
+exactly 0, they are orthogonal by construction, so a one-hot encoding has no way to represent that
+"dog" and "puppy" are related while "dog" and "spreadsheet" are not. Every token is equally
+(un)related to every other token.
+
+**The distributional hypothesis.** The theoretical basis for fixing this dates to linguist J.R.
+Firth's 1957 observation, often paraphrased as "a word is characterized by the company it keeps."
+Operationally: if two tokens tend to occur in similar surrounding contexts across a large corpus,
+they probably have related meanings, even if a model is never given an explicit definition of either
+word. Chapter 3.2 covers the specific training objectives (Word2Vec's skip-gram and CBOW) that turn
+this hypothesis into a concrete learning algorithm; this chapter's job is the representation that
+results, not yet the training procedure that produces it.
+
+**The embedding matrix as a lookup table.** Formally, an embedding matrix is E element of R^(V x d),
+where V is vocabulary size and d is the embedding dimension (a design choice, commonly 128 to 4096
+depending on model scale). Token ID i maps to the vector in row i of E, written E_i. Mathematically,
+this is identical to multiplying E^T by the one-hot vector for token i, E^T * onehot(i) = E_i, but no
+real implementation performs that matrix multiply: since exactly one entry of the one-hot vector is
+nonzero, frameworks implement embedding lookup as a direct array index into E, which is why it is
+called an embedding "lookup" rather than an embedding "projection." E starts randomly initialized and
+is updated by gradient descent (2.2) like any other model parameter: only the rows corresponding to
+tokens that actually appeared in a training batch receive a gradient update on that step.
+
+**Vector semantics and analogical structure.** Once training pushes similar-context tokens toward
+similar vectors, a further, less obvious property tends to emerge: differences between vectors can
+themselves encode a consistent relationship. The canonical illustration is
+vec(king) - vec(man) + vec(woman) is approximately equal to vec(queen): the vector offset from
+"man" to "king" (roughly, "add royalty") is similar to the offset from "woman" to "queen." This is
+not designed into the embedding space by any explicit rule, it is an emergent consequence of training
+tokens to satisfy co-occurrence statistics across a large corpus, and it holds approximately, as a
+statistical tendency over many analogy pairs, not as an exact guarantee for any single example.
+
+**Cosine similarity versus dot product, and why it matters here.** Two tokens' relatedness is
+usually scored with cosine similarity, x . y / (||x|| ||y||), rather than the raw dot product x . y
+(1.8). The reason is specific to embeddings: a token's vector norm ||x|| tends to correlate with how
+frequently that token appeared during training, so the raw dot product conflates "these two tokens
+are similar in meaning" with "these two tokens are both common." Dividing by both norms cancels
+magnitude and isolates direction, which is what carries the meaning.
+
+```python
+# Illustrative: an embedding lookup is an array index, and cosine similarity
+# isolates direction. No training loop here, this is only the representation.
+import numpy as np
+
+vocab = {"dog": 0, "puppy": 1, "spreadsheet": 2}
+# A tiny, hand-set embedding matrix (V=3 tokens, d=4 dims) standing in for
+# what training would actually learn from a real corpus.
+E = np.array([
+    [0.9, 0.1, 0.0, 0.2],   # dog
+    [0.8, 0.2, 0.1, 0.1],   # puppy: close to "dog"
+    [0.0, 0.9, 0.8, 0.9],   # spreadsheet: far from both
+])
+
+def embed(token):
+    return E[vocab[token]]   # a lookup, not a matmul
+
+def cosine_sim(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+print(cosine_sim(embed("dog"), embed("puppy")))         # high similarity
+print(cosine_sim(embed("dog"), embed("spreadsheet")))    # low similarity
+```
+
+**A limitation this chapter deliberately leaves open.** The embedding matrix above assigns exactly
+one vector per token, regardless of the sentence it appears in: "bank" gets the same vector in
+"river bank" and "bank account." This is the defining limitation of **static embeddings**, and it is
+the problem chapter 3.2 exists to solve with contextual embeddings.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['One-Hot / Sparse Count Vectors', 'Bag-of-Words / TF-IDF', 'Dense Learned Embeddings']}
+  rows={[
+    {aspect: 'Dimensionality', values: ['Equal to vocabulary size (often 30K+)', 'Equal to vocabulary size', 'A chosen, much smaller size (commonly 128-4096)'], decisive: true},
+    {aspect: 'Captures semantic similarity', values: ['No: all tokens mutually orthogonal', 'No: still counts, not learned relationships', 'Yes: similar-context tokens end up with similar vectors'], decisive: true},
+    {aspect: 'Sparse or dense', values: ['Sparse (almost all zeros)', 'Sparse', 'Dense (every dimension typically nonzero)'], },
+    {aspect: 'Handles out-of-vocabulary tokens', values: ['No: unseen token has no valid index', 'No, unless smoothed', 'Depends on tokenizer granularity (3.5), not the embedding step itself'], },
+    {aspect: 'Typical use today', values: ['Rare in practice; a teaching baseline', 'Lightweight search/keyword baselines', 'The default representation for every modern NLP and LLM system'], },
+  ]}
+  caption="One-hot and count-based representations describe which tokens appeared; dense embeddings are trained to also describe how tokens relate to each other."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From raw text to the vectors a model consumes"
+  mermaid={`
+flowchart LR
+  TXT[Raw text] --> NORM[Normalization]
+  NORM --> TOK[Tokenizer: text to token sequence]
+  TOK --> VOCAB[Vocabulary lookup: token to integer ID]
+  VOCAB --> EMB["Embedding matrix lookup: ID to dense vector"]
+  EMB --> OUT[Sequence of dense vectors]
+  OUT --> MODEL[Downstream model, e.g. a Transformer]
+`}
+  components={[
+    {name: 'Normalization', responsibility: 'Applies consistent text cleanup (case-folding, punctuation handling) so the same underlying word maps to the same token whenever possible.'},
+    {name: 'Tokenizer', responsibility: 'Splits normalized text into a sequence of tokens according to a fixed segmentation rule; the specific algorithms (BPE, WordPiece, SentencePiece) are covered in 3.5.'},
+    {name: 'Vocabulary lookup', responsibility: 'Maps each token string to a fixed integer ID from a closed vocabulary built during tokenizer training.'},
+    {name: 'Embedding matrix lookup', responsibility: 'Maps each integer ID to a row of a learned V x d matrix, producing a dense vector; the only step in this pipeline that is trained rather than fixed by rule.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Semantic search across research notes and filings', problem: 'Analysts need to find prior research or regulatory filings discussing a concept, not just documents containing the exact search keywords typed.', solution: 'Embedding each document and query into the same vector space lets retrieval rank by cosine similarity, surfacing conceptually related material that keyword search misses.', risk: 'A retrieval-augmented workflow feeding an embedding-based search into a compliance or research decision needs model-risk-management sign-off on the embedding model itself, since a silent embedding update can shift which documents surface without any code change to the search logic.'},
+    {title: 'Ticker and entity disambiguation in market news feeds', problem: 'The same short string can refer to different companies (a ticker symbol reused across exchanges, or a company name that is also a common word), and downstream trading signals need the correct entity.', solution: 'Tokenizing and embedding surrounding context, not just the mention itself, lets a model disambiguate which entity a token sequence actually refers to based on contextual similarity to known entity descriptions.', risk: 'A mis-disambiguated entity feeding directly into an automated trading signal creates a mis-attributed position that must be reconstructed and explained during a post-trade audit, not merely a retrieval quality issue.'},
+    {title: 'Near-duplicate detection in trade communications surveillance', problem: 'Compliance surveillance needs to flag communications that are substantively the same message reworded, which exact-text matching cannot catch.', solution: 'Embedding each communication and flagging pairs above a cosine-similarity threshold catches paraphrased near-duplicates that keyword or hash-based matching would miss.', risk: 'A surveillance system\'s embedding blind spot (two messages that are substantively identical but embed far apart) creates a genuine compliance gap that regulators expect to be documented and remediated, not just a lower recall metric.'},
+    {title: 'KYC and client-document classification', problem: 'Onboarding requires classifying large volumes of client-submitted documents (identity, proof of address, account applications) into the correct KYC category.', solution: 'Tokenizing document text and classifying based on its embedding lets a single model route heterogeneous document formats without hand-written keyword rules per document type.', risk: 'A misclassified KYC document can delay or incorrectly clear a required regulatory check, which is a compliance exposure that a model validation team must be able to trace back to a specific document and decision.'},
+  ]}
+  healthcare={[
+    {title: 'Semantic search over similar clinical cases', problem: 'A clinician wants to find prior cases with a similar presentation, not cases that happen to share the same exact wording in a note.', solution: 'Embedding clinical notes and ranking by vector similarity surfaces conceptually similar prior cases even when the wording differs substantially.', risk: 'A tool used for clinical decision support that surfaces the wrong "similar" case due to an embedding-space gap for a rare presentation is a clinical safety issue, and depending on intended use may require regulatory clearance review of the retrieval component itself.'},
+    {title: 'Medical coding assistance from clinical text', problem: 'Coders need to translate free-text clinical documentation into standardized codes (e.g. ICD-10) for billing and records, a slow and error-prone manual step at scale.', solution: 'Embedding a clinical note and comparing it against embedded code descriptions suggests likely codes for a human coder to confirm rather than search for manually.', risk: 'An incorrect suggested code that a time-pressured coder accepts without scrutiny has direct billing and patient-record accuracy consequences and needs a documented human-in-the-loop validation step before this counts as clinically deployed.'},
+    {title: 'De-identification of protected health information before embedding', problem: 'Clinical text often contains patient names, dates, and identifiers that must be removed before the text is embedded and stored in any downstream search index.', solution: 'A tokenization-aware de-identification pass runs before the embedding step, replacing identifying tokens with placeholders so the resulting vectors do not encode protected health information.', risk: 'A name or identifier that tokenizes unusually (an uncommon surname split in a way the de-identification rule does not anticipate) can leak protected health information into a search index, a direct HIPAA exposure distinct from any accuracy problem with the embeddings themselves.'},
+    {title: 'Triage note matching to clinical protocols', problem: 'A triage note needs to be matched to the correct clinical protocol quickly, but the same underlying situation is described in many different phrasings across clinicians.', solution: 'Embedding the triage note and matching it against embedded protocol descriptions finds the relevant protocol even when the note\'s exact wording does not overlap with the protocol\'s text.', risk: 'A semantic mismatch that routes a note to a protocol for a similar-sounding but clinically distinct condition is a patient-safety failure mode specific to relying on learned similarity rather than an explicit, auditable rule for a high-stakes routing decision.'},
+  ]}
+  telecom={[
+    {title: 'Trouble-ticket clustering for root-cause analysis', problem: 'Network operations receives large volumes of trouble tickets describing symptoms in inconsistent language, making it hard to see that many tickets share one root cause.', solution: 'Embedding ticket text and clustering by vector similarity groups tickets describing the same underlying issue even when the reported symptoms are worded very differently.', risk: 'A missed cluster during a live network incident directly extends the time to identify a shared root cause, which can breach the SLA clock a carrier is already running against for that outage.'},
+    {title: 'Customer support transcript intent classification', problem: 'Support transcripts need to be routed to the right team based on intent, but customers describe the same issue (an outage, a billing dispute, a device problem) in highly variable phrasing.', solution: 'Embedding transcript text and classifying intent from the resulting vector routes tickets more reliably than exact-keyword rules across variable phrasing.', risk: 'A misrouted high-churn-risk complaint during an active regional outage compounds the outage\'s customer impact with a support-routing failure at exactly the moment call volumes and churn risk are already elevated.'},
+    {title: 'Fraud and spam detection in SMS and messaging traffic', problem: 'Fraudulent or spam messages need to be detected at very high traffic volume without materially delaying legitimate message delivery.', solution: 'Embedding message content and scoring similarity against known fraud patterns flags suspicious messages for filtering at network scale.', risk: 'A false positive rate that blocks legitimate customer messages during a high-traffic period (a regional event, an emergency alert) is a network-capacity and customer-trust risk distinct from the fraud-detection accuracy tradeoff itself.'},
+    {title: 'Multilingual tokenization edge cases in customer care', problem: 'A single support queue serves multiple languages and scripts, and a tokenizer tuned mainly on one language can segment other languages poorly.', solution: 'Verifying tokenizer behavior per supported language before embedding customer text catches segmentation failures that would otherwise silently degrade downstream classification for that language.', risk: 'A tokenization failure that garbles embeddings for one language population is most dangerous during a live regional outage, when misrouted or misclassified outage reports in that language delay incident detection and push the affected segment\'s SLA clock past the point where its resolution time still qualifies as met.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why is a one-hot vector a poor representation of a token\'s meaning, even though it uniquely identifies the token?', answer: 'A one-hot vector\'s dimensionality equals vocabulary size, so it is extremely high-dimensional and sparse, and the cosine similarity between any two distinct one-hot vectors is always exactly 0, since they are orthogonal by construction. This means a one-hot encoding has no way to represent that two tokens are related in meaning; every token is equally unrelated to every other token.'},
+    {question: 'What is the distributional hypothesis, and what role does it play in how embeddings end up encoding meaning?', answer: 'The distributional hypothesis, often summarized as "a word is characterized by the company it keeps," holds that tokens appearing in similar surrounding contexts across a large corpus tend to have related meanings. It is the theoretical basis for learning embeddings from co-occurrence statistics rather than from explicit, hand-written definitions of each word.'},
+    {question: 'Mechanically, what does an "embedding lookup" actually do, and why is it implemented as an index rather than a matrix multiplication?', answer: 'An embedding lookup maps a token ID to the corresponding row of the V x d embedding matrix E. While this is mathematically equivalent to multiplying E^T by the token\'s one-hot vector, real implementations perform a direct array index into E instead, since only one entry of the one-hot vector is ever nonzero, making the full matrix multiply unnecessary work.'},
+    {question: 'Why is cosine similarity typically used to compare embeddings instead of the raw dot product?', answer: 'A token\'s embedding vector norm tends to correlate with how frequently that token appeared during training, so the raw dot product conflates semantic similarity with shared frequency. Cosine similarity divides out both vectors\' norms, isolating direction, which is what actually carries meaning.'},
+    {question: 'What limitation of the static embeddings described in this chapter motivates the shift covered in chapter 3.2?', answer: 'A static embedding matrix assigns exactly one fixed vector per token regardless of the sentence it appears in, so a word like "bank" gets the same vector in "river bank" and "bank account" even though the meanings differ. Chapter 3.2 covers contextual embeddings, which produce a different vector for a token depending on its surrounding context.'},
+  ]}
+/>
