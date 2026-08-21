@@ -332,34 +332,50 @@
 </sc-if>
 
 <sc-if value="{{ isReader }}" hint-placeholder-val="{{ false }}">
-<div style="max-width:1140px;margin:0 auto;padding:28px 24px 80px">
-  <button onClick="{{ goCatalog }}" class="btn btn-ghost" style="font-size:12.5px;margin-bottom:16px">← Curriculum</button>
+<div style="max-width:1140px;margin:0 auto;padding:24px 24px 80px">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <button onClick="{{ goCatalog }}" class="btn btn-ghost" style="font-size:12.5px;padding:2px 6px">← Curriculum</button>
+      <span style="color:var(--color-neutral-700)">/</span>
+      <span style="font-size:12px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500)">{{ chap.crumb }}</span>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onClick="{{ chap.prev }}" class="btn btn-icon btn-secondary" aria-label="Previous chapter" title="{{ chap.prevLabel }}">‹</button>
+      <button onClick="{{ chap.next }}" class="btn btn-icon btn-secondary" aria-label="Next chapter" title="{{ chap.nextLabel }}">›</button>
+    </div>
+  </div>
   <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:start">
     <div>
-      <div style="font-size:12px;letter-spacing:0.09em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:10px">{{ chap.crumb }}</div>
-      <h1 style="font-size:34px;line-height:1.1;margin-bottom:12px;text-wrap:pretty">{{ chap.title }}</h1>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+      <h1 style="font-size:32px;line-height:1.12;margin-bottom:12px;text-wrap:pretty">{{ chap.title }}</h1>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:24px">
         <span class="tag tag-neutral">{{ chap.hoursLabel }}</span>
         <span class="tag tag-outline">{{ chap.levelLabel }}</span>
         <sc-for list="{{ chap.tags }}" as="t" hint-placeholder-count="1"><span class="tag tag-accent">{{ t }}</span></sc-for>
-        <sc-if value="{{ chap.hasPresentation }}" hint-placeholder-val="{{ false }}"><button onClick="{{ chap.downloadPresentation }}" class="tag tag-accent" style="cursor:pointer">↓ Download concepts presentation</button></sc-if>
+        <sc-if value="{{ chap.isLive }}" hint-placeholder-val="{{ false }}"><span class="tag tag-accent-2">● Live</span></sc-if>
+        <sc-if value="{{ chap.hasPresentation }}" hint-placeholder-val="{{ false }}"><button onClick="{{ chap.downloadPresentation }}" class="tag tag-accent" style="cursor:pointer;border:none">↓ Download concepts presentation</button></sc-if>
       </div>
-      <div class="card" style="padding:16px 18px;border-left:2px solid var(--color-accent-600);margin-bottom:22px">
-        <div style="font-weight:600;font-size:14px;margin-bottom:5px">{{ chap.statusTitle }}</div>
-        <div style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-300)">{{ chap.statusBody }}</div>
-      </div>
-      <sc-if value="{{ chap.isLive }}" hint-placeholder-val="{{ false }}">
-        <iframe src="{{ chap.contentUrl }}" title="{{ chap.title }}" style="display:block;width:100%;height:calc(100vh - 150px);min-height:900px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-bg)"></iframe>
-      </sc-if>
       <sc-if value="{{ chap.isShell }}" hint-placeholder-val="{{ true }}">
+        <div class="card" style="padding:16px 18px;border-left:2px solid var(--color-accent-600);margin-bottom:22px">
+          <div style="font-weight:600;font-size:14px;margin-bottom:5px">{{ chap.statusTitle }}</div>
+          <div style="font-size:13.5px;line-height:1.6;color:var(--color-neutral-300)">{{ chap.statusBody }}</div>
+        </div>
         <h2 style="font-size:21px;margin-bottom:8px">What this chapter covers</h2>
         <p style="font-size:15.5px;line-height:1.7;color:var(--color-neutral-300);margin:0 0 20px">{{ chap.summary }}</p>
         <h2 style="font-size:21px;margin-bottom:8px">Where it sits</h2>
         <p style="font-size:15.5px;line-height:1.7;color:var(--color-neutral-300);margin:0">{{ chap.placement }}</p>
       </sc-if>
-      <div style="display:flex;gap:8px;margin-top:24px;flex-wrap:wrap">
-        <button onClick="{{ chap.prev }}" class="btn btn-secondary" style="font-size:13px">{{ chap.prevLabel }}</button>
-        <button onClick="{{ chap.next }}" class="btn btn-secondary" style="font-size:13px">{{ chap.nextLabel }}</button>
+      <sc-if value="{{ chap.isLive }}" hint-placeholder-val="{{ false }}">
+        <iframe src="{{ chap.contentUrl }}" title="{{ chap.title }}" style="display:block;width:100%;height:calc(100vh - 150px);min-height:900px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-bg)"></iframe>
+      </sc-if>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:28px;padding-top:20px;border-top:1px solid var(--color-divider)">
+        <button onClick="{{ chap.prev }}" class="card" style="text-align:left;cursor:pointer;padding:14px 16px;display:flex;flex-direction:column;gap:4px" style-hover="box-shadow:var(--shadow-sm)">
+          <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Previous chapter</span>
+          <span style="font-size:14px;color:var(--color-text)">{{ chap.prevLabel }}</span>
+        </button>
+        <button onClick="{{ chap.next }}" class="card" style="text-align:right;cursor:pointer;padding:14px 16px;display:flex;flex-direction:column;gap:4px;align-items:flex-end" style-hover="box-shadow:var(--shadow-sm)">
+          <span style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500)">Next chapter</span>
+          <span style="font-size:14px;color:var(--color-text)">{{ chap.nextLabel }}</span>
+        </button>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:88px">
@@ -367,29 +383,31 @@
         <button onClick="{{ chap.toggle }}" class="{{ chap.btnClass }} btn-block">{{ chap.btnLabel }}</button>
         <button onClick="{{ chap.markDone }}" class="btn btn-ghost btn-block" style="margin-top:6px;font-size:12.5px">{{ chap.doneLabel }}</button>
       </div>
-      <div class="card" style="padding:18px">
-        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Roles that need this chapter</div>
-        <sc-for list="{{ chap.roles }}" as="r" hint-placeholder-count="3">
-          <button onClick="{{ r.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--color-divider);padding:9px 0;cursor:pointer;color:var(--color-text)" style-hover="color:var(--color-accent-300)">
-            <div style="font-size:14px;font-weight:500">{{ r.title }}</div>
-            <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ r.family }}</div>
-          </button>
-        </sc-for>
-        <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:8px">{{ chap.rolesEmpty }}</div>
-      </div>
-      <div class="card" style="padding:18px">
-        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Prerequisite phases</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          <sc-for list="{{ chap.prereqs }}" as="pq" hint-placeholder-count="2">
-            <button onClick="{{ pq.add }}" class="tag tag-outline" style="cursor:pointer">{{ pq.label }}</button>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--color-divider)">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Roles that need this chapter</div>
+          <sc-for list="{{ chap.roles }}" as="r" hint-placeholder-count="3">
+            <button onClick="{{ r.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--color-divider);padding:9px 0;cursor:pointer;color:var(--color-text)" style-hover="color:var(--color-accent-300)">
+              <div style="font-size:14px;font-weight:500">{{ r.title }}</div>
+              <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">{{ r.family }}</div>
+            </button>
+          </sc-for>
+          <div style="font-size:12.5px;color:var(--color-neutral-500);margin-top:8px">{{ chap.rolesEmpty }}</div>
+        </div>
+        <div style="padding:16px 18px;border-bottom:1px solid var(--color-divider)">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:8px">Prerequisite phases</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <sc-for list="{{ chap.prereqs }}" as="pq" hint-placeholder-count="2">
+              <button onClick="{{ pq.add }}" class="tag tag-outline" style="cursor:pointer">{{ pq.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:6px">Rest of this phase</div>
+          <sc-for list="{{ chap.siblings }}" as="s" hint-placeholder-count="5">
+            <button onClick="{{ s.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 0;cursor:pointer;color:var(--color-neutral-400);font-size:13.5px" style-hover="color:var(--color-accent-300)">{{ s.label }}</button>
           </sc-for>
         </div>
-      </div>
-      <div class="card" style="padding:18px">
-        <div style="font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-neutral-500);margin-bottom:6px">Rest of this phase</div>
-        <sc-for list="{{ chap.siblings }}" as="s" hint-placeholder-count="5">
-          <button onClick="{{ s.open }}" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 0;cursor:pointer;color:var(--color-neutral-400);font-size:13.5px" style-hover="color:var(--color-accent-300)">{{ s.label }}</button>
-        </sc-for>
       </div>
     </div>
   </div>
