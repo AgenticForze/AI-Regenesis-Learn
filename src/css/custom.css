@@ -173,7 +173,11 @@ html, body { background: #161826; }
 .menu, .table-of-contents, .pagination-nav__link, .alert { background: #232532; }
 .menu__link--active, .menu__link:hover { color: #d2cefd; background: rgba(145, 132, 217, 0.14); }
 .markdown h2 { border-bottom-color: var(--regai-hairline); }
-.markdown code { background: #292b31; border: 1px solid var(--regai-hairline); }
+/* Inline code only — fenced code blocks get their own background and text
+   color from the Prism theme (docusaurus.config.ts) and must not be
+   double-styled here, which was previously making code-block text
+   unreadable against the forced-dark page background. */
+.markdown :not(pre) > code { background: #292b31; border: 1px solid var(--regai-hairline); }
 
 /* Embedded lessons remove duplicate Docusaurus chrome while retaining the
  * real, fully rendered MDX lesson and all of its interactive components. */

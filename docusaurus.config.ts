@@ -121,7 +121,12 @@ const config: Config = {
       copyright: `© ${new Date().getFullYear()} RegAITraining. Built with Docusaurus. Content licensed CC BY-SA 4.0.`,
     },
     prism: {
-      theme: prismThemes.oneLight,
+      // The site's `--ifm-background-color` is forced dark for both
+      // `data-theme` values (see the "Unified LMS visual system" block in
+      // src/css/custom.css), so the code block theme must be too — oneLight
+      // pairs dark syntax-highlighted text with the site's dark page
+      // background and becomes unreadable.
+      theme: prismThemes.oneDark,
       darkTheme: prismThemes.oneDark,
       additionalLanguages: ['python', 'bash', 'json', 'yaml'],
     },
