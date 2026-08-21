@@ -1,0 +1,184 @@
+---
+title: "Evolution of LLMs: GPT / BERT / T5 Families, Compared"
+sidebar_label: "3.4 GPT, BERT, T5 Families Compared"
+sidebar_position: 4
+phase: 3
+chapter: "3.4"
+lms_presentation: "3.4-GPT-BERT-T5-Families-Slides.pptx"
+prerequisites: ["3.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.3 covered three language modeling objectives in the abstract. This chapter covers the
+actual model families each objective produced, and how each family evolved. **GPT** is a
+decoder-only architecture built on causal language modeling, evolving from GPT-1's proof that
+pretraining plus fine-tuning works for generation, through GPT-2 and GPT-3's discovery that scale
+alone unlocks zero-shot and few-shot task transfer, to GPT-4's multimodal, alignment-tuned form.
+**BERT** is an encoder-only architecture built on masked language modeling, evolving through RoBERTa
+(more data and compute, a dropped auxiliary objective), ALBERT (parameter-sharing for efficiency),
+and DeBERTa (a refined attention mechanism), all aimed at stronger fixed-input understanding rather
+than generation. **T5** and **BART** are encoder-decoder architectures built on seq2seq objectives,
+converging on the idea that every task, including classification, can be framed as generating text
+from text. The architecture a team picks is rarely a free choice, it is largely determined by which
+of these three families' pretraining objective matches the task.
+
+## High-Level Explanation
+
+Think of GPT, BERT, and T5 as three family trees, each rooted in one of chapter 3.3's three
+objectives, each growing over several years of research. The GPT family keeps only a decoder: no
+separate encoder module exists, so a GPT-style model reads a prompt and continues it, using the same
+causal, one-direction-only mechanism for understanding the prompt and generating the reply. The BERT
+family keeps only an encoder: it produces rich, bidirectional representations of a fixed input, but
+has no decoder and therefore no built-in mechanism to generate new text, only to output predictions
+(a class label, a span, a masked-token guess) through a task-specific head added on top. The T5 and
+BART family keeps both halves, an encoder that reads the full input and a decoder that generates a
+separate output, which is why this family fits transformation tasks (translate this, summarize this)
+most naturally.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-4-three-architectures-compared.svg').default}
+    alt="Three architecture diagrams side by side: GPT as a decoder-only stack that reads a prompt and continues it in one causal stream, BERT as an encoder-only stack that produces bidirectional representations feeding a separate task-specific head, and T5/BART as a full encoder-decoder pair connected by cross-attention."
+  />
+  <figcaption>Three families, three structural choices, each following directly from the objective in 3.3 that trained them.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The GPT family's progression, and what scale actually unlocked at each step.** GPT-1 (Radford et
+al., [*Improving Language Understanding by Generative Pre-Training*](https://openai.com/research/language-unsupervised),
+2018) demonstrated that a decoder-only Transformer pretrained with causal language modeling, then
+fine-tuned on a labeled task, beat prior task-specific architectures. GPT-2 (Radford et al.,
+[*Language Models are Unsupervised Multitask Learners*](https://openai.com/research/better-language-models),
+2019, 1.5B parameters) showed that a large enough causal LM could perform many tasks in a **zero-shot**
+setting, from a task description in the prompt alone, with no fine-tuning step at all. GPT-3 (Brown
+et al., [*Language Models are Few-Shot Learners*](https://arxiv.org/abs/2005.14165), 2020, 175B
+parameters) went further: providing a handful of input-output examples directly in the prompt
+(**in-context learning**, or few-shot prompting) let the model adapt to a new task's format without
+updating any weights at all, a capability that scaled model size made dramatically stronger without
+any change to the underlying causal LM objective. GPT-4 (OpenAI,
+[*GPT-4 Technical Report*](https://arxiv.org/abs/2303.08774), 2023) added multimodal input and
+large-scale reinforcement learning from human feedback (RLHF) for alignment, covered in Phase 7,
+without abandoning the decoder-only, causal-LM foundation. Chapter 3.6 covers why scale specifically
+produces new capabilities like this rather than just smoothly improving existing ones.
+
+**Why decoder-only models can be prompted directly, mechanically.** Because a GPT-style model has no
+separate encoder, the prompt and the generated continuation live in the exact same token sequence,
+processed by the exact same causal self-attention stack. When the model generates the first token of
+its answer, it is already attending back over every token of the prompt, the same mechanism it uses to
+attend over its own previously generated tokens. There is no architectural seam between "reading the
+prompt" and "writing the answer," which is precisely what makes in-context learning possible: the
+few-shot examples in the prompt are just more prior tokens the causal attention mechanism conditions
+on, with no separate training step required to make use of them.
+
+**The BERT family's progression: refining understanding, not adding generation.** RoBERTa (Liu et al.,
+[*RoBERTa: A Robustly Optimized BERT Pretraining Approach*](https://arxiv.org/abs/1907.11692), 2019)
+kept BERT's architecture and masked language modeling objective, but trained on roughly ten times more
+data for longer, dropped the next-sentence-prediction objective (3.3) after finding it unhelpful, and
+switched to dynamic masking (choosing which tokens to mask fresh each epoch rather than once during
+data preprocessing), improving downstream results without any architectural change. ALBERT (Lan et al.,
+[*ALBERT: A Lite BERT for Self-supervised Learning of Language Representations*](https://arxiv.org/abs/1909.11942),
+2019) instead changed the architecture for efficiency: it shares the same parameters across every
+Transformer layer (rather than each layer having its own independent weights) and factorizes the
+embedding matrix into two smaller matrices, substantially shrinking parameter count with a smaller
+accuracy cost than the size reduction would suggest. DeBERTa (He et al.,
+[*DeBERTa: Decoding-enhanced BERT with Disentangled Attention*](https://arxiv.org/abs/2006.03654),
+2020) changed the attention mechanism itself: **disentangled attention** represents each token with
+two separate vectors, one for content and one for relative position, and computes attention weights
+from both separately rather than from a single combined vector, which more precisely captures how
+much a word's relevance depends on its position relative to another word versus its content alone.
+
+**The T5/BART family: two different pretraining recipes converging on encoder-decoder.** T5's
+pretraining objective (3.3) is span corruption: contiguous spans of the input are replaced with a
+single sentinel token, and the decoder must generate just the missing spans, not reconstruct the whole
+input. BART (Lewis et al., [*BART: Denoising Sequence-to-Sequence Pre-training for Natural Language
+Generation, Translation, and Comprehension*](https://arxiv.org/abs/1910.13461), 2019) instead trains
+as a **denoising autoencoder**: it corrupts the input with a mix of noise functions (token masking,
+token deletion, text infilling, sentence permutation, document rotation) and the decoder must reconstruct the entire
+original, uncorrupted document, not just the missing pieces. Both use an encoder-decoder architecture,
+so both fit the same "read input fully, generate output" shape from 3.3, but BART's decoder generates
+whole documents during pretraining while T5's generates only short missing spans, a training-time
+difference each paper's own ablations connect to different downstream strengths (BART edges ahead on
+some pure generation and summarization benchmarks; T5's controlled, unified text-to-text framing made
+it a common basis for later multi-task and instruction-tuned models). mT5 (Xue et al.,
+[*mT5: A Massively Multilingual Pre-trained Text-to-Text Transformer*](https://arxiv.org/abs/2010.11934),
+2021) applies T5's identical architecture and objective to a corpus covering 101 languages, changing
+only the training data and the shared multilingual vocabulary, not the underlying mechanism.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['GPT family', 'BERT family', 'T5 / BART family']}
+  rows={[
+    {aspect: 'Architecture', values: ['Decoder-only', 'Encoder-only', 'Encoder-decoder'], decisive: true},
+    {aspect: 'Pretraining objective (3.3)', values: ['Causal LM', 'Masked LM', 'Seq2seq (span corruption / denoising)'], },
+    {aspect: 'Can generate open-ended text', values: ['Yes, natively', 'No: needs a task-specific head, no decoder', 'Yes, conditioned on an input'], decisive: true},
+    {aspect: 'Zero/few-shot prompting without fine-tuning', values: ['Yes, at sufficient scale (GPT-3+)', 'Not naturally: typically requires fine-tuning', 'Limited without task-specific fine-tuning'], },
+    {aspect: 'Representative evolution', values: ['GPT-1 to GPT-2 to GPT-3 to GPT-4', 'BERT to RoBERTa, ALBERT, DeBERTa', 'T5, BART, mT5'], },
+  ]}
+  caption="The architecture is largely inherited from the pretraining objective in 3.3; picking a family means picking which of those three objectives fits the task."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Matching a task to the right family's architecture"
+  mermaid={`
+flowchart TD
+  TASK[What does the task need?] --> GEN{Open-ended generation from a prompt?}
+  GEN -->|Yes| GPT[GPT family: decoder-only, causal LM]
+  GEN -->|No| UNDER{Fixed-input classification or extraction?}
+  UNDER -->|Yes| BERT[BERT family: encoder-only, masked LM]
+  UNDER -->|No| TRANSFORM["Input-to-output transformation (translate, summarize)?"]
+  TRANSFORM -->|Yes| T5FAM[T5 / BART family: encoder-decoder, seq2seq]
+`}
+  components={[
+    {name: 'GPT family', responsibility: 'Decoder-only, causal LM; the natural choice when the task is producing new, open-ended text from a prompt.'},
+    {name: 'BERT family', responsibility: 'Encoder-only, masked LM; the natural choice when the task is understanding a fixed piece of text well enough to classify or extract from it.'},
+    {name: 'T5 / BART family', responsibility: 'Encoder-decoder, seq2seq; the natural choice when the task transforms one full text into a different full text.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Few-shot classification of ad-hoc regulatory queries', problem: 'Compliance teams periodically need to classify a new, narrow category of query or request that does not justify building and maintaining a dedicated fine-tuning pipeline.', solution: 'A GPT-family model classifies via a handful of in-context examples in the prompt, with no fine-tuning infrastructure required.', risk: 'A prompted (not fine-tuned) model\'s classification behavior can shift when the underlying model version changes, which model-risk-management needs to treat as a distinct, ongoing validation surface rather than a one-time sign-off, since there is no fixed fine-tuned checkpoint to re-certify.'},
+    {title: 'High-volume transaction categorization', problem: 'Transaction categorization runs continuously at very high volume and needs stable, consistent behavior over long periods.', solution: 'A BERT-family model fine-tuned on labeled transaction examples provides the consistent, task-specific classification this volume justifies investing in.', risk: 'Any retraining triggered by a category-scheme change must pass through formal model-risk-management change control before deployment, since a silently updated fine-tuned classifier changing categorization behavior at this volume has direct regulatory-reporting consequences.'},
+    {title: 'Generating disclosure narrative from structured filing data', problem: 'Structured financial data (e.g. XBRL figures) needs to become readable narrative disclosure text for a regulatory filing.', solution: 'A T5-family model generates narrative text conditioned on the structured input via its encoder-decoder architecture.', risk: 'A generated narrative that misstates or rounds a figure inconsistently with the underlying structured data creates a direct disclosure-accuracy exposure that would need to be caught before regulatory filing, not after.'},
+    {title: 'Choosing a self-hosted versus API-based GPT-family model for compliance workloads', problem: 'A compliance workload involves sensitive financial data that may be subject to data-residency or third-party data-sharing restrictions.', solution: 'Weighing an open-weight, self-hosted GPT-family model against a closed, API-based one is a deliberate architectural and vendor decision, not just a capability choice.', risk: 'Sending sensitive financial data to a third-party API-based model can conflict with data-residency requirements or a regulator\'s expectations about where and how customer financial data is processed, a distinct vendor-risk and compliance exposure from model accuracy.'},
+  ]}
+  healthcare={[
+    {title: 'Few-shot summarization of triage notes for rapid deployment', problem: 'A new triage note summarization need arises faster than a fine-tuning pipeline and validation study could reasonably be built.', solution: 'A GPT-family model summarizes via in-context examples in the prompt, enabling fast deployment without a dedicated fine-tuning cycle.', risk: 'A prompted model\'s behavior is harder to bound and validate than a fine-tuned, version-locked classifier, which is a clinical-safety gap specifically when the summarization feeds any workflow influencing triage prioritization.'},
+    {title: 'Fine-tuned clinical entity extraction at scale', problem: 'Clinical entity extraction (medications, conditions, dosages) runs continuously across a large volume of notes and needs stable, well-characterized behavior.', solution: 'A BERT-family model fine-tuned on labeled clinical entity examples provides the consistent extraction this scale and stability requirement justifies.', risk: 'Retraining or re-versioning this extractor requires regulatory-clearance-relevant revalidation if the tool\'s cleared use depends on its extraction behavior remaining within previously validated bounds.'},
+    {title: 'Correcting OCR errors in scanned medical records', problem: 'Scanned historical medical records often contain OCR errors that need correcting before the text can be reliably indexed or searched.', solution: 'A BART-style denoising model reconstructs the likely original text from the corrupted OCR output.', risk: 'A "corrected" reconstruction that silently changes a clinical value, such as a dosage digit, rather than flagging it as uncertain, is a clinical-safety issue distinct from an ordinary OCR-accuracy problem, since it can introduce an error rather than merely fail to fix one.'},
+    {title: 'Selecting a multilingual model for non-English patient populations', problem: 'A patient population includes speakers of languages an English-centric model was not trained on or trained on only lightly.', solution: 'An mT5-style multilingual model, trained across many languages with the same seq2seq architecture, extends coverage to the served population\'s languages.', risk: 'A multilingual model that underperforms for a specific lower-resource language in the served population creates a patient-safety and language-access gap that is easy to miss if evaluation is only reported in aggregate across all languages.'},
+  ]}
+  telecom={[
+    {title: 'Zero-shot drafting of new technical documentation', problem: 'A newly launched product or feature needs technical support documentation drafted quickly, before a fine-tuning pipeline for that product\'s vocabulary could reasonably exist.', solution: 'A GPT-family model drafts documentation zero-shot or few-shot from a short product description and a few examples.', risk: 'An error in zero-shot-drafted documentation that reaches a support queue without review can lead a technician to a wrong resolution step during an active incident, extending the very outage the documentation was meant to help resolve.'},
+    {title: 'Fine-tuned network log and ticket triage classifier', problem: 'Ticket and log triage runs continuously at high volume across a large, stable vocabulary of network equipment and fault types.', solution: 'A BERT-family model fine-tuned on labeled tickets and logs provides consistent, high-throughput triage classification.', risk: 'A retraining cadence that lags behind newly deployed equipment or fault vocabulary leaves the classifier degraded for exactly the newest equipment, which is disproportionately likely to be involved in early-life network incidents.'},
+    {title: 'Generating narrative incident reports from structured NOC data', problem: 'Structured network-operations-center incident data needs to become a narrative report, sometimes for regulatory outage reporting obligations.', solution: 'A T5-family model generates narrative incident text conditioned on the structured timeline and fault data via its encoder-decoder architecture.', risk: 'A generated incident report that misstates the outage timeline creates a direct regulatory-reporting accuracy exposure, since outage reporting obligations are often timeline-specific.'},
+    {title: 'Choosing an open-weight versus API-based model for network telemetry', problem: 'Handling live network telemetry and customer data through a language model raises data-residency and network-security considerations distinct from general text processing.', solution: 'Weighing a self-hosted, open-weight model against a third-party API-based one is a deliberate network-security and architecture decision.', risk: 'Sending sensitive network telemetry to a third-party API introduces a distinct network-security exposure, since telemetry can reveal infrastructure topology and vulnerability details beyond what a generic data-privacy review would typically consider.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why can a decoder-only GPT-family model be prompted directly with in-context examples, while a BERT-family model cannot?', answer: 'A GPT-style model has no separate encoder; the prompt and the generated continuation live in the same token sequence processed by the same causal self-attention stack, so few-shot examples in the prompt are just more prior tokens the model conditions on, with no separate training step needed. A BERT-family model has no decoder at all, so it has no built-in mechanism to generate new text from a prompt; it can only output predictions through a task-specific head added on top.'},
+    {question: 'What specifically changed between BERT and RoBERTa, and what changed between BERT and ALBERT?', answer: 'RoBERTa kept BERT\'s architecture and masked language modeling objective, but trained on far more data for longer, dropped the next-sentence-prediction objective, and used dynamic masking, all training-recipe changes with no architectural change. ALBERT changed the architecture itself: it shares parameters across every Transformer layer and factorizes the embedding matrix into two smaller matrices, substantially reducing parameter count.'},
+    {question: 'What is the key difference between T5\'s and BART\'s pretraining objectives, even though both use an encoder-decoder architecture?', answer: 'T5 uses span corruption: contiguous spans are replaced with a sentinel token, and the decoder generates only the missing spans. BART trains as a denoising autoencoder: the input is corrupted with a mix of noise functions (masking, deletion, permutation, rotation), and the decoder must reconstruct the entire original document, not just the missing pieces.'},
+    {question: 'What did GPT-3 demonstrate that GPT-2 did not, and what stayed the same across both?', answer: 'GPT-3 demonstrated that providing a handful of input-output examples directly in the prompt (in-context learning, or few-shot prompting) let the model adapt to a new task\'s format without updating any weights, a capability that emerged much more strongly at GPT-3\'s scale. The underlying causal language modeling objective and decoder-only architecture stayed the same as GPT-2; only scale and its effects changed.'},
+    {question: 'Why does DeBERTa\'s disentangled attention represent a genuinely different mechanism from standard self-attention, rather than just a bigger model?', answer: 'Disentangled attention represents each token with two separate vectors, one for content and one for relative position, and computes attention weights from both separately rather than from a single combined vector. This lets the model capture how much a word\'s relevance to another depends on relative position versus content more precisely than a standard self-attention mechanism that combines both into one vector from the start.'},
+  ]}
+/>

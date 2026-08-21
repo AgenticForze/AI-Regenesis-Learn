@@ -19,10 +19,9 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [3.1 NLP Fundamentals: Tokenization, Embeddings, Vector Semantics](./3-1-nlp-fundamentals-tokenization-embeddings-vector-semantics.mdx)
 - [3.2 From Word2Vec to Contextual Embeddings (BERT-Era Shift)](./3-2-word2vec-to-contextual-embeddings-bert-era-shift.mdx)
 - [3.3 Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq](./3-3-language-modeling-objectives-causal-masked-seq2seq.mdx)
+- [3.4 Evolution of LLMs: GPT / BERT / T5 Families, Compared](./3-4-evolution-of-llms-gpt-bert-t5-families-compared.mdx)
 
 ## Planned chapters
-- 3.3 Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq
-- 3.4 Evolution of LLMs: GPT / BERT / T5 Families — Compared
 - 3.5 Tokenizers Deep Dive: BPE, WordPiece, SentencePiece
 - 3.6 Scaling Laws & Emergent Abilities
 - 3.7 The 2026 Model Landscape: Open vs. Closed, Size Classes, Choosing a Base Model
