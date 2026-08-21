@@ -117,6 +117,9 @@ chapters don't redefine these — they link back here.
 | **Embedding / Embedding matrix** | A dense, low-dimensional vector representation of a token (an embedding), retrieved by indexing into a learned V x d embedding matrix by token ID. Contrast with a one-hot vector, which uniquely identifies a token but encodes no relationship to any other token. See 3.1. |
 | **Distributional hypothesis** | The linguistic claim, associated with J.R. Firth (1957), that a word's meaning is characterized by the contexts it tends to occur in; the theoretical basis for learning embeddings from co-occurrence statistics rather than from explicit, hand-written definitions. See 3.1; operationalized into a concrete training objective by Word2Vec in 3.2. |
 | **Static embedding** | A word representation that assigns exactly one fixed vector per token regardless of the surrounding sentence, so the same token has an identical vector in every context it appears in. Contrast with a contextual embedding, covered in 3.2. See 3.1. |
+| **Word2Vec (skip-gram / CBOW)** | A method for training static word embeddings from raw text by predicting nearby context words from a center word (skip-gram) or predicting a center word from its averaged context (CBOW), turning the distributional hypothesis (3.1) into a trainable objective. See 3.2. |
+| **Negative sampling** | A training shortcut that replaces an expensive full-vocabulary softmax with binary classification of a true center/context word pair against a handful of randomly sampled negative words, making large-vocabulary embedding training computationally tractable. See 3.2. |
+| **Contextual embedding** | A token representation computed fresh for each occurrence from its surrounding sequence (via a bidirectional LSTM as in ELMo, or a bidirectional Transformer encoder as in BERT), rather than retrieved from a fixed per-token lookup table. Contrast with a static embedding. See 3.2. |
 
 ## Notation
 

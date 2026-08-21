@@ -1,0 +1,210 @@
+---
+title: "From Word2Vec to Contextual Embeddings (BERT-Era Shift)"
+sidebar_label: "3.2 Word2Vec to Contextual Embeddings"
+sidebar_position: 2
+phase: 3
+chapter: "3.2"
+lms_presentation: "3.2-Word2Vec-to-Contextual-Slides.pptx"
+prerequisites: ["3.1", "2.5"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.1 introduced the embedding matrix but left open how it is actually trained, and flagged its
+central limitation: one fixed vector per token regardless of context. **Word2Vec** (Mikolov et al.,
+2013) answered the training question first, turning the distributional hypothesis into a concrete,
+efficient prediction task, and became the default way to produce **static embeddings** for years.
+The context limitation remained until representations shifted from a fixed lookup table to a
+**function of the whole input sequence**: first ELMo's bidirectional LSTMs (2018), then, decisively,
+BERT's bidirectional Transformer encoder (2018-2019). A **contextual embedding** is not looked up, it is
+computed fresh for every occurrence of a token from its surrounding words, which is why "bank" gets
+different vectors in "river bank" and "bank account" once a model actually reads the sentence around
+it.
+
+## High-Level Explanation
+
+Word2Vec trains embeddings with a deliberately simple task: given a word in a large corpus, predict
+the words that tend to appear near it (or the reverse, predict a word from its neighbors). Getting
+good at this narrow prediction task forces the model to organize its embedding space so that
+words with similar neighbors end up with similar vectors, exactly the distributional hypothesis
+from 3.1, now turned into something a gradient descent optimizer can actually train against. No
+document ever needs to be labeled by hand; the "labels" are just other words already sitting next to
+each other in ordinary text.
+
+Static embeddings from Word2Vec (or the related GloVe) were a major advance over one-hot vectors,
+but they share a blind spot: once trained, a word's vector is fixed, looked up the same way every
+time that word appears. **Contextual embeddings** remove that constraint by not storing a per-word
+vector at all. Instead, a model reads an entire sentence and computes each token's representation
+based on every other token in it. The same written word can therefore land at different points in
+vector space depending on what surrounds it, which is exactly what "bank" needs.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-2-static-vs-contextual.svg').default}
+    alt="A diagram contrasting static embeddings, where the word bank always maps to the same fixed vector regardless of sentence, with contextual embeddings, where bank in river bank and bank in bank account map to two different vectors computed from each sentence's surrounding words."
+  />
+  <figcaption>Static embeddings look up one vector per word. Contextual embeddings compute a new vector per occurrence, from context.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Skip-gram, formally.** Word2Vec's most-cited variant, skip-gram, slides a window across a corpus
+and, for each center word w_t, tries to predict each nearby context word w_(t+j) within the window.
+The training objective maximizes the average log probability of the true context words appearing
+near each center word, over the whole corpus:
+
+```
+maximize (1/T) * sum over t of [ sum over context positions j of log P(w_(t+j) | w_t) ]
+```
+
+where P(w_(t+j) | w_t) is itself a softmax over the entire vocabulary using the center word's current
+embedding. CBOW (Continuous Bag of Words) is the mirror-image objective: average the context words'
+embeddings and predict the single center word from that average. Skip-gram tends to do better on
+rare words (each rare word gets its own dedicated prediction rather than being averaged into a
+context), while CBOW trains faster and does slightly better on frequent words; both were introduced
+in the same Mikolov et al. 2013 paper, [*Efficient Estimation of Word Representations in Vector
+Space*](https://arxiv.org/abs/1301.3781).
+
+**Negative sampling: making the softmax tractable.** A softmax over a 100,000-word vocabulary,
+recomputed for every training example, is expensive. Word2Vec's practical trick, **negative
+sampling**, reframes prediction as a much cheaper binary classification: for each true
+(center word, context word) pair, sample a handful of random "negative" words that did not actually
+appear in that context, and train the model to score the true pair higher than the sampled negatives,
+rather than normalizing over the full vocabulary every step (Mikolov et al.,
+[*Distributed Representations of Words and Phrases and their Compositionality*](https://arxiv.org/abs/1310.4546),
+NeurIPS, 2013). This is a genuinely different mechanism from 3.1's embedding lookup: it is what makes
+the lookup table's values converge to something meaningful in the first place. A separate line of
+analysis (Levy and Goldberg,
+[*Neural Word Embedding as Implicit Matrix Factorization*](https://proceedings.neurips.cc/paper/2014/hash/feab05aa91085b7a8012516bc3533958-Abstract.html),
+NeurIPS, 2014) showed that skip-gram with negative sampling is implicitly factorizing a matrix of
+pointwise mutual information (PMI) values shifted by a constant (log of the number of negative
+samples), connecting Word2Vec's predictive framing back
+to older, explicitly count-based methods like Latent Semantic Analysis.
+
+**Why a fixed vector cannot represent a context-dependent meaning, mechanically.** Skip-gram and CBOW
+both train exactly one row of the embedding matrix per vocabulary word; every occurrence of "bank" in
+the training corpus contributes gradient updates to the same row, so the row converges to something
+like a weighted average of all the contexts "bank" appeared in. There is no mechanism in this training
+setup that could produce two different vectors for the same word, the architecture only has one
+row to give it.
+
+**The architectural shift: representations as a function of the sequence.** ELMo (Peters et al.,
+[*Deep contextualized word representations*](https://arxiv.org/abs/1802.05365), 2018) broke this
+constraint first, running a bidirectional LSTM (2.4) over the whole sentence and using its
+hidden states, which depend on every word the LSTM has processed, as the token representations,
+combined across the LSTM's layers with learned weights. BERT (Devlin et al.,
+[*BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding*](https://arxiv.org/abs/1810.04805),
+2019) replaced the LSTM with a bidirectional Transformer encoder (2.5): every token attends to every
+other token in the sequence in both directions simultaneously (not sequentially, as an LSTM does),
+so each token's output representation is a learned function of the entire surrounding sentence in one
+pass. Chapter 3.3 covers BERT's specific masked language modeling training objective in depth; this
+chapter's point is architectural, a stack of self-attention layers computes a representation per
+token per occurrence, rather than retrieving one from a fixed table.
+
+**Layers specialize, empirically.** Probing studies on BERT's internal layers (Tenney, Das, and Pavlick,
+[*BERT Rediscovers the Classical NLP Pipeline*](https://arxiv.org/abs/1905.05950), ACL 2019) found
+that earlier Transformer layers tend to encode more syntactic information (part-of-speech, syntactic
+dependencies) while later layers encode more semantic and task-specific information. This is an
+empirical property of how the layers organize during training, not something explicitly designed
+into the architecture, and it is why practitioners often extract representations from a specific
+middle-to-late layer rather than only the final layer when using a pretrained model's contextual
+embeddings for a downstream task.
+
+```python
+# Illustrative: the same tokenizer input, "bank", produces one fixed row from a
+# static embedding table, versus a representation from a contextual encoder that
+# depends on the full sequence. This shows the *shape* of the difference, not a
+# runnable BERT forward pass (which chapter 3.4 covers architecturally in full).
+static_embedding_table = {"bank": [0.12, -0.44, 0.81]}  # one row, used every time
+
+def static_lookup(word):
+    return static_embedding_table[word]  # identical for every occurrence
+
+def contextual_lookup(sentence_tokens, target_index, encoder):
+    # `encoder` is a stand-in for a bidirectional Transformer encoder (2.5):
+    # it consumes the WHOLE token sequence and returns one vector per position,
+    # each depending on every other token in `sentence_tokens`.
+    all_vectors = encoder(sentence_tokens)
+    return all_vectors[target_index]  # varies by sentence, even for the same word
+
+print(static_lookup("bank"))  # identical for "river bank" and "bank account"
+# contextual_lookup(["river", "bank"], 1, encoder) would differ from
+# contextual_lookup(["bank", "account"], 0, encoder), because the surrounding
+# tokens passed into `encoder` are different in each call.
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Word2Vec (skip-gram/CBOW)', 'GloVe', 'ELMo', 'BERT-style Contextual']}
+  rows={[
+    {aspect: 'Static or contextual', values: ['Static', 'Static', 'Contextual', 'Contextual'], decisive: true},
+    {aspect: 'Training signal', values: ['Local context window prediction', 'Global co-occurrence matrix factorization', 'Bidirectional LSTM language modeling', 'Masked language modeling (3.3)'], },
+    {aspect: 'Handles polysemy (e.g. "bank")', values: ['No: one vector per word', 'No: one vector per word', 'Yes: vector depends on sentence', 'Yes: vector depends on sentence'], decisive: true},
+    {aspect: 'Architecture', values: ['Shallow projection + softmax/negative sampling', 'Log-bilinear model over a co-occurrence matrix', 'Bidirectional LSTM (2.4)', 'Bidirectional Transformer encoder (2.5)'], },
+    {aspect: 'Typical role today', values: ['Lightweight baseline, small deployments', 'Lightweight baseline', 'Largely superseded by Transformer encoders', 'Default for embeddings in modern NLP systems'], },
+  ]}
+  caption="Word2Vec and GloVe answered how to train an embedding from raw text; ELMo and BERT answered a different question, how to make that embedding depend on context, which is the shift this chapter covers."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Computing a contextual embedding for one token"
+  mermaid={`
+flowchart LR
+  SEQ[Full token sequence] --> ENC[Bidirectional encoder: LSTM (ELMo) or Transformer (BERT)]
+  ENC --> L1[Lower layers: more syntactic]
+  L1 --> L2[Higher layers: more semantic]
+  L2 --> VEC["Per-token contextual vector (varies by occurrence)"]
+`}
+  components={[
+    {name: 'Full token sequence', responsibility: 'The entire sentence (or longer span) is available to the encoder at once, unlike a static lookup which only ever sees one token at a time.'},
+    {name: 'Bidirectional encoder', responsibility: 'Computes a representation for every position using information from both earlier and later tokens in the sequence; ELMo does this with stacked LSTMs, BERT with stacked self-attention layers.'},
+    {name: 'Layer stack', responsibility: 'Successive layers tend to specialize, empirically, from more syntactic information in earlier layers to more semantic information in later ones.'},
+    {name: 'Per-token contextual vector', responsibility: 'The output representation for one token at one position, computed fresh for that occurrence rather than retrieved from a fixed table.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Disambiguating "interest" in contract clause classification', problem: 'Contract review needs to classify clauses referencing "interest," which can mean a financial rate, an ownership stake, or a party\'s legal interest, each triggering different downstream handling.', solution: 'Contextual embeddings represent each occurrence of "interest" according to its surrounding clause language, letting a classifier distinguish the senses that a static, one-vector-per-word representation would conflate.', risk: 'A clause misclassified because its sense of "interest" was conflated with another carries model-risk-management exposure, since the misclassification can propagate into how a contractual obligation is tracked and reported, not just a labeling error.'},
+    {title: 'Negation-aware sentiment scoring of earnings call transcripts', problem: 'Analysts need sentiment scores that correctly handle negation and hedging ("not expecting growth to slow" versus "expecting growth to slow"), which a bag-of-words or static-embedding sentiment model handles poorly.', solution: 'A contextual encoder represents each word\'s contribution to sentiment conditioned on the surrounding negation and hedging language in the same sentence.', risk: 'A sentiment score that misreads negation and feeds an automated trading or research signal needs a documented, auditable trail showing why the signal moved, since a flipped sentiment read on a single transcript can produce a mis-attributed position.'},
+    {title: 'AML name-variant matching against sanctions and watch lists', problem: 'Screening needs to match name variants and aliases appearing in different contexts (a person\'s name inside a shipping manifest versus inside a wire transfer memo) without over- or under-matching.', solution: 'Contextual embeddings of the surrounding document text help disambiguate whether a name match is the same real-world entity, using context the name string alone does not carry.', risk: 'A missed match against a sanctioned entity due to a context-disambiguation failure is a distinct AML compliance exposure with its own regulatory reporting obligations, not a generic search-quality issue.'},
+    {title: 'Distinguishing clause-type senses of "assignment" in filings', problem: 'Regulatory filing preparation needs to correctly identify whether "assignment" in a document refers to a contract-transfer clause or an unrelated task assignment, to route it to the correct review step.', solution: 'A contextual embedding of the sentence around "assignment" separates these senses far more reliably than a single static vector for the word.', risk: 'Routing a contract-transfer clause to the wrong review path creates a documented gap in a regulatory filing\'s clause-level review record, a compliance-process risk distinct from simple misclassification cost.'},
+  ]}
+  healthcare={[
+    {title: 'Disambiguating "discharge" in clinical notes', problem: 'Clinical notes use "discharge" for both a patient\'s release from care and a wound\'s physical discharge, and downstream alerting needs to tell these apart.', solution: 'A contextual embedding of the surrounding clinical sentence distinguishes the two senses in a way a single static vector for "discharge" cannot.', risk: 'A wound-discharge mention misread as a patient-discharge event (or vice versa) in an automated clinical alerting pipeline is a direct clinical-safety failure mode, since it can suppress or misdirect a needed clinical follow-up.'},
+    {title: 'Negation detection in radiology report findings', problem: 'A report stating "no evidence of fracture" must not be treated the same as one stating "fracture present" by any downstream coding or alerting system.', solution: 'Contextual embeddings represent the finding term conditioned on the negation phrase in the same sentence, rather than scoring the term in isolation.', risk: 'A negation-detection failure that reads a negated finding as positive can drive an incorrect diagnosis code onto the claim, creating a billing-accuracy and coding-audit problem on top of whatever clinical follow-up the false finding also triggers.'},
+    {title: 'Disambiguating overloaded clinical abbreviations (e.g. "MS")', problem: 'Clinical text reuses short abbreviations like "MS" for multiple sclerosis, mitral stenosis, or other unrelated meanings, and the wrong expansion changes clinical interpretation entirely.', solution: 'A contextual embedding of the surrounding clinical narrative disambiguates which expansion applies far better than a static, single-vector representation of the abbreviation.', risk: 'A misresolved abbreviation feeding a clinical decision support tool can point clinicians toward the wrong condition entirely, a patient-safety failure that a regulatory-clearance review of the tool would need to specifically test for.'},
+    {title: 'Urgency triage of patient portal messages', problem: 'Patients describe urgent symptoms in highly context-dependent phrasing that a keyword or static-embedding classifier often misses ("it came back" meaning a recurrence versus a routine follow-up comment).', solution: 'Contextual embeddings capture the message\'s full phrasing and prior sentence context when scoring urgency, rather than scoring individual words independently.', risk: 'A message that should have triggered an urgent clinical response but was scored routine is a direct patient-safety failure specific to triage systems, distinct from a general classification-accuracy metric.'},
+  ]}
+  telecom={[
+    {title: 'Disambiguating "cell" in mixed technical and customer ticket text', problem: 'Network operations text uses "cell" for a network cell tower, while customer-facing tickets may use unrelated senses of the same word, and a shared NLP pipeline needs to route each correctly.', solution: 'A contextual embedding of the surrounding ticket language distinguishes the network-infrastructure sense from other senses, unlike a static, single-vector "cell" representation.', risk: 'A ticket about a genuine cell-tower issue misrouted because of a sense confusion delays a network-capacity problem from reaching the team that can act on it, directly risking an SLA breach on that segment.'},
+    {title: 'Sentiment scoring in support chat during outage-driven contact spikes', problem: 'Customers use sarcasm and context-dependent phrasing ("great, another outage") that a bag-of-words or static-embedding sentiment model reads as positive.', solution: 'Contextual embeddings score sentiment using the full surrounding conversation, capturing sarcasm and context that a single-word-vector approach misses.', risk: 'A misread sentiment signal during an active outage can suppress escalation of a high-churn-risk customer at exactly the moment call volumes and churn exposure are already elevated.'},
+    {title: 'Scoping "outage" in incident tickets (device-level vs. network-wide)', problem: 'Ticket text using the word "outage" can describe a single device fault or a network-wide event, and the incident-management workflow needs to route each to a very different escalation tier.', solution: 'Contextual embeddings of the surrounding ticket description distinguish device-scoped from network-wide outage language more reliably than a static vector for "outage" alone.', risk: 'A network-wide event misclassified as device-level pulls on-call engineering staff and spare network capacity toward a single-device fix, leaving the actual network-wide fault under-resourced until someone manually re-scopes the incident.'},
+    {title: 'Contextual disambiguation of borrowed technical terms in multilingual support', problem: 'Non-English support queues often mix borrowed English technical terms into local-language text, and a tokenizer or embedding tuned mainly on one language can misread these terms\' local-context meaning.', solution: 'Contextual embeddings trained or fine-tuned on the mixed-language support corpus disambiguate borrowed terms using their actual local-language surrounding context.', risk: 'A misrouted non-English ticket during a high-volume period risks breaching that market\'s SLA specifically, since queue prioritization in a high-volume window has less slack to absorb a misrouting error than an off-peak period would.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What problem does Word2Vec\'s skip-gram objective train the model to solve, and how does that force meaningful embeddings to emerge?', answer: 'Skip-gram trains the model to predict nearby context words given a center word, using the center word\'s embedding in a softmax over the vocabulary. Getting good at this narrow prediction task requires organizing the embedding space so that words with similar neighbors end up with similar vectors, operationalizing the distributional hypothesis from 3.1 as something gradient descent can optimize.'},
+    {question: 'Why does Word2Vec use negative sampling instead of a full softmax over the vocabulary during training?', answer: 'A full softmax over a large vocabulary is expensive to recompute for every training example. Negative sampling reframes the task as binary classification: score the true (center, context) pair higher than a handful of randomly sampled negative words, which is far cheaper than normalizing over the entire vocabulary at every step.'},
+    {question: 'Mechanically, why can a static embedding never produce two different vectors for the same word in two different sentences?', answer: 'Static embedding training (skip-gram or CBOW) updates exactly one row of the embedding matrix per vocabulary word, and every occurrence of that word during training contributes to the same row. There is no mechanism in this setup for two occurrences of the same word to end up with different vectors, since the architecture only stores one row per word.'},
+    {question: 'What is the key architectural difference that lets BERT-style models produce contextual embeddings, compared to a static embedding lookup?', answer: 'Instead of retrieving a fixed vector from a lookup table, a contextual encoder (a bidirectional Transformer for BERT, a bidirectional LSTM for ELMo) computes each token\'s representation as a function of the entire surrounding sequence, processed together in one pass. The same word therefore gets a different output vector depending on the tokens around it in each specific occurrence.'},
+    {question: 'What did probing studies find about how information is organized across a BERT model\'s layers?', answer: 'Probing studies found that earlier Transformer layers tend to encode more syntactic information, while later layers encode more semantic and task-specific information, an empirical property of how the layers organize during training rather than something explicitly designed into the architecture. This is why practitioners sometimes extract a specific middle-to-late layer\'s representations rather than only the final layer for a downstream task.'},
+  ]}
+/>
