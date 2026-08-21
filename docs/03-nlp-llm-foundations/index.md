@@ -18,6 +18,7 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 
 - [3.1 NLP Fundamentals: Tokenization, Embeddings, Vector Semantics](./3-1-nlp-fundamentals-tokenization-embeddings-vector-semantics.mdx)
 - [3.2 From Word2Vec to Contextual Embeddings (BERT-Era Shift)](./3-2-word2vec-to-contextual-embeddings-bert-era-shift.mdx)
+- [3.3 Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq](./3-3-language-modeling-objectives-causal-masked-seq2seq.mdx)
 
 ## Planned chapters
 - 3.3 Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq

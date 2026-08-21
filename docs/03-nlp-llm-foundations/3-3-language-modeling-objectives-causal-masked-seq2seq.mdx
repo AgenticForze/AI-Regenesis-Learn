@@ -1,0 +1,191 @@
+---
+title: "Language Modeling Objectives: Causal LM vs. Masked LM vs. Seq2Seq"
+sidebar_label: "3.3 Language Modeling Objectives"
+sidebar_position: 3
+phase: 3
+chapter: "3.3"
+lms_presentation: "3.3-Language-Modeling-Objectives-Slides.pptx"
+prerequisites: ["3.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.2 established that BERT-style models compute contextual representations from a whole
+sequence, but did not say exactly what task they are trained to perform while doing it. There are
+three dominant **language modeling objectives**, and the choice between them is the single biggest
+factor in what a model ends up naturally good at. **Causal (autoregressive) language modeling**
+predicts each next token from only the tokens before it, which is what makes open-ended text
+generation possible. **Masked language modeling** hides random tokens and predicts them from full
+bidirectional context, which produces strong representations for understanding tasks but no natural
+way to generate new text. **Sequence-to-sequence (seq2seq)** modeling reads one full sequence with a
+bidirectional encoder and generates a separate output sequence with a causal decoder, which is the
+natural fit for transformation tasks like translation and summarization. Chapter 3.4 covers the model
+families (GPT, BERT, T5) built around exactly these three objectives.
+
+## High-Level Explanation
+
+Picture the sentence "the customer's account was overdrawn." A **causal** model reads left to right
+and, at each position, is only allowed to see what came before it: given "the customer's account was,"
+it predicts "overdrawn" next, the way autocomplete predicts the next word as you type. A **masked**
+model instead sees the whole sentence at once, except a few words have been blanked out ("the
+customer's [MASK] was overdrawn"), and it fills in the blank using context from both sides,
+similar to a cloze test. A **seq2seq** model does something different again: it reads an entire input
+sequence (say, a sentence in English) and then generates a full, separate output sequence (a French
+translation), one token at a time, while also being allowed to look back at the input it already fully
+read.
+
+These are not just three flavors of the same idea. They lead to models with genuinely different
+natural strengths: causal models are the natural choice for open-ended generation, masked models are
+the natural choice for classification and extraction tasks that need a rich understanding of a fixed
+piece of text, and seq2seq models are the natural choice for input-to-output transformation tasks.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-3-three-objectives-compared.svg').default}
+    alt="Three side-by-side panels showing what each language modeling objective can see when making a prediction: causal language modeling sees only prior tokens and predicts the next one, masked language modeling sees the full sentence with some tokens hidden and predicts those hidden tokens, and sequence-to-sequence modeling has a bidirectional encoder read a full input sequence while a causal decoder generates a separate output sequence one token at a time."
+  />
+  <figcaption>Three objectives, three different views of the sequence at prediction time.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Causal language modeling, formally.** The objective maximizes the log-likelihood of each token
+given every token before it: sum over t of log P(x_t | x_1, ..., x_(t-1)). Mechanically, this is
+enforced with the **causal mask** from chapter 2.5: at position t, the self-attention computation
+sets the attention score to negative infinity for every position after t, before the softmax, so no
+information from future tokens can leak into the current prediction. At inference time this objective
+has a direct consequence: generation is inherently sequential. A causal model produces one token,
+appends it to the input, and repeats, since it has no other mechanism for producing text; there is no
+way to "generate the whole sentence at once."
+
+**Masked language modeling, formally, and BERT's specific recipe.** BERT's pretraining objective
+randomly selects about 15% of input token positions and trains the model to predict the original
+token at each selected position from the full bidirectional context. The specific replacement recipe
+matters and is easy to gloss over: of the selected positions, 80% are replaced with a literal
+`[MASK]` token, 10% are replaced with a random other token from the vocabulary, and 10% are left
+unchanged. This mixture exists to reduce a mismatch between pretraining and downstream fine-tuning:
+the `[MASK]` token never appears in real fine-tuning input, so always masking 100% of selected
+positions would train the model to rely on a token it will never see again after pretraining; mixing
+in random and unchanged tokens forces the model to keep building a genuine contextual representation
+for every position, not only the ones it can detect are masked. BERT's original paper also trained a
+second, auxiliary objective, next sentence prediction (predicting whether two given text spans were
+truly adjacent in the source corpus), which later work (Liu et al.,
+[*RoBERTa: A Robustly Optimized BERT Pretraining Approach*](https://arxiv.org/abs/1907.11692), 2019)
+found contributed little and dropped, keeping masked language modeling alone as the pretraining
+objective. A masked LM has no natural generation mechanism: it predicts a fixed, already-chosen set
+of positions in a fixed-length input, not an open-ended continuation.
+
+**Seq2seq, formally: two attention mechanisms doing different jobs.** A seq2seq model pairs a
+bidirectional encoder (structurally similar to BERT's encoder, attending both directions over the
+full input) with a causal decoder (structurally similar to a causal LM's decoder, attending only to
+prior output tokens via a causal mask). The decoder adds a second attention mechanism beyond the
+self-attention chapter 2.5 already covered: **cross-attention**, where each decoder position's query
+vectors attend over the encoder's output states as keys and values, rather than over other decoder
+positions. This is the specific mechanism that lets the decoder condition each generated token on the
+entire input sequence the encoder already processed. Training uses **teacher forcing**: at each
+decoder step during training, the ground-truth previous output token is fed in as input, regardless of
+what the model itself would have predicted, which makes training parallelizable across positions but
+creates **exposure bias**, a mismatch where the model never practices recovering from its own mistakes
+during training, since at inference time it must feed back its own (possibly wrong) prior predictions
+instead of the ground truth. T5 (Raffel et al.,
+[*Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer*](https://arxiv.org/abs/1910.10683),
+2020) demonstrated that this seq2seq architecture, combined with a span-corruption pretraining
+objective (masking contiguous spans rather than individual tokens, and having the decoder generate
+just the missing spans), can be cast as a single unified format, "text-to-text," where every task,
+classification included, is reframed as generating a text output from a text input.
+
+**Evaluating a language model: perplexity.** Causal and masked language models are typically compared
+using **perplexity**, defined as the exponential of the average per-token cross-entropy loss over a
+held-out set: perplexity = exp( -(1/N) * sum of log P(x_t | context) ). Lower perplexity means the
+model assigned higher probability to the actual held-out tokens, on average; perplexity is
+interpretable as the model's effective average branching factor, roughly "how many equally likely
+next tokens did the model act as if there were," at each position.
+
+```python
+# Illustrative: perplexity from per-token cross-entropy loss (not a real model,
+# just the arithmetic relationship described above).
+import math
+
+per_token_losses = [0.8, 1.2, 0.5, 2.1, 0.9]  # cross-entropy loss at each token
+avg_loss = sum(per_token_losses) / len(per_token_losses)
+perplexity = math.exp(avg_loss)
+print(f"average loss: {avg_loss:.3f}, perplexity: {perplexity:.3f}")
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Causal LM', 'Masked LM', 'Seq2Seq']}
+  rows={[
+    {aspect: 'Context visible when predicting', values: ['Only prior tokens (causal mask)', 'Full sequence, bidirectional', 'Encoder: full input. Decoder: prior outputs + full input via cross-attention'], decisive: true},
+    {aspect: 'Natural task fit', values: ['Open-ended generation', 'Classification, extraction, understanding', 'Input-to-output transformation (translation, summarization)'], decisive: true},
+    {aspect: 'Can generate open-ended new text', values: ['Yes, natively', 'No: predicts a fixed set of masked positions', 'Yes, conditioned on an input sequence'], },
+    {aspect: 'Canonical example', values: ['GPT family', 'BERT family', 'T5, BART'], },
+    {aspect: 'Standard evaluation metric', values: ['Perplexity', 'Masked-token accuracy / perplexity', 'Task metric (e.g. BLEU, ROUGE) plus perplexity'], },
+  ]}
+  caption="Chapter 3.4 covers the specific model families (GPT, BERT, T5) built around these three objectives, compared architecturally."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A seq2seq model: bidirectional encoder, causal decoder, cross-attention between them"
+  mermaid={`
+flowchart LR
+  IN[Input sequence] --> ENC[Bidirectional encoder]
+  ENC --> ENCOUT[Encoder output states]
+  ENCOUT --> CROSS[Cross-attention: decoder queries attend over encoder keys/values]
+  PREV["Prior output tokens (teacher-forced in training)"] --> DEC[Causal decoder]
+  DEC --> CROSS
+  CROSS --> DEC
+  DEC --> OUT[Next output token]
+`}
+  components={[
+    {name: 'Bidirectional encoder', responsibility: 'Reads the entire input sequence at once, both directions, the same way a masked LM encoder does (3.2).'},
+    {name: 'Cross-attention', responsibility: 'Lets each decoder position attend over the encoder\'s full output, conditioning generation on the input rather than only on prior output tokens.'},
+    {name: 'Causal decoder', responsibility: 'Generates the output sequence one token at a time, attending only to prior output tokens via the causal mask (2.5), the same mechanism a causal LM uses.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Summarizing lengthy credit agreements', problem: 'Credit officers need a faithful, shortened summary of long credit agreements without missing obligations buried in dense legal language.', solution: 'A seq2seq model trained for summarization generates a condensed version conditioned on the full agreement text via its encoder.', risk: 'A generated summary that omits or softens an obligation clause needs to clear model-risk-management validation on summarization fidelity before it can inform any credit decision, since a dropped clause changes the deal\'s actual risk profile.'},
+    {title: 'Drafting Suspicious Activity Report narratives', problem: 'Compliance analysts need to draft SAR narratives quickly from transaction detail without spending disproportionate time on prose.', solution: 'A causal language model drafts a narrative from structured transaction detail as a starting point for analyst review and edit.', risk: 'A hallucinated transactional detail that an analyst fails to catch before filing becomes a factual inaccuracy in a regulatory filing, a distinct audit and regulatory-accuracy exposure beyond an ordinary drafting error.'},
+    {title: 'Clause-type classification for filing routing', problem: 'Incoming filings and contract documents need clauses classified by type to route them to the correct downstream regulatory review process.', solution: 'A masked-language-model-pretrained classifier, fine-tuned on labeled clause examples, categorizes clauses using its bidirectional contextual understanding.', risk: 'A misclassified clause routed to the wrong regulatory review path creates a gap in the filing\'s documented review trail that a model validation team must be able to trace back to the specific classification decision.'},
+    {title: 'Translating cross-border compliance documents', problem: 'Filings and disclosures crossing jurisdictions need translation that preserves precise regulatory and legal terminology, not just general meaning.', solution: 'A seq2seq translation model conditions its generated output on the full source document via its encoder, rather than translating sentence fragments independently.', risk: 'A mistranslated regulatory term can alter the legal meaning of a cross-border filing, an audit-trail and cross-jurisdictional compliance exposure distinct from an ordinary translation-quality problem.'},
+  ]}
+  healthcare={[
+    {title: 'Clinical note drafting assistance', problem: 'Clinicians spend significant time writing structured clinical notes during and after patient encounters.', solution: 'A causal language model drafts note text from a clinician\'s shorthand or dictation, for the clinician to review and finalize.', risk: 'A hallucinated clinical detail accepted into the final note without correction becomes part of the permanent patient record, a clinical-safety and record-accuracy issue distinct from an ordinary drafting error.'},
+    {title: 'Protected health information span detection', problem: 'Text must be scanned for protected health information spans (names, dates, identifiers) before it can be used in any downstream search or research pipeline.', solution: 'A masked-language-model-pretrained token classifier, fine-tuned for PHI span detection, uses bidirectional context to identify identifying spans.', risk: 'A PHI span type the classifier was not trained to recognize (an uncommon identifier format) passing through undetected is a direct HIPAA exposure, not merely a recall metric shortfall.'},
+    {title: 'Generating narrative radiology reports from structured findings', problem: 'Structured imaging findings need to become a fluent narrative report a referring physician can read quickly.', solution: 'A seq2seq model generates report prose conditioned on the structured findings via its encoder, rather than using a fixed template.', risk: 'Generated report text that does not faithfully reflect an underlying finding is a clinical-safety issue, and a tool generating clinical report language may itself need regulatory-clearance review distinct from the underlying imaging model\'s clearance.'},
+    {title: 'Translating patient discharge instructions', problem: 'Discharge instructions, including medication dosing, need to be available in a patient\'s preferred language without losing precise dosage and timing information.', solution: 'A seq2seq translation model conditions the generated translation on the full instruction text via its encoder, preserving numeric and timing details in context.', risk: 'A mistranslated medication dose or timing instruction is a direct patient-safety risk specific to discharge instructions, distinct from a general translation-quality concern in less safety-critical patient communications.'},
+  ]}
+  telecom={[
+    {title: 'Drafting network diagnostic troubleshooting steps', problem: 'Field and NOC engineers need quick draft troubleshooting steps for a described symptom, rather than searching a runbook manually under time pressure.', solution: 'A causal language model drafts candidate troubleshooting steps from the described symptom, for an engineer to verify before acting.', risk: 'A hallucinated remediation step followed during a live incident without verification can extend or worsen an outage, directly working against the SLA clock already running against that incident.'},
+    {title: 'Urgency and category tagging of support tickets', problem: 'Incoming tickets need to be tagged by urgency and category at high volume to route them to the right team quickly.', solution: 'A masked-language-model-pretrained classifier, fine-tuned on labeled tickets, tags urgency and category using bidirectional context from the full ticket text.', risk: 'A misclassified high-urgency ticket during a high-volume period (a regional event, an active outage) delays triage precisely when queue prioritization has the least slack to absorb the delay.'},
+    {title: 'Summarizing customer service call transcripts for QA review', problem: 'Quality-assurance review of lengthy call transcripts needs an accurate summary of what was discussed and committed to, without reviewers listening to every full call.', solution: 'A seq2seq model generates a summary conditioned on the full transcript via its encoder, capturing commitments made during the call.', risk: 'A summary that drops a promised service credit or restoration-time commitment made during an outage call can surface later as an SLA dispute with no record of the commitment ever having been made, since the summary is what QA and billing systems treat as the call\'s record of truth.'},
+    {title: 'Translating technical documentation for field technicians', problem: 'Field technicians in non-English-speaking regions need accurate translated technical repair documentation, not just approximate meaning.', solution: 'A seq2seq translation model conditions its output on the full source documentation via its encoder, preserving technical specificity across the translation.', risk: 'A mistranslated technical instruction followed during a field repair can cause an incorrect repair action that extends the very outage the technician was dispatched to resolve.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does a causal language model see when predicting a token, and what mechanism enforces this?', answer: 'A causal language model sees only the tokens before the position being predicted. This is enforced by the causal mask (2.5), which sets the self-attention score to negative infinity for every later position before the softmax, so no information from future tokens can influence the current prediction.'},
+    {question: 'What is BERT\'s specific masked-token replacement recipe, and why is it a mixture rather than always using the [MASK] token?', answer: 'BERT selects about 15% of positions, then replaces 80% of them with the literal [MASK] token, 10% with a random other token, and leaves 10% unchanged. This mixture exists because [MASK] never appears during downstream fine-tuning; always masking 100% of selected positions would train the model to rely on a token it will never see again, so the mixture forces it to keep building genuine contextual representations at every position.'},
+    {question: 'What is cross-attention in a seq2seq decoder, and how does it differ from the self-attention already covered in chapter 2.5?', answer: 'Cross-attention has each decoder position\'s query vectors attend over the encoder\'s output states as keys and values, rather than over other decoder positions as in self-attention. This is the specific mechanism that lets the decoder condition each generated output token on the entire input sequence the encoder already read.'},
+    {question: 'What is exposure bias, and why does teacher forcing during training create it?', answer: 'Teacher forcing feeds the ground-truth previous output token into the decoder at each training step, regardless of what the model itself would have predicted. Exposure bias is the resulting mismatch: the model never practices recovering from its own mistakes during training, but at inference time it must feed back its own, possibly incorrect, prior predictions instead of the ground truth.'},
+    {question: 'Why can a masked language model not generate open-ended new text the way a causal language model can?', answer: 'A masked language model predicts a fixed, already-chosen set of masked positions within a fixed-length input it can see in full; it has no mechanism for producing a variable-length continuation one token at a time the way a causal model\'s next-token prediction naturally does.'},
+  ]}
+/>
