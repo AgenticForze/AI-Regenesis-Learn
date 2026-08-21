@@ -22,8 +22,8 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [2.4 Sequence Models Before Transformers: RNN, LSTM, GRU](./2-4-sequence-models-rnn-lstm-gru.mdx)
 - [2.5 The Transformer Architecture: A Deep Dive](./2-5-transformer-architecture.mdx)
 - [2.6 Transfer Learning & the Pretrain-Then-Adapt Paradigm](./2-6-transfer-learning-pretrain-then-adapt.mdx)
+- [2.7 Deep Learning Frameworks Compared: PyTorch, TensorFlow, and JAX](./2-7-deep-learning-frameworks-compared.mdx)
 
 ## Planned chapters
 
-- 2.7 Deep Learning Frameworks Compared (PyTorch vs. TensorFlow vs. JAX)
 - 2.8 Hardware for AI: GPUs, TPUs, Training vs. Inference Compute Economics

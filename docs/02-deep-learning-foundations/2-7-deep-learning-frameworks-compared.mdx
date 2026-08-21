@@ -1,0 +1,210 @@
+---
+title: "Deep Learning Frameworks Compared: PyTorch, TensorFlow, and JAX"
+sidebar_label: "2.7 Deep Learning Frameworks Compared"
+sidebar_position: 7
+phase: 2
+chapter: "2.7"
+lms_presentation: "2.7-Deep-Learning-Frameworks-Slides.pptx"
+prerequisites: ["2.2", "2.6"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every network described so far in this phase, from a two-layer MLP (2.1) to a full Transformer
+(2.5), needs to actually be implemented, trained on real hardware, and have its gradients computed
+correctly for backpropagation (2.2) to work. A **deep learning framework** provides three things
+that make this practical: **automatic differentiation** (computing exact gradients of arbitrary
+differentiable code without hand-deriving them), GPU-accelerated tensor operations, and pre-built
+layers and optimizers. The three dominant frameworks take different design approaches. **PyTorch**
+runs eagerly, executing operations immediately in ordinary Python, which makes it easy to debug and
+has made it the default in research. **TensorFlow** now also runs eagerly by default but retains
+strong tooling for compiling models into optimized graphs and deploying them to servers, mobile,
+and browsers. **JAX** takes a functional approach, offering composable transformations, most
+notably automatic differentiation and just-in-time compilation, that can be combined in ways the
+other two do not support as directly. All three exist to do the same underlying job: mechanize the
+chain rule so nobody has to re-derive backpropagation by hand for every new architecture.
+
+## High-Level Explanation
+
+Chapter 2.2 derived backpropagation by hand for a small MLP: computing each weight's gradient by
+applying the chain rule layer by layer, backward from the loss. A real network, especially one as
+large as a modern CNN (2.3) or Transformer (2.5), makes this manual approach impractical. **Automatic
+differentiation** (autodiff) solves this generically: as the framework runs the forward pass, it
+records every operation performed on the input tensors, building up a record of exactly how the
+output depends on each input. Running that record backward, applying the chain rule at each
+recorded step, computes the gradient of the loss with respect to every parameter automatically, no
+matter how deep or unusual the network's structure is. This is not an approximation of
+backpropagation, it is a direct, mechanized implementation of the same chain rule from chapter 2.2,
+generalized to arbitrary differentiable code rather than a fixed sequence of layers.
+
+Every framework built on autodiff supports roughly the same training loop: define a model as a
+collection of parameters and operations, run a forward pass to get a prediction, compute a loss,
+run a backward pass (autodiff computes every gradient), and take an optimizer step (2.2's gradient
+descent, momentum, or Adam) to update the parameters. What differs between PyTorch, TensorFlow, and
+JAX is how directly Python code maps onto this loop, and how much of it can be compiled and
+optimized before it runs.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/2-7-autodiff-loop.svg').default}
+    alt="A diagram showing the shared training loop across deep learning frameworks: a forward pass through model parameters producing a prediction, a loss computed against the target, a backward pass where automatic differentiation computes the gradient of the loss with respect to every parameter, and an optimizer step that updates the parameters using those gradients, feeding back into the next forward pass."
+  />
+  <figcaption>All three frameworks implement the same loop; they differ in execution model, not in the underlying math.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Reverse-mode automatic differentiation, formally.** As the forward pass executes, the framework
+builds a computation graph (dynamically, operation by operation, in PyTorch and JAX's tracing;
+statically compiled ahead of time when using TensorFlow's @tf.function or classic graph mode) where
+each node is an operation and each edge carries a tensor. Every operation also registers its local
+derivative rule (for example, the local derivative of a multiplication node with respect to each of
+its two inputs). Reverse-mode autodiff then walks this graph backward from the loss, at each node
+computing a vector-Jacobian product, the chain rule step that combines the gradient flowing in from
+later in the graph with that node's local derivative, and accumulates the result at every parameter
+that fed into the computation. This is exactly the layer-by-layer backward pass chapter 2.2 walked
+through by hand, generalized to any graph shape, not only a stack of dense layers.
+
+**PyTorch** builds its computation graph dynamically: each time the forward pass runs, PyTorch's
+autograd engine records the actual sequence of tensor operations Python executed, including any
+data-dependent control flow (an `if` statement or a `for` loop whose length depends on the input,
+useful for variable-length sequences like 2.4's RNNs). Calling `.backward()` on the final loss
+tensor walks that freshly recorded graph backward. Because the graph is rebuilt every forward pass
+using ordinary Python execution, standard debugging tools and print statements work as expected,
+which is a major reason PyTorch became the default choice in research (Paszke, Gross, Massa, Lerer,
+Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, Desmaison, Kopf, Yang, DeVito, Raison, Tejani,
+Chilamkurthy, Steiner, Fang, Bai, and Chintala,
+[*PyTorch: An Imperative Style, High-Performance Deep Learning Library*](https://arxiv.org/abs/1912.01703),
+NeurIPS, 2019).
+
+**TensorFlow** originally required defining a static computation graph up front and running it
+inside a separate session, a design that enabled aggressive optimization and easy deployment but
+made debugging harder, since the code that built the graph did not execute the same way as ordinary
+Python. TensorFlow 2 changed the default to eager execution, matching PyTorch's immediate-execution
+style, while keeping the option to trace a Python function into an optimized, compiled graph with
+the `@tf.function` decorator when performance matters more than step-by-step debuggability.
+TensorFlow's deployment ecosystem, TensorFlow Serving for server inference, TensorFlow Lite for
+mobile and embedded devices, and TensorFlow.js for browsers, remains a distinguishing strength built
+up over its graph-based history (Abadi, Barham, Chen, Chen, Davis, Dean, Devin, Ghemawat, Irving,
+Isard, Kudlur, Levenberg, Monga, Moore, Murray, Steiner, Tucker, Vasudevan, Warden, Wicke, Yu, and
+Zheng,
+[*TensorFlow: A System for Large-Scale Machine Learning*](https://www.usenix.org/conference/osdi16/technical-sessions/presentation/abadi),
+OSDI, 2016).
+
+**JAX** takes a functional programming approach: functions are pure (no hidden internal state; the
+same inputs always produce the same outputs) and arrays are immutable. On top of this, JAX exposes
+a small set of composable function transformations that can be layered on top of each other: `grad`
+computes the gradient of a function, `jit` compiles a function ahead of time using XLA (a
+linear-algebra compiler shared with TensorFlow) for substantial speedups, `vmap` automatically
+rewrites a function written for a single example into one that runs efficiently on a batch, and
+`pmap` distributes a computation across multiple devices. Because these transformations compose
+(`jit(grad(loss_fn))` compiles the gradient computation itself, for example), JAX is popular for
+research that needs custom training procedures beyond a standard forward-loss-backward-step loop
+(Frostig, Johnson, and Leary,
+[*Compiling Machine Learning Programs via High-Level Tracing*](https://cs.stanford.edu/~rfrostig/pubs/jax-mlsys2018.pdf),
+SysML, 2018). Unlike PyTorch and TensorFlow, JAX itself has no built-in notion of a layer or a
+model object; libraries built on top of JAX (such as Flax) add that structure.
+
+**Eager versus graph execution, practically.** Eager execution (PyTorch's default, and TensorFlow
+2's default) runs each operation immediately as ordinary Python, which makes debugging as simple as
+using a debugger or print statements, at some cost to raw execution speed since the framework
+cannot see the whole computation ahead of time to optimize it. Graph or compiled execution (classic
+TensorFlow, `@tf.function`, and JAX's `jit`) instead traces or compiles the computation before
+running it, allowing operations to be fused and scheduled efficiently, at the cost of a compilation
+step and a debugging experience one step removed from ordinary Python. Most production training
+pipelines in every framework end up compiling the hot training loop once debugging is done, using
+eager or interpreted execution mainly during development.
+
+```python
+# Illustrative PyTorch: the same chain-rule computation chapter 2.2 derived by hand,
+# now computed automatically by calling .backward() instead of deriving each gradient.
+import torch
+
+x = torch.tensor([1.0, 2.0], requires_grad=False)
+w = torch.tensor([0.5, -0.3], requires_grad=True)   # a parameter autodiff will track
+b = torch.tensor(0.1, requires_grad=True)
+
+y_pred = torch.tanh((x * w).sum() + b)   # forward pass: same activation as chapter 2.1
+target = torch.tensor(1.0)
+loss = (y_pred - target) ** 2            # forward pass continues: squared error loss
+
+loss.backward()   # autodiff walks the recorded graph backward, applying the chain rule
+print(w.grad, b.grad)   # gradients autodiff computed, with no manual chain-rule derivation
+```
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['PyTorch', 'TensorFlow', 'JAX']}
+  rows={[
+    {aspect: 'Default execution model', values: ['Eager (dynamic graph each forward pass)', 'Eager by default; @tf.function compiles a graph', 'Functional; jit compiles ahead of time'], decisive: true},
+    {aspect: 'Debugging experience', values: ['Ordinary Python, easy to step through', 'Easy in eager mode; harder inside a compiled graph', 'Easy outside jit; harder once jit-compiled'], },
+    {aspect: 'Built-in layers/model objects', values: ['Yes: nn.Module', 'Yes: Keras', 'No: provided by libraries built on JAX (e.g. Flax)'], },
+    {aspect: 'Primary strength', values: ['Research iteration speed and debuggability', 'Production deployment tooling (Serving, Lite, .js)', 'Composable transformations for custom, large-scale training'], },
+  ]}
+  caption="All three mechanize the same chain rule from chapter 2.2; the differences are in execution model, ecosystem, and how much structure the framework itself provides versus leaves to add-on libraries."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The training loop every framework implements"
+  mermaid={`
+flowchart LR
+  PARAMS[Model parameters] --> FWD[Forward pass: model(input)]
+  FWD --> PRED[Prediction]
+  PRED --> LOSS[Loss: compare prediction to target]
+  LOSS --> BACK[Backward pass: automatic differentiation computes every gradient]
+  BACK --> OPT[Optimizer step: SGD, momentum, or Adam (2.2) updates parameters]
+  OPT --> PARAMS
+`}
+  components={[
+    {name: 'Forward pass', responsibility: 'Runs the model on a batch of inputs, recording (or, in JAX/graph mode, having already compiled) the computation for later differentiation.'},
+    {name: 'Loss', responsibility: 'Compares the prediction to the target, producing a single scalar the backward pass differentiates.'},
+    {name: 'Backward pass (autodiff)', responsibility: 'Applies the chain rule automatically across the recorded computation, producing a gradient for every parameter.'},
+    {name: 'Optimizer step', responsibility: 'Uses the gradients to update parameters via an optimization rule from chapter 2.2 (SGD, momentum, Adam).'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Research prototyping for new risk models', problem: 'Quantitative researchers need to iterate quickly on novel model architectures before committing to a production build.', solution: 'PyTorch\'s eager execution and easy debugging make it a common choice for fast research iteration on new risk and pricing model architectures.', risk: 'A model prototyped for research speed still needs to clear formal model-risk-management validation and sign-off before any production use, a step research code rarely anticipates.'},
+    {title: 'Low-latency production inference serving', problem: 'A fraud-scoring model needs to serve predictions within a strict latency budget at high transaction volume.', solution: 'TensorFlow Serving or a compiled JAX/PyTorch graph provides optimized, low-latency inference for the production scoring path.', risk: 'A compiled graph optimized for one input shape or batch size can silently underperform if production traffic patterns shift.'},
+    {title: 'Large-scale distributed training for market models', problem: 'Training a large model on years of market data requires distributing computation across many accelerators.', solution: 'JAX\'s pmap or a framework\'s native distributed training utilities parallelize training across multiple devices.', risk: 'A regulated model needs its training run reproducible for audit purposes; distributed synchronization can make two runs on the same data produce subtly different weights, complicating that audit trail.'},
+    {title: 'On-device model inference for mobile banking', problem: 'Certain fraud or personalization checks need to run directly on a customer\'s mobile device rather than a server round trip.', solution: 'TensorFlow Lite compiles a trained model for efficient on-device inference within a mobile banking app.', risk: 'Compressing a fraud model for on-device deployment can lower its recall on rare, high-value transaction fraud specifically, exactly the pattern the check exists to catch.'},
+  ]}
+  healthcare={[
+    {title: 'Research prototyping for clinical models', problem: 'Researchers need to rapidly test new model architectures against clinical datasets before validation studies begin.', solution: 'PyTorch\'s debuggability and large ecosystem of published research code make it a common choice for clinical model research.', risk: 'Research-stage code often lacks the validation and reproducibility controls needed before any clinical use.'},
+    {title: 'Production deployment of imaging models', problem: 'A validated diagnostic imaging model needs to run reliably in a hospital\'s clinical infrastructure.', solution: 'TensorFlow Serving or an equivalent production-serving stack deploys the validated model with consistent, monitored inference.', risk: 'Any framework version or dependency change after validation requires re-verification that behavior has not shifted.'},
+    {title: 'Federated model training across institutions', problem: 'Multiple hospitals want to jointly improve a model without centralizing sensitive patient data.', solution: 'Framework-level support for distributed and federated training coordinates model updates across institutions without sharing raw data.', risk: 'Coordinating training across institutions with different data distributions can produce a model that underperforms for any single institution\'s population.'},
+    {title: 'On-device inference for wearable health monitors', problem: 'A wearable device needs to run inference locally without a continuous connection to a server.', solution: 'A framework\'s mobile/embedded deployment path compiles a lightweight model version for on-device inference.', risk: 'Compressing a model for embedded deployment can reduce sensitivity to rare but clinically important patterns.'},
+  ]}
+  telecom={[
+    {title: 'Research prototyping for network models', problem: 'Network engineering teams need to quickly test new anomaly-detection or forecasting model architectures.', solution: 'PyTorch\'s fast iteration cycle supports rapid experimentation with new network telemetry model architectures.', risk: 'A model that performs well in offline research experiments can behave differently against live, evolving network traffic.'},
+    {title: 'Large-scale distributed training on network telemetry', problem: 'Training on the full volume of network telemetry data requires distributing computation across many machines.', solution: 'JAX or a framework\'s native distributed training tools scale training across a multi-device cluster.', risk: 'Distributed training at scale increases the operational complexity of reproducing and debugging a specific training run.'},
+    {title: 'Real-time inference for network operations', problem: 'Network anomaly detection needs to run inference in near real time against high-volume streaming telemetry.', solution: 'A compiled, optimized graph (via @tf.function or JAX\'s jit) provides the low-latency inference the streaming pipeline needs.', risk: 'Compiled graphs are less flexible to update quickly, creating a tradeoff between inference speed and how fast a model can be revised.'},
+    {title: 'On-device inference for network edge equipment', problem: 'Some network equipment needs to run inference locally without depending on a connection back to a central system.', solution: 'A framework\'s embedded/edge deployment tooling compiles a model to run directly on network edge hardware.', risk: 'Edge hardware constraints can force a smaller, less accurate model version than what runs centrally.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What problem does automatic differentiation solve, and how does it relate to the backpropagation chapter 2.2 introduced?', answer: 'Automatic differentiation mechanizes the chain rule so gradients for arbitrary differentiable code can be computed without hand-deriving them for every new architecture. It is a direct, generalized implementation of the same backpropagation chapter 2.2 walked through by hand for a small MLP, extended to work over any computation graph shape rather than a fixed sequence of layers.'},
+    {question: 'What is the key difference between PyTorch\'s and classic TensorFlow\'s approach to building a computation graph?', answer: 'PyTorch builds its computation graph dynamically: each forward pass records the actual sequence of operations Python executes, including data-dependent control flow. Classic TensorFlow required defining a static computation graph up front and running it in a separate session, which enabled aggressive optimization and deployment but made step-by-step debugging harder.'},
+    {question: 'What does it mean that JAX\'s function transformations compose, and why does this matter?', answer: 'JAX transformations like grad, jit, vmap, and pmap can be layered on top of each other, for example compiling the gradient computation itself with jit(grad(loss_fn)). This matters because it lets researchers build custom training procedures beyond a standard forward-loss-backward-step loop without needing framework-specific escape hatches.'},
+    {question: 'What is the practical tradeoff between eager execution and graph/compiled execution?', answer: 'Eager execution runs each operation immediately as ordinary Python, making debugging straightforward at some cost to raw speed, since the framework cannot see the whole computation ahead of time to optimize it. Graph or compiled execution traces or compiles the computation before running it, allowing operations to be fused and scheduled efficiently, at the cost of a compilation step and a debugging experience one step removed from ordinary Python.'},
+    {question: 'Why might a team choose TensorFlow over PyTorch or JAX for a specific project, given all three implement the same underlying training loop?', answer: 'TensorFlow\'s deployment ecosystem, including TensorFlow Serving for servers, TensorFlow Lite for mobile and embedded devices, and TensorFlow.js for browsers, is a distinguishing strength built up over its graph-based history. A team prioritizing a well-supported path to production deployment across many target environments might choose TensorFlow even though PyTorch or JAX could implement the same model.'},
+  ]}
+/>

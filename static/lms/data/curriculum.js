@@ -246,13 +246,17 @@ export const PHASES = [
    },
    {
     "id": "2.7",
-    "title": "Deep Learning Frameworks Compared (PyTorch vs. TensorFlow vs. JAX)",
+    "title": "Deep Learning Frameworks Compared: PyTorch, TensorFlow, and JAX",
     "tags": [],
-    "hours": 3
+    "hours": 3,
+    "url": "../docs/deep-learning-foundations/2-7-deep-learning-frameworks-compared",
+    "summary": "Every network described so far in this phase, from a two-layer MLP (2.1) to a full Transformer (2.5), needs to actually be implemented, trained on real hardware, and have its gradients computed correctly for backpropagation (2.2) to work. A **deep learning framework** provides three things that make this practical: **automatic differentiation** (computing exact gradients of arbitrary differentiable code without hand-deriving them), GPU-accelerated tensor operations, and pre-built layers and optimizers. The three dominant frameworks take different design approaches. **PyTorch** runs eagerly, executing operations immediately in ordinary Python, which makes it easy to debug and has made it the default in research. **TensorFlow** now also runs eagerly by default but retains strong tooling for compiling models into optimized graphs and deploying them to servers, mobile, and browsers. **JAX** takes a functional approach, offering composable transformations, most notably automatic differentiation and just-in-time compilation, that can be combined in ways the other two do not support as directly. All three exist to do the same underlying job: mechanize the chain rule so nobody has to re-derive backpropagation by hand for every new architecture.",
+    "published": true,
+    "presentationUrl": "../slides/2.7-Deep-Learning-Frameworks-Slides.pptx"
    },
    {
     "id": "2.8",
-    "title": "Hardware for AI: GPUs, TPUs, Training vs. Inference Compute Economics",
+    "title": "Hardware for AI: GPUs, TPUs, and Training vs. Inference Compute Economics",
     "tags": [],
     "hours": 3
    }
