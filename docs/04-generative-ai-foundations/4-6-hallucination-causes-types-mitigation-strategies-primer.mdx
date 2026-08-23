@@ -1,0 +1,209 @@
+---
+title: "Hallucination: Causes, Types, and Mitigation Strategies (Primer)"
+sidebar_label: "4.6 Hallucination (Primer)"
+sidebar_position: 6
+phase: 4
+chapter: "4.6"
+lms_presentation: "4.6-Hallucination-Primer-Slides.pptx"
+prerequisites: ["3.3", "4.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+**Hallucination** is an LLM generating content that is false or unsupported, stated with the same
+fluent confidence as accurate output. Ji et al. split it into **intrinsic hallucination** (the output
+directly contradicts a given source) and **extrinsic hallucination** (the output cannot be verified
+from the source at all, whether or not it happens to be true). Hallucination is not simply a bug to
+be patched away: Kalai and Vempala show that even a well-calibrated model trained on entirely accurate
+data must hallucinate at some baseline rate on facts that appeared rarely in training, and a 2025
+OpenAI paper argues hallucination persists in deployed systems partly because standard evaluation
+scores a wrong, confident answer no worse than an honest "I don't know," rewarding guessing over
+calibrated abstention. Exposure bias from training (3.3) and randomness from sampling-based decoding
+(4.3) further compound the base rate. Detection methods like SelfCheckGPT and semantic entropy catch
+likely hallucinations after the fact by sampling multiple outputs; mitigation techniques like
+Chain-of-Verification and retrieval-augmented generation, previewed here and covered fully in Phase 6,
+intervene earlier, at generation time or by grounding the model in external evidence.
+
+## High-Level Explanation
+
+Picture a multiple-choice exam scored the ordinary way: one point for a correct answer, zero for a
+wrong one, and zero for leaving a question blank. A student who is unsure of an answer is still better
+off guessing than leaving it blank, since a guess sometimes pays off and a blank never does, even
+though the guess is really just confident-sounding uncertainty. An LLM trained and evaluated under a
+similar scoring pattern faces the same incentive: producing a specific, fluent, plausible-sounding
+answer scores better on average than expressing uncertainty or declining to answer, even when the
+model's actual grasp of the fact in question is closer to a guess than to genuine knowledge. Nothing
+in the model's output signals which case it is: a confidently stated but hallucinated fact sounds
+exactly like a confidently stated and correct one.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-6-confident-guesser-incentive.svg').default}
+    alt="A diagram showing a scoring scheme where a correct answer scores one point, a wrong answer scores zero, and a blank also scores zero, illustrating why guessing confidently is statistically favored over abstaining."
+  />
+  <figcaption>When a wrong, confident answer costs no more than an honest "I don't know," confident guessing is the statistically favored strategy, for a model as much as for a student.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Defining hallucination, and its two-way split.** Ji et al.
+([*Survey of Hallucination in Natural Language Generation*](https://arxiv.org/abs/2202.03629),
+2022/2023) define hallucination as generated content that is nonsensical or unfaithful to an intended
+source, and split it into two kinds. **Intrinsic hallucination** directly contradicts the source
+content provided, for example a summary that states a policy took effect in 2021 when the source
+document says 2019. **Extrinsic hallucination** is content that the source can neither confirm nor
+deny, information the model added that may or may not be true but simply is not present in, or
+derivable from, what it was given. Both count as hallucination even though only intrinsic
+hallucination is directly checkable against the source text in front of the model.
+
+**Hallucination has a statistical floor, not just a training-quality problem.** Kalai and Vempala
+([*Calibrated Language Models Must Hallucinate*](https://arxiv.org/abs/2311.14648), 2023, STOC 2024)
+prove a lower bound: even a model trained on entirely accurate data and perfectly calibrated to that
+data's statistics must still hallucinate at some baseline rate on facts that appeared only once or a
+handful of times in training, roughly tied to how many such singleton facts exist. This result applies
+most strongly to arbitrary, rare facts with no learnable pattern behind them, such as a specific
+person's exact birthdate, and applies far less to systematic knowledge like arithmetic, where the
+underlying structure is learnable rather than memorized fact by fact. The practical implication is
+that some hallucination on long-tail facts is not a defect that better training data alone eliminates;
+it is close to a mathematical floor for that class of fact.
+
+**Why hallucination persists in deployed systems: an evaluation-incentive problem.** A 2025 paper from
+Kalai, Nachum, Vempala, and Zhang
+([*Why Language Models Hallucinate*](https://arxiv.org/abs/2509.04664), 2025) extends the exam analogy
+from the High-Level section into a direct argument: standard benchmark scoring is binary, right or
+wrong, and treats a wrong confident answer identically to an honest expression of uncertainty, scoring
+both as zero. Under that incentive, a model optimized to perform well on such benchmarks is statistically
+pushed toward guessing confidently rather than abstaining, the same way a test-taker is pushed toward
+guessing on a multiple-choice question with no penalty for a wrong answer. The paper's proposed fix is
+not another hallucination-specific benchmark, but changing how existing benchmarks are scored, so that
+calibrated abstention is rewarded rather than penalized as harshly as a confident wrong answer.
+
+**Compounding factors: exposure bias, sampling, and the long tail.** Several mechanics already covered
+in this curriculum add to the baseline rate above. Teacher forcing during training creates exposure
+bias (3.3), a mismatch where the model never practices recovering from its own earlier mistakes, since
+training always feeds it the correct prior token regardless of what it would have generated itself.
+Sampling-based decoding strategies (4.3) such as temperature scaling and nucleus sampling deliberately
+introduce randomness to avoid repetitive output, which also means an unlucky sample can occasionally
+drift toward a less-supported continuation, particularly at higher temperature. And Kandpal et al.
+([*Large Language Models Struggle to Learn Long-Tail Knowledge*](https://arxiv.org/abs/2211.08411),
+2023) show that factual accuracy correlates strongly with how often a fact appeared in pretraining
+data, meaning hallucination risk is not evenly distributed: it concentrates on rare entities and
+niche facts specifically, not on well-represented, frequently repeated ones.
+
+**Detecting likely hallucination without a ground-truth source.** Two black-box techniques catch
+likely hallucination by exploiting a single insight: sample the same prompt multiple times and check
+whether the answers agree. SelfCheckGPT (Manakul, Liusie, and Gales,
+[*SelfCheckGPT: Zero-Resource Black-Box Hallucination Detection for Generative Large Language
+Models*](https://arxiv.org/abs/2303.08896), 2023) generates several independent responses to the same
+prompt and checks their mutual consistency, on the reasoning that a model drawing on a genuinely known
+fact tends to reproduce it consistently across samples, while a hallucinated detail is more likely to
+vary from sample to sample, since there is no real fact anchoring it. Semantic entropy (Farquhar et
+al., [*Detecting hallucinations in large language models using semantic entropy*](https://www.nature.com/articles/s41586-024-07421-0),
+Nature, 2024) refines this by clustering sampled outputs according to whether they mean the same
+thing, not whether they are worded the same way, and then measuring entropy over those meaning-based
+clusters rather than over raw token sequences; high semantic entropy, many meaningfully different
+answers to the same question, flags likely confabulation. Neither method requires access to model
+internals or an external knowledge base, only the ability to sample the model repeatedly.
+
+**Mitigating hallucination: verification and grounding.** Chain-of-Verification (Dhuliawala et al.,
+[*Chain-of-Verification Reduces Hallucination in Large Language Models*](https://arxiv.org/abs/2309.11495),
+2023) has the model draft an initial answer, independently generate verification questions targeting
+specific claims within that draft, answer those verification questions on their own without reference
+to the original draft's framing, and then revise the original answer based on any inconsistencies the
+verification step surfaces. This catches errors the model can identify when prompted to check its own
+claims individually, even though it produced those same claims fluently the first time. Retrieval-augmented
+generation (Lewis et al.,
+[*Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*](https://arxiv.org/abs/2005.11401),
+2020), previewed here and covered fully in Phase 6, takes a different approach: rather than relying
+solely on facts memorized during training, a retriever fetches relevant external documents at
+inference time and the model conditions its generation on them, shrinking the gap between what the
+model must recall from memory and what it can read directly from a grounded source.
+
+**No single technique eliminates hallucination.** The statistical floor from Kalai and Vempala means
+some baseline rate on rare, singleton facts is unlikely to reach zero regardless of technique.
+Detection methods like SelfCheckGPT and semantic entropy flag likely hallucination after generation
+but do not prevent it. Chain-of-Verification catches some errors the model can self-identify when
+prompted correctly, but is not exhaustive. Retrieval reduces reliance on memorized facts for content
+the retriever actually surfaces, but does not help for reasoning or synthesis the retrieved documents
+do not directly answer. In practice, a production system combines several of these techniques rather
+than treating any single one as sufficient on its own.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['SelfCheckGPT', 'Semantic entropy', 'Chain-of-Verification', 'Retrieval-augmented generation']}
+  rows={[
+    {aspect: 'What it does', values: ['Samples multiple responses and checks mutual consistency', 'Clusters sampled responses by meaning and measures entropy over clusters', 'Drafts an answer, independently verifies its own claims, then revises', 'Grounds generation in retrieved external documents at inference time'], decisive: true},
+    {aspect: 'When it intervenes', values: ['After generation, as a post-hoc check', 'After generation, as a post-hoc check', 'During generation, before the final answer is returned', 'Before and during generation, by supplying source material'], decisive: true},
+    {aspect: 'Needs model internals or a knowledge base?', values: ['No, black-box sampling only', 'No, black-box sampling only', 'No, uses the model\'s own further generations', 'Yes, an external retrieval index'] },
+    {aspect: 'Main limitation', values: ['Flags likely hallucination but does not prevent or fix it', 'Flags likely hallucination but does not prevent or fix it', 'Only catches errors the model can self-identify when prompted', 'Only helps for content the retriever actually surfaces'] },
+  ]}
+  caption="Detection methods (SelfCheckGPT, semantic entropy) flag likely hallucination after the fact; Chain-of-Verification and retrieval intervene earlier, and are commonly combined with a detection pass rather than used alone."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing a hallucination detection or mitigation approach"
+  mermaid={`
+flowchart TD
+  PROBLEM[Hallucination risk in an LLM application] --> SOURCE{Is there an external source the answer should be grounded in?}
+  SOURCE -->|Yes| RAG[Use retrieval-augmented generation, Phase 6]
+  SOURCE -->|No external source available| SELFCHECK{Can the application afford multiple sampled generations?}
+  SELFCHECK -->|Yes| DETECT[Apply SelfCheckGPT or semantic entropy to flag likely hallucination]
+  SELFCHECK -->|No, single generation only| COVE[Apply Chain-of-Verification before returning the answer]
+  PROBLEM --> RARE{Does the answer depend on a rare, long-tail fact?}
+  RARE -->|Yes| FLOOR[Expect a nonzero baseline hallucination rate regardless of technique]
+  PROBLEM --> EVAL{Does the evaluation or scoring setup penalize abstention as harshly as a wrong answer?}
+  EVAL -->|Yes| RESCORE[Revise scoring to reward calibrated abstention instead of guessing]
+`}
+  components={[
+    {name: 'Retrieval-augmented generation (Phase 6)', responsibility: 'Grounds generation in retrieved external evidence when a source exists.'},
+    {name: 'SelfCheckGPT / semantic entropy', responsibility: 'Flags likely hallucination after generation by sampling multiple responses.'},
+    {name: 'Chain-of-Verification', responsibility: 'Has the model verify its own draft claims before returning a final answer.'},
+    {name: 'Scoring revision', responsibility: 'Removes the incentive to guess confidently rather than abstain, at the evaluation layer.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Detecting fabricated regulatory citations in compliance-summary drafts', problem: 'An LLM drafting a compliance summary cites a specific regulation section number that sounds plausible but does not actually exist in the cited rule.', solution: 'Apply a verification pass, such as Chain-of-Verification, that independently checks each cited section number against the actual regulation text before the draft reaches a reviewer.', risk: 'A fabricated regulation citation that reads as plausible and specific can pass a reviewer\'s quick visual check, since the error is not a vague statement but a confidently wrong, specific-sounding reference indistinguishable in tone from a correct one.'},
+    {title: 'Flagging hallucinated transaction or account details in customer-facing statement explanations', problem: 'An LLM explaining a customer\'s account activity in plain language occasionally states a transaction detail, merchant name, or date not actually present in the account\'s real transaction log.', solution: 'Ground the explanation in retrieval from the actual transaction record rather than relying on the model to recall or synthesize account specifics unprompted.', risk: 'A customer reading a plausible but fabricated transaction detail in an official-sounding account explanation could reasonably believe it reflects their real activity, creating a factual dispute the institution has to resolve after the fact.'},
+    {title: 'Evaluating long-tail hallucination risk for less common financial instruments', problem: 'A research-assistant tool performs well on major, frequently discussed securities but is not separately evaluated on rarer, less-traded instruments.', solution: 'Specifically test factual accuracy on a sample of long-tail, infrequently discussed instruments, not only on the well-represented ones used in a general evaluation set.', risk: 'A tool validated only on common, frequently discussed securities can appear reliable overall while hallucinating specifics on rarer instruments precisely because those facts appeared rarely in training, a gap general accuracy testing would not surface.'},
+    {title: 'Auditing whether an internal LLM tool\'s scoring rewards confident guessing over flagged uncertainty', problem: 'An internal evaluation rubric for an analyst-support LLM tool scores a wrong, confident answer no worse than a flagged "uncertain, verify independently" response.', solution: 'Revise the evaluation rubric to specifically reward calibrated abstention or uncertainty flags, rather than scoring only on whether a specific answer was produced.', risk: 'A rubric that penalizes abstention as harshly as a wrong answer trains reviewers to prefer, and inadvertently reinforces, a tool that always guesses rather than one that flags genuine uncertainty on cases that matter most.'},
+  ]}
+  healthcare={[
+    {title: 'Checking for fabricated citations in clinical-literature summarization tools', problem: 'A tool summarizing recent clinical literature for a care team occasionally cites a study finding, author, or journal that does not actually exist or does not say what the summary claims.', solution: 'Apply a verification step that checks each cited claim against the actual source article before the summary is used in a clinical discussion.', risk: 'A fabricated but plausible-sounding citation in a clinical summary could shape a care team\'s discussion around a study finding that was never actually published, a risk distinct from and harder to catch than an openly uncertain or unsourced statement.'},
+    {title: 'Detecting hallucinated dosage or interaction details in patient-education material generation', problem: 'An LLM generating patient-education material about a medication occasionally states a dosage figure or drug-interaction detail not present in the actual prescribing information.', solution: 'Ground dosage and interaction statements in retrieval from the actual prescribing information rather than the model\'s unaided recall, with a verification pass on numeric claims specifically.', risk: 'A hallucinated dosage figure stated with the same fluent confidence as a correct one could lead a patient to misunderstand their actual prescribed dose, a distinct patient-safety risk that reads as authoritative rather than uncertain.'},
+    {title: 'Verifying that a clinical-documentation assistant does not fabricate patient-history details it was not given', problem: 'A documentation assistant summarizing a patient encounter occasionally adds a plausible-sounding history detail, such as a prior diagnosis, that was not actually mentioned in the encounter transcript.', solution: 'Constrain the assistant to ground every history detail in the actual transcript or chart, and flag any generated detail that cannot be traced to a specific source passage.', risk: 'A fabricated prior-diagnosis detail added to a patient\'s documented history could persist in the chart and influence future clinical decisions long after the specific encounter that introduced the error is forgotten.'},
+    {title: 'Evaluating long-tail hallucination risk for rare conditions in a clinical decision-support tool', problem: 'A decision-support tool performs well on common conditions but is not separately evaluated on rare diseases that appeared infrequently in its training data.', solution: 'Specifically test factual accuracy on a curated sample of rare-condition scenarios, not only the common-condition cases a general evaluation set is likely to emphasize.', risk: 'A tool that appears reliable on common conditions can still hallucinate specifics on rare diseases precisely because those facts were sparse in training, a gap that only surfaces if rare conditions are specifically tested rather than assumed to generalize.'},
+  ]}
+  telecom={[
+    {title: 'Detecting fabricated network-topology details in an AI-generated diagnostic summary', problem: 'A network-diagnostics assistant summarizing an incident occasionally states a topology detail, such as a specific router or link, that does not match the network\'s actual documented configuration.', solution: 'Ground topology statements in retrieval from the actual current network configuration database rather than the model\'s unaided recall.', risk: 'A fabricated topology detail stated with the same confidence as a verified one could send an on-call engineer investigating the wrong physical link or device, extending outage duration during an active incident.'},
+    {title: 'Flagging hallucinated resolution steps in an AI-assisted customer-support ticket tool', problem: 'A support-ticket assistant occasionally generates a plausible-sounding but incorrect resolution step, such as a setting that does not exist on a given device model.', solution: 'Ground resolution steps in retrieval from the actual device documentation for the specific model in question, and flag any generated step that cannot be matched to a source passage.', risk: 'A customer following a fabricated resolution step referencing a setting that does not exist on their specific device could become more confused or, in some cases, alter a different setting than intended while searching for the nonexistent one.'},
+    {title: 'Auditing citations in an internal tool summarizing telecom regulatory filings', problem: 'A regulatory-summary tool occasionally cites a specific tariff filing or interconnection rule reference that sounds plausible but does not match the actual filing record.', solution: 'Apply a verification pass checking each cited filing or rule reference against the actual regulatory database before the summary reaches a compliance reviewer.', risk: 'A compliance reviewer relying on a fabricated but specific-sounding tariff filing reference could sign off on a network-buildout or interconnection decision based on a rule that was never actually filed, an error that would not surface until an actual regulatory audit questioned the citation.'},
+    {title: 'Evaluating long-tail hallucination risk for rare account or plan configurations in customer support', problem: 'A customer-support assistant performs well on common service plans but is not separately evaluated on rare, legacy, or regionally specific plan configurations.', solution: 'Specifically test factual accuracy on a sample of rare or legacy plan configurations, not only the common, frequently discussed plans a general evaluation set is likely to emphasize.', risk: 'An assistant validated only on common plans can hallucinate specifics, such as data caps or fees, on rare or legacy configurations precisely because those details appeared infrequently in training, misinforming the smaller set of customers on those plans.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the difference between intrinsic and extrinsic hallucination, per Ji et al.?', answer: 'Intrinsic hallucination directly contradicts the source content provided, such as stating a different date than the source gives. Extrinsic hallucination is content the source can neither confirm nor deny, information added that is not present in or derivable from what the model was given, whether or not it happens to be true.'},
+    {question: 'In what sense does Kalai and Vempala\'s result show hallucination has a statistical floor, and what kind of facts does it apply to most strongly?', answer: 'They prove that even a perfectly calibrated model trained on entirely accurate data must still hallucinate at some baseline rate on facts that appeared only once or a handful of times in training, roughly tied to how many such singleton facts exist. This applies most strongly to arbitrary, rare facts with no learnable underlying pattern, and far less to systematic knowledge like arithmetic, where structure rather than memorization is doing the work.'},
+    {question: 'According to the 2025 "Why Language Models Hallucinate" paper, why does hallucination persist in deployed systems even beyond the statistical floor?', answer: 'Standard benchmark scoring is binary and treats a wrong, confident answer the same as an honest "I don\'t know," scoring both as zero. This statistically pushes a model optimized on such benchmarks toward guessing confidently rather than abstaining, the same incentive a test-taker faces guessing on a multiple-choice question with no penalty for being wrong. The paper argues the fix is revising how benchmarks are scored, not adding more hallucination-specific evaluations.'},
+    {question: 'How do SelfCheckGPT and semantic entropy detect likely hallucination without access to a ground-truth source?', answer: 'Both sample the same prompt multiple times and check whether the answers agree. SelfCheckGPT checks raw consistency across sampled responses, reasoning that a genuinely known fact tends to be reproduced consistently while a hallucinated detail is more likely to vary. Semantic entropy refines this by clustering sampled responses according to whether they mean the same thing, then measuring entropy over those meaning-based clusters rather than over surface wording, flagging high entropy as likely confabulation.'},
+    {question: 'Why does retrieval-augmented generation address hallucination differently than Chain-of-Verification?', answer: 'Chain-of-Verification works entirely within the model\'s own further generations: it drafts an answer, independently generates and answers verification questions about its own claims, and revises the draft based on inconsistencies it finds, without any external source. Retrieval-augmented generation instead grounds generation in externally retrieved documents at inference time, reducing reliance on the model\'s memorized, parametric knowledge for whatever the retriever actually surfaces, though it does not help for claims the retrieved material does not address.'},
+  ]}
+/>

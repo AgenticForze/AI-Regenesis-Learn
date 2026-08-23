@@ -1,0 +1,215 @@
+---
+title: "Responsible GenAI: Content Safety, Watermarking, Provenance"
+sidebar_label: "4.7 Responsible GenAI"
+sidebar_position: 7
+phase: 4
+chapter: "4.7"
+lms_presentation: "4.7-Responsible-GenAI-Slides.pptx"
+prerequisites: ["4.3", "4.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Responsible GenAI in production rests on three complementary layers, none sufficient alone.
+**Content safety** works before and during generation: red-teaming (human or automated) probes a
+model for harmful failure modes before deployment, and runtime moderation classifiers such as Llama
+Guard screen both prompts and outputs against a harm taxonomy. **Watermarking** embeds a statistical
+signal directly into generated content so it can later be identified as AI-generated: Kirchenbauer et
+al.'s scheme biases token sampling (4.3) toward a pseudorandomly chosen "green list," while Google
+DeepMind's SynthID uses a tournament-sampling scheme that better preserves the model's original output
+distribution, with a separate SynthID variant embedding an imperceptible signal directly into image
+and video pixel data (4.4). **Provenance** takes a different approach entirely: the C2PA standard
+attaches a cryptographically signed manifest to a piece of media recording its creation and edit
+history, including AI tool involvement, which is tamper-evident but, unlike a watermark, can be
+stripped if the metadata itself is removed. Each layer defends against a different failure mode and a
+different adversary, and regulation such as the EU AI Act's Article 50 increasingly requires some
+combination of them for AI-generated content specifically.
+
+## High-Level Explanation
+
+Think of how a physical product reaches a store shelf responsibly. Before it ships, it goes through
+quality control and safety testing designed to catch defects and failure modes in advance, the
+equivalent of red-teaming and safety classifiers screening an LLM's behavior before and during
+deployment. Once it ships, many products carry a hidden serial number or security thread woven into
+the material itself, invisible in normal use but readable with the right tool, the equivalent of a
+statistical watermark embedded in generated text, images, or video. And separately, some products
+travel with a certificate of authenticity or paperwork documenting where they came from and what
+happened to them along the way, the equivalent of a C2PA provenance record: useful and verifiable as
+long as it stays attached, but not something built into the product itself the way a security thread
+is, so it can be lost or discarded without altering the product.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-7-three-layers-responsible-genai.svg').default}
+    alt="A diagram showing three complementary layers of responsible generative AI: content safety, applied before and during generation via red-teaming and moderation classifiers; watermarking, an embedded statistical signal in the generated content itself; and provenance, a cryptographically signed record of the content's creation and edit history."
+  />
+  <figcaption>Content safety, watermarking, and provenance defend against different failure modes, and a production system typically layers more than one.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Content safety: catching failure modes before and during deployment.** Two complementary approaches
+address content safety at different points in a system's lifecycle. Red-teaming happens before
+deployment: Ganguli et al. ([*Red Teaming Language Models to Reduce Harms*](https://arxiv.org/abs/2209.07858),
+Anthropic, 2022) had large numbers of human red-teamers adversarially probe a model to elicit harmful
+outputs, analyzing which attack strategies succeeded and how harm rates changed with model scale and
+safety training. Perez et al. ([*Red Teaming Language Models with Language Models*](https://arxiv.org/abs/2202.03286),
+DeepMind, 2022) automated this process, using one language model to generate adversarial test cases
+designed to provoke a separate target model into unsafe output, reducing reliance on human labor for
+this kind of adversarial testing. Runtime moderation classifiers operate continuously after
+deployment instead: Llama Guard (Inan et al., [*Llama Guard: LLM-based Input-Output Safeguard for
+Human-AI Conversations*](https://arxiv.org/abs/2312.06674), Meta, 2023), building on the same
+classifier concept OpenAI's Moderation model established (Markov et al.,
+[*A Holistic Approach to Undesired Content Detection in the Real World*](https://arxiv.org/abs/2208.03274),
+2022), is itself a fine-tuned LLM that scores both a user's prompt and a model's response against a
+defined harm taxonomy, flagging or blocking content in real time. Red-teaming finds and helps fix
+systemic failure modes before launch; runtime classifiers catch whatever slips through afterward. They
+are not substitutes for each other.
+
+**Watermarking text: biasing sampling toward a detectable pattern.** Kirchenbauer et al.
+([*A Watermark for Large Language Models*](https://arxiv.org/abs/2301.10226), 2023) embed a
+statistical signal directly into generated text. Before sampling each token, a pseudorandom hash of
+the preceding tokens partitions the vocabulary into a "green list" and a "red list," and the sampling
+process (4.3) is softly biased toward green-list tokens by boosting their logits before the final
+sampling step. Detecting the watermark is a statistical test: given a piece of text and the same
+hashing scheme used at generation, a detector counts how often green-list tokens appear and computes
+whether that fraction is statistically unlikely under ordinary, unwatermarked text, without needing
+access to the generating model's weights or internals, only the hash function and key used to produce
+the green/red split. This approach has real limitations: paraphrasing the watermarked text, whether by
+a human or another model, measurably degrades detection reliability, and passages that are too short
+simply do not contain enough tokens for the statistical test to reach significance.
+
+**SynthID: a tournament-based alternative that better preserves output quality.** Google DeepMind's
+SynthID for text (Dathathri et al.,
+[*Scalable watermarking for identifying large language model outputs*](https://www.nature.com/articles/s41586-024-08025-4),
+Nature, 2024) takes a different mechanical approach to the same goal. Rather than biasing logits
+toward a fixed green list, it draws several candidate next tokens from the model's own unmodified
+next-token distribution and runs them through a pseudorandom, key-seeded tournament of pairwise
+comparisons, emitting the tournament's winner; the winning token encodes a detectable statistical
+pattern across many tokens without needing to distort the underlying probability distribution the way
+a green-list logit bias does. Deployed at scale across millions of real responses, this approach
+produced a negligible measured change in output quality compared to unwatermarked generation. SynthID
+also extends to entirely different modalities: SynthID for images, introduced before the text variant,
+uses a separately trained pair of models, one embedding an imperceptible signal directly into pixel
+data at generation time and one detecting it afterward, and this image watermark is designed to survive
+common transformations such as compression, cropping, and color adjustment, though detection returns
+a confidence level rather than an unconditional guarantee, since determined adversarial editing can
+still degrade or remove it.
+
+**Provenance: a signed record instead of an embedded signal.** The Coalition for Content Provenance
+and Authenticity (C2PA), founded in 2021 by Adobe, Microsoft, Truepic, Arm, Intel, and the BBC, takes
+a structurally different approach from watermarking. Rather than embedding a detectable pattern in the
+content itself, C2PA's Content Credentials attach a cryptographically signed manifest to a piece of
+media, recording assertions about its provenance: how and when it was created or edited, and which
+tools, including generative AI tools, were involved at each step. The manifest is signed so that any
+tampering with either the content or the manifest itself is cryptographically detectable, making the
+record tamper-evident. The key trade-off against watermarking is durability under transformation: a
+watermark embedded in pixel data or token choices travels with the content through many kinds of
+editing, while a C2PA manifest is metadata attached alongside the content, and a common action such as
+taking a screenshot, re-exporting a file, or passing it through a platform's re-encoding pipeline can
+strip that metadata entirely without altering the underlying pixels at all, silently removing the
+provenance record while leaving the content itself intact.
+
+**Why regulation increasingly asks for more than one of these at once.** The EU AI Act's Article 50
+transparency obligations, which become applicable in August 2026, require providers of systems that
+generate synthetic audio, image, video, or text to mark that output in a machine-readable, detectable
+format, and require certain deployers to disclose AI involvement in synthetic media, particularly
+deepfakes. Meeting an obligation like this in practice typically calls for combining a technique that
+survives editing, such as a watermark, with a technique that documents a fuller creation and edit
+history, such as a C2PA manifest, since neither alone covers both the "can this be detected after the
+content is copied and re-shared" case and the "can a full chain of custody be verified" case. The NIST
+AI Risk Management Framework (AI RMF 1.0, 2023) provides a general, voluntary governance structure for
+organizing decisions like these across an AI system's lifecycle, though it is a governance framework
+rather than a specific technical control.
+
+**Putting the three layers together.** Content safety, watermarking, and provenance each target a
+different failure mode. Content safety reduces the likelihood that harmful content is generated in the
+first place, whether through pre-deployment red-teaming or runtime moderation. Watermarking and
+SynthID help identify content as AI-generated after the fact, even once it has left the system that
+produced it, addressing situations where the concern is not that the content is harmful on its face
+but that its AI origin is being concealed or misrepresented. Provenance addresses a related but
+distinct question: not just whether content is AI-generated, but a fuller account of its creation and
+edit history, verifiable as long as the record survives. None of the three substitutes for the others,
+and a determined adversary can attack any single layer in isolation, which is why a production system
+handling sensitive or regulated content typically layers more than one.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Content safety classifiers', 'Text watermarking (Kirchenbauer / SynthID)', 'Image/video watermarking (SynthID)', 'C2PA provenance']}
+  rows={[
+    {aspect: 'What it protects against', values: ['Harmful content being generated or reaching a user at all', 'AI-generated text later being passed off as human-written', 'AI-generated images or video later being passed off as authentic', 'An unverifiable or misrepresented creation and edit history'], decisive: true},
+    {aspect: 'When it is applied', values: ['Before deployment (red-teaming) and continuously at runtime', 'At generation time, via biased or tournament-based sampling', 'At generation time, via an embedded pixel-level signal', 'At creation and each edit, via a signed manifest'], decisive: true},
+    {aspect: 'Survives paraphrasing, editing, or re-export?', values: ['Not applicable, operates on content as generated', 'Degrades under paraphrasing; needs sufficient text length', 'Degrades under aggressive editing, more robust to common transforms', 'No: stripping the metadata removes it entirely'] },
+    {aspect: 'Main limitation', values: ['Cannot catch what its taxonomy was not built to recognize', 'A statistical test, not a certainty; short text is hard to detect', 'Confidence-based detection, not an unconditional guarantee', 'Metadata-based, not embedded in the content itself'] },
+  ]}
+  caption="These four approaches address different failure modes and different points in a content's lifecycle; regulatory obligations increasingly expect more than one applied together."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing responsible-GenAI controls for a given risk"
+  mermaid={`
+flowchart TD
+  PROBLEM[Responsible-GenAI risk to address] --> HARM{Is the risk that harmful content gets generated or reaches a user?}
+  HARM -->|Yes, before deployment| REDTEAM[Red-team the model to find and fix failure modes]
+  HARM -->|Yes, at runtime| CLASSIFY[Apply an input/output moderation classifier]
+  PROBLEM --> IDENTIFY{Does AI-generated content need to be identifiable later?}
+  IDENTIFY -->|Yes, for text| TEXTWATERMARK[Apply text watermarking, e.g. SynthID or green/red-list sampling]
+  IDENTIFY -->|Yes, for images or video| PIXELWATERMARK[Apply image/video watermarking, e.g. SynthID]
+  PROBLEM --> HISTORY{Does a verifiable creation and edit history need to travel with the content?}
+  HISTORY -->|Yes| C2PA[Attach a C2PA-signed Content Credentials manifest]
+  PROBLEM --> REGULATED{Is this content subject to a disclosure requirement, e.g. EU AI Act Article 50?}
+  REGULATED -->|Yes| COMBINE[Combine a durable watermark with a provenance manifest]
+`}
+  components={[
+    {name: 'Red-teaming', responsibility: 'Finds and helps fix harmful failure modes before deployment.'},
+    {name: 'Moderation classifier', responsibility: 'Screens prompts and outputs against a harm taxonomy at runtime.'},
+    {name: 'Watermarking (text, image/video)', responsibility: 'Embeds a detectable signal identifying content as AI-generated.'},
+    {name: 'C2PA Content Credentials', responsibility: 'Attaches a signed, tamper-evident record of creation and edit history.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Red-teaming an advisor-support LLM before deployment for compliance failure modes', problem: 'An internal LLM tool drafting client-facing investment communications has not been systematically tested for producing noncompliant or biased financial advice under adversarial prompting.', solution: 'Conduct structured red-teaming specifically targeting compliance-relevant failure modes, such as prompts designed to elicit unlicensed or unsuitable investment recommendations, before the tool reaches client-facing use.', risk: 'A tool deployed without compliance-focused red-teaming could be prompted, deliberately or accidentally, into producing advice that violates suitability or licensing rules, creating regulatory exposure the institution only discovers after the advice has already reached a client.'},
+    {title: 'Applying input/output moderation classifiers to a customer-facing banking chatbot', problem: 'A banking chatbot handling account questions has no runtime safeguard against a user manipulating it into disclosing another customer\'s account details or bypassing identity-verification steps.', solution: 'Deploy an input/output moderation classifier, such as a Llama Guard-style safeguard, tuned to a finance-specific taxonomy covering account-disclosure and identity-bypass attempts specifically.', risk: 'Without a runtime classifier tuned to finance-specific risks, a chatbot safe against generic harmful-content prompts could still be manipulated into disclosing account information or approving an identity bypass, since generic safety taxonomies are not built to recognize finance-specific social-engineering patterns.'},
+    {title: 'Evaluating watermark robustness against paraphrased AI-generated loan narratives', problem: 'A fraud-detection process relies on text watermarking to flag AI-generated loan-application narratives, but has not tested whether a lightly paraphrased version still triggers detection.', solution: 'Specifically test watermark detection reliability against paraphrased and edited variants of AI-generated narratives, not only against unmodified model output.', risk: 'A fraud-detection process that assumes watermark detection is reliable without testing against paraphrasing could let a fabricated loan narrative through simply because an applicant ran the AI-generated text through a light rewording pass, a known and documented watermark-detection weakness.'},
+    {title: 'Verifying C2PA provenance on submitted identity or income documents during KYC review', problem: 'A know-your-customer process accepts scanned identity and income documents without a way to verify whether an image was synthetically generated or manipulated after the fact.', solution: 'Check submitted documents for C2PA Content Credentials where available, and treat documents lacking any verifiable provenance record as requiring additional manual review.', risk: 'A synthetically generated income document that passes a purely visual check could open an account or approve a credit line for an identity that does not actually hold the income it claims, an exposure the institution only discovers once a payment default triggers a closer look at the original file.'},
+  ]}
+  healthcare={[
+    {title: 'Red-teaming a patient-facing symptom-checker chatbot for harmful medical misinformation', problem: 'A patient-facing symptom-checker tool has not been systematically tested for producing dangerous medical misinformation under adversarial or unusual phrasing of symptoms.', solution: 'Conduct structured red-teaming specifically targeting medically dangerous failure modes, such as prompts likely to elicit an unsafe self-treatment recommendation, before the tool is made available to patients.', risk: 'A symptom-checker deployed without medically focused red-teaming could produce a dangerous self-treatment suggestion under an adversarial or unusual phrasing pattern that ordinary testing never surfaced, reaching a patient before the failure mode is caught.'},
+    {title: 'Applying content-safety classifiers to a mental-health support chatbot\'s conversations', problem: 'A mental-health support chatbot has no runtime classifier tuned to recognize when a conversation has moved into territory requiring escalation to a human clinician rather than continued automated response.', solution: 'Deploy a runtime moderation classifier specifically tuned to recognize escalation-worthy conversational signals, routing those conversations to a human clinician rather than relying on the chatbot to continue unsupervised.', risk: 'A generic safety classifier not tuned to clinical escalation signals could allow a conversation that genuinely needs a human clinician\'s involvement to continue with the automated tool alone, missing the specific handoff point that matters most in a mental-health context.'},
+    {title: 'Verifying provenance of medical imaging submitted for a second-opinion or research dataset', problem: 'A research dataset or second-opinion review process accepts submitted medical images without a way to verify whether an image is an authentic scan or a synthetically generated or altered one.', solution: 'Check submitted medical images for C2PA Content Credentials or equivalent provenance records, and flag images lacking any verifiable creation history for additional scrutiny before inclusion.', risk: 'A research dataset or second-opinion process that accepts medical images with no provenance verification risks incorporating a synthetically generated or altered image indistinguishable from an authentic scan by visual inspection alone, potentially corrupting a study\'s findings or a clinical judgment based on it.'},
+    {title: 'Accounting for watermark limitations when tracing AI-generated patient-education material', problem: 'A health system distributes AI-generated patient-education handouts and assumes text watermarking alone can confirm authorship if a modified version later circulates externally.', solution: 'Treat watermark detection as one signal among several, not a certainty, particularly once external editing or paraphrasing of distributed material is a realistic possibility.', risk: 'Relying on watermark detection alone to confirm the origin of circulating patient-education material could produce a false negative once the material has been lightly edited externally, leaving the health system unable to confirm or deny authorship when it actually matters, such as during a misinformation dispute.'},
+  ]}
+  telecom={[
+    {title: 'Red-teaming and classifying a customer-service chatbot against account-disclosure jailbreaks', problem: 'A telecom customer-service chatbot has not been systematically tested against adversarial prompting designed to extract another customer\'s account or SIM-swap-relevant details.', solution: 'Red-team the chatbot specifically against account-disclosure and SIM-swap social-engineering patterns before deployment, and back it with a runtime moderation classifier tuned to the same risk category.', risk: 'A chatbot not specifically red-teamed against account-disclosure jailbreaks could be manipulated into revealing details that enable a SIM-swap fraud attempt, a telecom-specific attack pattern a generic safety evaluation would not be built to catch.'},
+    {title: 'Evaluating watermark detection reliability for AI-generated vishing scripts on a carrier network', problem: 'A fraud-detection effort wants to use text watermarking to flag AI-generated vishing scripts circulating over messaging channels, but has not evaluated detection reliability against realistically edited scripts.', solution: 'Specifically test watermark detection against scripts modified in the ways an actual scammer would edit them, such as light paraphrasing or reordering, not only against unmodified generated text.', risk: 'A fraud-detection process assuming watermark detection works reliably against real-world vishing scripts could miss scripts that were lightly edited specifically to evade detection, a gap that only testing against realistic adversarial edits would reveal.'},
+    {title: 'Using C2PA-style provenance verification for photo evidence in insurance or warranty claims', problem: 'A telecom-adjacent claims process, such as device-damage or outage-related claims, accepts submitted photo evidence without a way to verify whether an image is authentic or synthetically generated or altered.', solution: 'Check submitted claim photos for C2PA Content Credentials where available, and route photos lacking any verifiable provenance record to additional manual review.', risk: 'A fabricated damage photo that passes casual visual review could result in a warranty replacement device or an outage credit being issued for damage that never actually occurred, a cost that scales quickly if the same synthetic-photo pattern is reused across many claims before anyone notices.'},
+    {title: 'Meeting AI-generated-content disclosure obligations for an automated customer communications system', problem: 'A telecom provider\'s automated system generates customer-facing text and voice content, such as service-plan summaries and IVR responses, without a clear mechanism for disclosing AI involvement as regulation increasingly requires.', solution: 'Combine a durable watermark with a provenance manifest on AI-generated customer communications, tracking applicable disclosure requirements such as the EU AI Act\'s Article 50 transparency obligations.', risk: 'A telecom provider that has not implemented any disclosure mechanism for AI-generated customer communications risks noncompliance once applicable transparency obligations take effect, with no existing technical process to retrofit disclosure onto content already in circulation.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What distinct failure mode does each of the three responsible-GenAI layers, content safety, watermarking, and provenance, address, and why is no single layer sufficient alone?', answer: 'Content safety reduces the likelihood that harmful content is generated or reaches a user at all, through pre-deployment red-teaming and runtime moderation classifiers. Watermarking and provenance instead address identifying content as AI-generated after the fact: watermarking embeds a detectable signal in the content itself, while provenance attaches a signed record of its creation and edit history. None substitutes for the others because each defends against a different adversary and failure mode, and a determined actor can attack any single layer in isolation.'},
+    {question: 'How does Kirchenbauer et al.\'s watermarking scheme work mechanically, and what are its two main limitations?', answer: 'Before sampling each token, a pseudorandom hash of the preceding tokens partitions the vocabulary into a green list and a red list, and sampling is softly biased toward green-list tokens by boosting their logits. Detection is a statistical test on the fraction of green-list tokens in a piece of text, using the same hashing scheme, without needing the generating model\'s internals. Its two main limitations are that paraphrasing measurably degrades detection reliability, and that very short passages do not contain enough tokens for the statistical test to reach significance.'},
+    {question: 'How does SynthID for text differ mechanically from the green/red-list approach, and what advantage does that give it?', answer: 'Rather than biasing logits toward a fixed green list, SynthID draws several candidate tokens from the model\'s own unmodified next-token distribution and runs them through a pseudorandom, key-seeded tournament of pairwise comparisons, emitting the winner. This encodes a detectable pattern without distorting the underlying probability distribution the way a green-list logit bias does, which is why it measured a negligible quality change when deployed at scale, compared to the more noticeable distortion a logit-biasing approach can introduce.'},
+    {question: 'Why is C2PA provenance described as structurally different from watermarking, and what is the key trade-off between them?', answer: 'C2PA attaches a cryptographically signed manifest recording a piece of media\'s creation and edit history, rather than embedding a detectable signal in the content\'s pixels or token choices. The key trade-off is durability under transformation: a watermark travels with the content through many kinds of editing, while a C2PA manifest is metadata attached alongside the content, so an action like a screenshot or a platform\'s re-encoding pipeline can strip the provenance record entirely while leaving the underlying content unchanged.'},
+    {question: 'Why might a regulatory requirement, such as the EU AI Act\'s Article 50, call for combining a watermark with a provenance manifest rather than using just one?', answer: 'A watermark is built to survive copying and re-sharing but does not, by itself, document a fuller chain of creation and editing, while a C2PA manifest documents that fuller history but can be stripped if its metadata is removed. Combining the two covers both the case where content needs to be detected as AI-generated after being copied and re-shared, and the case where a verifiable chain of custody needs to be established, which neither technique alone fully addresses.'},
+  ]}
+/>

@@ -1,0 +1,166 @@
+---
+title: "What Is Generative AI? Generative vs. Discriminative Models"
+sidebar_label: "4.1 Generative vs. Discriminative Models"
+sidebar_position: 1
+phase: 4
+chapter: "4.1"
+lms_presentation: "4.1-Generative-vs-Discriminative-Slides.pptx"
+prerequisites: ["1.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 1.2 introduced generative AI as one layer in the AI taxonomy: systems that produce new content
+rather than a label. This chapter opens up what "generative" actually means mechanically. A
+**discriminative model** learns a direct mapping from input to output, typically approximating P(label
+given input), and never represents how the input data itself was produced. A **generative model**
+instead learns, explicitly or implicitly, something about the distribution the data itself came from,
+which is what lets it sample new, never-before-seen examples rather than only label existing ones. This
+single distinction is why a discriminative fraud classifier can tell you a transaction looks suspicious
+but cannot produce a new synthetic transaction, while a generative model can produce entirely new text,
+images, or data that never previously existed. Generative models further split into **explicit-density**
+models, which compute a real probability for each output they produce (an autoregressive LLM, covered
+in Phase 3), and **implicit-density** models, which learn only to sample convincingly without ever
+computing an explicit probability (a GAN, covered in the next chapter). No single generative model
+family available today gets high sample quality, full coverage of the data's diversity, and fast
+sampling all at once, a tension known as the generative learning trilemma, which is why chapter 4.2
+covers several structurally different families rather than one dominant approach.
+
+## High-Level Explanation
+
+Think of a discriminative model as a security guard checking IDs at a door: shown a person and a photo,
+the guard can say whether they match, drawing on a learned sense of what matching looks like, but the
+guard was never trained to draw a new face from scratch. A generative model is the sketch artist who
+has studied enough faces to draw an entirely new, plausible one that never existed, because the artist
+learned something about the underlying structure of faces themselves, not just a yes/no matching rule.
+Both jobs can look similar from a distance, both involve faces, both produce a kind of judgment or
+output, but only one of them can create something new. What determines which capability a model has is
+not its architecture alone but what it was actually trained to predict: a model trained to predict a
+fixed label learns to discriminate; a model trained to predict (or implicitly capture) the data itself
+learns to generate.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-1-discriminative-vs-generative.svg').default}
+    alt="A diagram contrasting a discriminative model, which learns a decision boundary between fixed classes and can only classify existing input, with a generative model, which learns the underlying data distribution and can sample entirely new examples from it."
+  />
+  <figcaption>A discriminative model draws a boundary between existing classes. A generative model learns the shape of the data well enough to produce new examples from it.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The mathematical distinction, stated precisely.** A discriminative model directly parameterizes
+P(y given x), the probability of a label given an input, or a direct function mapping input to output,
+with no representation of P(x) itself anywhere in the model. A generative model parameterizes something
+about the data's own distribution: classically, the joint distribution P(x, y), from which P(y given x)
+can be derived via Bayes' theorem (1.8) if needed, or, in modern generative AI, the conditional
+distribution P(output given input) treated as a full distribution to sample from rather than a single
+predicted label. Naive Bayes (1.5) is the standard textbook generative classifier: it models P(x given
+y) and P(y) separately, then combines them, which is also what lets it generate a synthetic x for a
+given class if asked, a capability logistic regression, a purely discriminative model, does not have
+even though both can be used for the same classification task.
+
+**Explicit-density versus implicit-density generative models.** Among generative models, a further split
+matters operationally. An **explicit-density** model computes a real, well-defined probability for each
+output it could produce. An autoregressive language model (3.3) is explicit-density: at each generation
+step it computes an actual probability distribution over every possible next token, and the model's
+perplexity (3.3) is a direct, auditable summary of those probabilities. An **implicit-density** model
+never computes any such probability at all; it learns only to produce samples that are hard to
+distinguish from real data, typically by training one network to generate samples and a second network
+to try to tell them apart from real data, with no explicit density anywhere in the setup. A Generative
+Adversarial Network, covered fully in chapter 4.2, is the standard implicit-density example. This
+distinction matters beyond theory: an explicit-density model's output can in principle be interrogated
+for how confident the model actually was; an implicit-density model's output cannot, because there was
+never a probability computed to interrogate in the first place.
+
+**The generative learning trilemma.** Xiao, Kreis, and Vahdat ([*Tackling the Generative Learning
+Trilemma with Denoising Diffusion GANs*](https://arxiv.org/abs/2112.07804), 2022) name a tension that
+runs across generative model families: high-quality samples, full coverage of the data distribution's
+diversity, and fast sampling are three goals that no single family achieves simultaneously with the
+methods available at the time of that paper. GANs typically sample in a single fast pass and can produce
+sharp, high-quality samples, but are prone to **mode collapse**, a failure mode where the generator
+learns to reliably produce only a narrow subset of the true data's variety, sacrificing diversity.
+Variational autoencoders (VAEs) sample quickly and tend to cover the data's diversity well, but their
+samples are often blurrier or lower-fidelity than a GAN's. Diffusion models, covered in chapter 4.2,
+typically achieve both high sample quality and good diversity, but pay for it with slow sampling, since
+generating one sample requires many sequential denoising steps. Naming this trade-off explicitly, rather
+than treating any one family as strictly "better," is what lets a practical choice among generative
+model families in chapter 4.2 be a genuine engineering trade-off rather than a search for one universally
+superior option.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Discriminative model', 'Explicit-density generative model', 'Implicit-density generative model']}
+  rows={[
+    {aspect: 'What is learned', values: ['P(label given input), directly', 'A real, computable probability over possible outputs', 'Only how to sample; no probability is ever computed'], decisive: true},
+    {aspect: 'Can generate new samples', values: ['No', 'Yes, by sampling from the computed distribution', 'Yes, by sampling from the trained generator'], decisive: true},
+    {aspect: 'Per-output confidence available', values: ['Yes (a calibrated label probability)', 'Yes, in principle (e.g., perplexity, 3.3)', 'No; nothing to interrogate'], },
+    {aspect: 'Representative example', values: ['Logistic regression, a fine-tuned classifier', 'Autoregressive LLM (3.3)', 'GAN (4.2)'], },
+  ]}
+  caption="Both kinds of generative model can produce new samples; only one of them can also tell you how confident it was in a specific output."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing between a discriminative and a generative model for a task"
+  mermaid={`
+flowchart TD
+  TASK[What does the task need?] --> LABEL{Assign a fixed label to existing input?}
+  LABEL -->|Yes| DISC[Discriminative model: learn P(label given input) directly]
+  LABEL -->|No| SAMPLE{Produce new content matching a learned distribution?}
+  SAMPLE -->|Yes| GENMODEL[Generative model]
+  GENMODEL --> DENSITY{Need a computable probability per output?}
+  DENSITY -->|Yes| EXPLICIT[Explicit-density model, e.g. an autoregressive LLM]
+  DENSITY -->|No| IMPLICIT[Implicit-density model, e.g. a GAN]
+`}
+  components={[
+    {name: 'Discriminative model', responsibility: 'Learns a direct mapping or P(label given input) for tasks that need a fixed decision about existing input, such as classification or scoring.'},
+    {name: 'Explicit-density generative model', responsibility: 'Learns a computable probability distribution, enabling both sampling and per-output confidence, at the cost of the specific architectural constraints (like a causal mask) that make that computation tractable.'},
+    {name: 'Implicit-density generative model', responsibility: 'Learns only to sample convincingly, without a computable probability, trading interpretability of individual outputs for architectural flexibility.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Using a discriminative model, not a generative one, for the actual fraud decision', problem: 'A team building a fraud-detection pipeline is tempted to have a generative LLM directly issue the fraud/no-fraud decision.', solution: 'Keep the actual scoring decision on a discriminative classifier that produces a calibrated P(fraud given transaction), reserving any generative component for downstream tasks like case-note drafting.', risk: 'A generative model\'s plausible-sounding fraud judgment is not a calibrated probability the way a discriminative classifier\'s output is, and model-risk-management cannot validate it the same way, creating a validation gap if it is used for the actual decision.'},
+    {title: 'Validating synthetic transaction data for mode collapse before using it in testing', problem: 'Synthetic transaction data generated for model development can suffer mode collapse, underrepresenting rare-but-legitimate patterns like unusual large wire transfers.', solution: 'Specifically test synthetic data for coverage of rare transaction types, not just aggregate statistical similarity to real data.', risk: 'A downstream fraud model validated against synthetic data missing rare patterns due to mode collapse can look accurate in testing while remaining blind to exactly the rare pattern that mattered in production.'},
+    {title: 'Matching model-risk-management validation approach to explicit- versus implicit-density mechanisms', problem: 'An implicit-density synthetic-data generator provides no per-output probability to audit, unlike an explicit-density LLM used elsewhere in the pipeline.', solution: 'Tailor validation approach to the actual generative mechanism in use, rather than applying an explicit-density-style review to a model that cannot produce a comparable signal.', risk: 'A model-risk-management team that signs off on an implicit-density synthetic-data generator using the same likelihood-based tests built for explicit-density models can produce a satisfied regulatory exam record for a generator that was never actually audited on the dimension that matters, since no likelihood ever existed to test.'},
+    {title: 'Keeping market-surveillance anomaly detection discriminative, not generative', problem: 'A market-surveillance tool needs to flag existing trades as anomalous, a discriminative task, not produce new synthetic trade sequences.', solution: 'Clarify at design time whether the tool needs to score existing trades or generate synthetic ones for stress-testing, since the two require different model types.', risk: 'Choosing a generative architecture for what is actually a discriminative flagging task can produce a system good at plausible narratives but poorly calibrated at the yes/no decision regulators expect.'},
+  ]}
+  healthcare={[
+    {title: 'Keeping a diagnostic classifier discriminative, separate from a generative imaging tool', problem: 'A diagnostic tool must output a calibrated probability for a specific condition; a separate generative tool might be used to create synthetic training images.', solution: 'Validate the diagnostic classifier on calibration and accuracy against ground truth, and validate the generative image tool separately on whether it preserves clinically relevant features.', risk: 'Treating a generative tool\'s synthetic image or fabricated finding as equivalent to a discriminative classifier\'s calibrated probability can lead a clinician to over-trust an unvalidated signal.'},
+    {title: 'Checking synthetic patient-data generators for mode collapse before research use', problem: 'Synthetic patient records generated for privacy-preserving research can underrepresent rare disease presentations if the generator suffers mode collapse.', solution: 'Validate synthetic patient-data generators specifically for coverage of rare, clinically important subgroups before using the data for research or model training.', risk: 'A downstream model trained on synthetic data missing rare presentations due to mode collapse can appear well-validated in aggregate while systematically failing the rare patient population most in need of representation.'},
+    {title: 'Matching regulatory validation to whether a clinical documentation tool is explicit- or implicit-density', problem: 'A regulatory submission for a generative clinical documentation assistant might assume a per-output confidence score exists.', solution: 'Confirm whether the tool\'s underlying mechanism actually supports per-output confidence before building a validation or submission around that assumption.', risk: 'A regulatory submission built on an assumed confidence signal the tool\'s generative mechanism cannot actually produce is built on an unsatisfiable validation premise.'},
+    {title: 'Keeping early-detection screening decisions discriminative', problem: 'An early-disease-detection workflow needs a calibrated P(condition given scan), not a generative description of the scan.', solution: 'Keep the screening decision on a calibrated discriminative classifier, using any generative component only downstream, such as for report drafting.', risk: 'Substituting a generative model\'s fluent scan description for a calibrated discriminative screening decision can miss that the generative output carries no validated probability of disease presence.'},
+  ]}
+  telecom={[
+    {title: 'Keeping outage-risk prediction discriminative, separate from synthetic traffic generation', problem: 'An outage-prediction tool needs a calibrated risk score; a separate generative model might produce synthetic network traffic for load-testing.', solution: 'Keep the outage-prediction decision on a calibrated discriminative classifier, using generative models specifically for synthetic-traffic generation in test environments.', risk: 'Using a generative model\'s fluent traffic-pattern description as if it were a calibrated outage-risk score misses that the generative output carries no calibrated probability guarantee.'},
+    {title: 'Checking synthetic network-traffic generators for mode collapse before capacity planning', problem: 'A generative model producing synthetic traffic for capacity planning can suffer mode collapse, underrepresenting rare surge patterns like a viral event or outage-driven call spike.', solution: 'Validate synthetic traffic data specifically for coverage of rare surge patterns before using it for capacity-planning decisions.', risk: 'Capacity plans built on synthetic data missing rare surge patterns due to mode collapse can leave the network under-provisioned for exactly the rare event that matters most operationally.'},
+    {title: 'Matching validation rigor to whether a network-diagnostics tool is explicit- or implicit-density', problem: 'Operations staff may treat a generative diagnostics tool\'s output as carrying a calibrated confidence signal it does not actually provide.', solution: 'Match validation rigor and any operational sign-off to whether the tool\'s generative mechanism actually supports a per-output confidence signal.', risk: 'Treating a fluent-sounding generative diagnostic explanation as calibrated confidence, when the model provides no such guarantee, can lead to under-investigating a root cause during a live incident.'},
+    {title: 'Keeping automated fault-ticket routing discriminative', problem: 'Routing an urgent network-fault ticket to the right team requires a genuine classification decision, not a generative one.', solution: 'Keep the routing decision on a calibrated discriminative classifier, reserving any generative component for downstream ticket-narrative drafting.', risk: 'Routing a critical fault ticket based on a generative model\'s plausible-sounding categorization, rather than a calibrated classifier\'s decision, can send it to the wrong team during an active incident.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the core mathematical difference between a discriminative model and a generative model?', answer: 'A discriminative model directly parameterizes P(label given input) and never represents how the input data itself was produced. A generative model parameterizes something about the data\'s own distribution, whether the classical joint distribution P(x, y) or a conditional distribution treated as a full distribution to sample from, which is what allows it to produce new examples.'},
+    {question: 'What is the difference between an explicit-density and an implicit-density generative model, and what is an example of each?', answer: 'An explicit-density model computes a real, well-defined probability for each output it could produce, such as an autoregressive LLM computing a probability distribution over next tokens. An implicit-density model, such as a GAN, learns only to produce convincing samples and never computes any explicit probability.'},
+    {question: 'What is the generative learning trilemma, and which goal does each of GANs, VAEs, and diffusion models tend to sacrifice?', answer: 'The generative learning trilemma is the observation that high sample quality, full coverage of the data\'s diversity, and fast sampling are not simultaneously achievable with a single method. GANs sacrifice diversity (prone to mode collapse) for quality and speed. VAEs sacrifice sample quality for diversity and speed. Diffusion models sacrifice speed for quality and diversity.'},
+    {question: 'What is mode collapse, and why is it a particular risk for GAN-style generative models?', answer: 'Mode collapse is a failure mode where a generative model learns to reliably produce only a narrow subset of the true data\'s variety rather than covering its full diversity. It is a particular risk for GANs because their adversarial training setup can make the generator settle on a small set of outputs that reliably fool the discriminator, rather than learning to cover the full data distribution.'},
+    {question: 'Why can\'t a discriminative model be used to directly generate new samples, even though it may internally produce probability-like outputs such as softmax scores?', answer: 'A discriminative model\'s probability-like outputs describe P(label given input) for a specific, already-given input; the model never represents P(input) or the data\'s own distribution anywhere, so there is nothing in it to sample a new input from. A softmax score is a distribution over labels for one fixed input, not a distribution over possible inputs.'},
+  ]}
+/>

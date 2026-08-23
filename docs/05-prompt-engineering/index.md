@@ -8,19 +8,17 @@ sidebar_position: 0
 
 From zero-shot prompting through schema-enforced structured outputs to your first production LLM app architecture.
 
-:::info Chapter shells
-The chapters below are planned and tracked, but not yet written. Content is added
-incrementally — see the [Contribution Guide](/docs/capstones-and-contributing) to propose or
-draft one. Check the [Recently Added](/docs) page for what has shipped so far.
+:::info Phase complete
+All eight chapters of Phase 5 are now published.
 :::
 
-## Planned chapters
+## Chapters
 
-- 5.1 Prompting Fundamentals: Zero-Shot, Few-Shot, Instruction Following
-- 5.2 Advanced Prompting Patterns: Chain-of-Thought, Self-Consistency, Tree-of-Thought
-- 5.3 Structured Outputs & Tool/Function Calling — the Basics
-- 5.4 [v3] Structured Output Enforcement & Constrained Decoding — Deep Dive
-- 5.5 System Prompts, Guardrails & Prompt-Injection Defense
-- 5.6 Prompt Optimization & Evaluation (Versioning, A/B Testing Prompts)
-- 5.7 Architecture Patterns for Your First LLM App
-- 5.8 Prompting vs. Fine-Tuning vs. RAG — A Decision Framework
+- [5.1 Prompting Fundamentals: Zero-Shot, Few-Shot, Instruction Following](./5-1-prompting-fundamentals-zero-shot-few-shot-instruction-following.mdx)
+- [5.2 Advanced Prompting Patterns: Chain-of-Thought, Self-Consistency, Tree-of-Thought](./5-2-advanced-prompting-patterns-chain-of-thought-self-consistency-tree-of-thought.mdx)
+- [5.3 Structured Outputs & Tool/Function Calling, the Basics](./5-3-structured-outputs-tool-function-calling-basics.mdx)
+- [5.4 Structured Output Enforcement & Constrained Decoding, Deep Dive](./5-4-structured-output-enforcement-constrained-decoding-deep-dive.mdx)
+- [5.5 System Prompts, Guardrails & Prompt-Injection Defense](./5-5-system-prompts-guardrails-prompt-injection-defense.mdx)
+- [5.6 Prompt Optimization & Evaluation (Versioning, A/B Testing Prompts)](./5-6-prompt-optimization-evaluation-versioning-ab-testing.mdx)
+- [5.7 Architecture Patterns for Your First LLM App](./5-7-architecture-patterns-for-your-first-llm-app.mdx)
+- [5.8 Prompting vs. Fine-Tuning vs. RAG, A Decision Framework](./5-8-prompting-vs-fine-tuning-vs-rag-decision-framework.mdx)

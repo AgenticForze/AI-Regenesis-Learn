@@ -1,0 +1,209 @@
+---
+title: "Prompting vs. Fine-Tuning vs. RAG, A Decision Framework"
+sidebar_label: "5.8 Prompting vs. Fine-Tuning vs. RAG"
+sidebar_position: 8
+phase: 5
+chapter: "5.8"
+lms_presentation: "5.8-Prompting-vs-FineTuning-vs-RAG-Slides.pptx"
+prerequisites: ["5.1", "5.7"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Three different tools solve three different problems, and reaching for the wrong one is the most
+common architectural mistake in a first LLM app. Prompting, writing clear instructions and a few
+in-context examples, is the cheapest to try and should be tried first: OpenAI's own guidance states
+plainly that "the prompt engineering process may be all you need in order to get great results for
+your use case." Retrieval-augmented generation (RAG) exists because a model's parametric knowledge
+is frozen at training time; Lewis et al.'s original RAG paper (2020) names the core limitation
+directly, that a pretrained model's "ability to access and precisely manipulate knowledge is still
+limited," and that "providing provenance for their decisions and updating their world knowledge
+remain open research problems." RAG solves exactly that: it grounds a response in retrieved,
+current, citable documents. Fine-tuning solves a different problem entirely, baking a behavior,
+format, or narrow skill into the model's weights so it no longer needs to be re-explained in every
+prompt, at the cost of needing labeled training data, compute, and retraining whenever that behavior
+needs to change. None of these three approaches is a strict replacement for either of the others, and
+production systems routinely combine them, most notably fine-tuning a model specifically to make
+better use of retrieved context, an approach the RAFT paper (Zhang et al., 2024) demonstrates
+directly. This chapter is a decision framework for choosing and combining them; the mechanics of RAG
+retrieval pipelines and fine-tuning techniques are covered in full in Phase 6 and Phase 7.
+
+## High-Level Explanation
+
+Picture training a new employee. Prompting is a one-page instruction sheet you hand them before
+today's task, clear, specific, easy to revise tomorrow, but only as good as what fits on the page and
+only in effect for as long as they're holding it. RAG is giving that same employee a reference binder
+they can flip through mid-task, the binder can be updated overnight without retraining the employee
+at all, and they can point to the exact page a fact came from. Fine-tuning is months of on-the-job
+coaching until a behavior becomes second nature, no instruction sheet or binder required in the
+moment, but every correction takes real time and effort, and it does not update itself when a policy
+changes. A new task usually starts with the instruction sheet. It graduates to the binder when the
+task needs facts that change or need a paper trail. It graduates to coaching when the same narrow
+behavior has to happen thousands of times a day and re-explaining it in every instruction sheet has
+become the expensive part.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/5-8-three-approaches-overview.svg').default}
+    alt="A diagram comparing three ways to shape an LLM's behavior side by side: prompting, which changes what is written in the request itself and takes effect immediately with no training; retrieval-augmented generation, which adds retrieved documents to the request so the model is grounded in current, citable source material; and fine-tuning, which changes the model's own weights through additional training so a behavior no longer needs to be re-explained in every request."
+  />
+  <figcaption>Three different levers, changing the request, adding retrieved context to the request, or changing the model itself, not three tiers of the same lever.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Start with prompting, and mean it.** OpenAI's guidance on model optimization is direct about
+sequencing: "the prompt engineering process may be all you need in order to get great results for
+your use case." The same guidance names concrete benefits of fine-tuning "over prompting alone," but
+frames them as reasons to graduate beyond prompting, not reasons to start elsewhere: "you can use
+shorter prompts with fewer examples and context data, which saves on token costs at scale and can be
+lower latency," and "you can train a smaller, cheaper, faster model to excel at a particular task,
+where a larger model is not cost-effective."
+Both of those benefits describe a cost problem that only exists once a prompt has already grown long
+and a task is already running at high volume, not a reason to skip prompting on day one. The
+practical discipline this implies: build an eval set first (the golden-dataset discipline from 5.6
+applies here directly), see how far prompting actually gets you, and only then decide whether the gap
+is a knowledge problem or a behavior problem.
+
+**RAG exists because parametric memory has a cutoff and no paper trail.** Lewis et al.'s "Retrieval-
+Augmented Generation for Knowledge-Intensive NLP Tasks" (2020) is the paper that named and formalized
+this pattern. Its motivating claim is precise: large pretrained models' "ability to access and
+precisely manipulate knowledge is still limited, and hence on knowledge-intensive tasks, their
+performance lags behind task-specific architectures," and "providing provenance for their decisions
+and updating their world knowledge remain open research problems." Their proposed architecture
+combines "a pre-trained seq2seq model" as parametric memory with "a dense vector index of Wikipedia,
+accessed with a pre-trained neural retriever" as non-parametric memory, retriever and generator
+working together rather than the generator working alone. Anthropic's own framing of when this
+matters is worth quoting directly: "RAG can be particularly useful for tasks that require up-to-date
+information, domain-specific knowledge, or explicit citation of sources." A fine-tuned model cannot
+offer any of those three properties on its own, no matter how well it was trained, because a fact
+baked into weights during training has no timestamp, no source, and no way to update itself
+overnight.
+
+**Fine-tuning exists because some behaviors are expensive to keep re-explaining.** Anthropic's
+glossary describes fine-tuning plainly: "the process of further training a pretrained language model
+using additional data. This causes the model to start representing and mimicking the patterns and
+characteristics of the fine-tuning dataset." OpenAI's supervised fine-tuning guidance names what it
+is "best for": "Classification, Nuanced translation, Generating content in a specific format,
+Correcting instruction-following failures." Full fine-tuning updates every weight in the model and is
+expensive at real model scale; parameter-efficient techniques exist specifically to cut that cost.
+LoRA (Hu et al., 2021) is the best known: it "freezes the pre-trained model weights and injects
+trainable rank decomposition matrices into each layer of the Transformer architecture, greatly
+reducing the number of trainable parameters for downstream tasks," reporting a reduction in trainable
+parameters "by 10,000 times and the GPU memory requirement by 3 times" against full fine-tuning of a
+175-billion-parameter model. This chapter does not go further into how LoRA or full fine-tuning
+actually works; Phase 7 covers that in full. What matters here is only the shape of the tradeoff: real
+upfront cost (labeled data, compute, an evaluation harness) in exchange for a model that no longer
+needs the behavior re-explained in every request.
+
+**A rough map from question to approach.** No single source states this as one settled formula, but
+triangulating OpenAI, Anthropic, AWS, and Google Cloud's published guidance points at a consistent
+shape. Google Cloud's own framing starts with exactly the right first question: "do you need the
+model to always give a citation of a source grounded in your data? If yes, you will need to use RAG."
+If not, the next question is about data volume and behavior complexity: "if you have only a small
+amount of data, then prompt engineering may suffice." AWS's guidance frames the same RAG-versus-
+fine-tuning choice around freshness and trust: "RAG can incorporate the latest documents in a few
+minutes," while "fine-tuning can take a few hours to days, depending on the size of the model,"
+and critically, "fine-tuned models do not provide a reference to the source in their responses,"
+while "in its response, a RAG model provides a reference to the information source." Put the three
+questions in sequence: does the answer need to cite current source material (RAG), does a small
+number of well-chosen examples already demonstrate the desired behavior (prompting), and is this a
+narrow, extremely high-volume task where the same behavior needs to happen without re-explaining it
+every time (fine-tuning).
+
+**The three approaches are not mutually exclusive.** Google Cloud's guidance says this outright: "you
+can freely combine the aforementioned methods at your convenience." Snorkel AI's framing is more
+direct still: "fine-tuning and RAG are not rivals, but complementary techniques that collaboratively
+enhance LLMs." The clearest documented example of combining them is RAFT (Retrieval Augmented
+Fine-Tuning, Zhang et al., 2024), "a training recipe that improves the model's ability to answer
+questions in a 'open-book' in-domain settings" by training the model itself to tell a genuinely
+relevant retrieved passage apart from an irrelevant distractor one, and to cite the passage it actually
+used. A RAG system built on a model that was never trained to use retrieved context well can retrieve
+a perfectly relevant document and still ignore it, or cite the wrong one; RAFT-style fine-tuning is
+what closes that gap. A production system reaching real scale commonly ends up combining all three:
+a fine-tuned model for consistent style and a narrow core skill, RAG for anything that needs to be
+current or cited, and prompting for everything that varies request to request.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Prompting / few-shot', 'Retrieval-augmented generation (RAG)', 'Fine-tuning (full or parameter-efficient)']}
+  rows={[
+    {aspect: 'What actually changes', values: ['The request sent to the model, nothing about the model itself', 'The request, augmented with retrieved documents at query time', 'The model\'s own weights, through additional training'], decisive: true},
+    {aspect: 'Best for', values: ['Getting started, and any task a few good examples can demonstrate', 'Answers that must cite current, specific source documents', 'A narrow, high-volume behavior expensive to keep re-explaining'], decisive: true},
+    {aspect: 'Upfront cost before it helps at all', values: ['Near zero, iterate in the prompt itself', 'A retrieval pipeline and a document index, no model training', 'Labeled training data, compute, and an evaluation harness'] },
+    {aspect: 'How current is its knowledge', values: ['As current as what fits in the prompt', 'As current as the underlying document index', 'Frozen at whatever the training data reflected'] },
+    {aspect: 'Can it cite a source for a specific claim', values: ['Only what was included in the prompt itself', 'Yes, this is RAG\'s defining advantage', 'No, a fact baked into weights carries no provenance'] },
+  ]}
+  caption="Complementary levers, not competing tiers; a mature system commonly combines all three rather than picking exactly one."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing (and combining) an approach for a new LLM use case"
+  mermaid={`
+flowchart TD
+  START[A new LLM use case needs an approach] --> CITE{Must the answer cite specific, current source documents?}
+  CITE -->|Yes| RAG[Retrieve relevant documents and pass them into the prompt]
+  CITE -->|No| SMALL{Do a few well-chosen examples already demonstrate the desired behavior?}
+  SMALL -->|Yes| PROMPT[Ship a prompting-based approach with a few in-context examples]
+  SMALL -->|No| VOLUME{Is this a narrow, very high-volume task where per-request cost and latency matter most?}
+  VOLUME -->|Yes| FT[Fine-tune a model on labeled examples of the task]
+  VOLUME -->|No| ITERATE[Keep iterating on the prompt, and revisit both questions above as the task grows]
+  ITERATE --> SMALL
+  RAG --> COMBINE{Does the model reliably use and cite the retrieved context on its own?}
+  COMBINE -->|No| FTRAG[Fine-tune the model to use retrieved context better]
+  COMBINE -->|Yes| SHIP1[Ship the RAG-based approach]
+  FTRAG --> SHIP1
+`}
+  components={[
+    {name: 'Prompting / few-shot', responsibility: 'The default starting point for any new task; cheapest to try and fastest to revise.'},
+    {name: 'Retrieval-augmented generation', responsibility: 'Grounds a response in retrieved, current, citable documents rather than frozen parametric knowledge.'},
+    {name: 'Fine-tuning', responsibility: 'Bakes a narrow behavior, format, or skill into the model\'s weights so it no longer needs re-explaining every request.'},
+    {name: 'RAFT-style combination', responsibility: 'Fine-tunes a model specifically to use and cite retrieved context reliably, when RAG alone is not enough.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Fine-tuning a report-formatting model before trying a few-shot prompt', problem: 'Wanting a quarterly-summary generator to always follow one exact template, a team jumps straight to collecting a training set and fine-tuning a model for it.', solution: 'Try a well-specified prompt with two or three example outputs first, and only fine-tune if that genuinely falls short at scale.', risk: 'The cost of labeled data, training, and evaluation infrastructure for that fine-tuning project gets paid regardless of whether a single afternoon of prompt iteration might have solved the same problem for free.'},
+    {title: 'Fine-tuning a compliance-answer model on rules that change quarterly', problem: 'A compliance assistant is fine-tuned on the current regulatory thresholds, and those thresholds are revised again before the next quarter ends.', solution: 'Use RAG to ground compliance answers in the current version of the regulation document, updated the moment the source changes, rather than baking a snapshot of it into the model.', risk: 'A fine-tuned model has no way to know its regulatory knowledge went stale the day the rule changed, and it will keep citing the old threshold with exactly the same confidence as it once cited the correct one.'},
+    {title: 'Building a long few-shot prompt for a high-volume trade-ticket classifier', problem: 'A trade-ticket classifier runs on every incoming ticket and relies on a growing list of few-shot examples stuffed into every single request to cover new edge cases.', solution: 'Fine-tune a smaller model on the accumulated labeled examples once the few-shot prompt has grown large and the task volume is high enough to make it worthwhile.', risk: 'Paying full per-token, per-example prompt costs on every one of thousands of daily tickets adds up to real, recurring spend that a one-time fine-tuning cost would have replaced with a much shorter prompt.'},
+    {title: 'Shipping a RAG-based advisory assistant that ignores its own retrieved documents', problem: 'An investment-advisory assistant retrieves the right internal research note for a query, and the generated answer still contradicts what that note says.', solution: 'Evaluate whether the base model reliably grounds its answer in retrieved content, and apply RAFT-style fine-tuning if it does not.', risk: 'Even when the retriever surfaces exactly the right document, a model that was never trained to prefer that document\'s content over its own frozen assumptions will not reliably use it, so nothing about a working retrieval pipeline actually guarantees a grounded answer.'},
+  ]}
+  healthcare={[
+    {title: 'Fine-tuning a patient-intake summarizer before testing a prompt', problem: 'Before anyone tries a detailed prompt with two example summaries, a model is fine-tuned to summarize patient intake forms into a fixed structure.', solution: 'Test a carefully written prompt with a couple of worked examples before investing in a labeled dataset and a fine-tuning run.', risk: 'Skipping straight to fine-tuning means the cost of curating a labeled intake-summary dataset gets paid regardless of whether a much cheaper prompt would have cleared the same bar.'},
+    {title: 'Fine-tuning a clinical-guidance assistant on protocols that get revised', problem: 'A clinical-guidance assistant is fine-tuned on the current treatment protocol, and a revised version of that protocol is published a few months later.', solution: 'Ground clinical guidance in RAG over the current protocol documents instead, so an update to the source document is reflected immediately.', risk: 'Whatever protocol version was baked into the fine-tuned model keeps being recommended after a revision ships, and nothing in the model\'s own output signals to a clinician that the guidance it just gave is now out of date.'},
+    {title: 'Re-sending a long list of formatting examples on every discharge-note request', problem: 'A discharge-note generator processes a high volume of notes daily and includes a large block of few-shot formatting examples in every single request to keep the output structure consistent.', solution: 'Fine-tune a model on the same formatting examples once volume and prompt length make the per-request cost of few-shot prompting the larger expense.', risk: 'The added latency and token cost of resending the same formatting examples on every discharge note, multiplied across a full day of patient volume, becomes the dominant cost of running the feature.'},
+    {title: 'Deploying a RAG-based guideline assistant that cites the wrong retrieved source', problem: 'A clinical-guideline assistant retrieves a relevant passage but attributes its answer to a different, unrelated document in the response.', solution: 'Assess whether the model needs RAFT-style fine-tuning to reliably distinguish and cite the specific retrieved passage it actually relied on.', risk: 'A citation that points to the wrong source is arguably worse than no citation at all, because it gives a clinician false confidence to verify a claim against a document that never actually supported it.'},
+  ]}
+  telecom={[
+    {title: 'Fine-tuning a ticket-tagging model without first trying a few-shot prompt', problem: 'A team fine-tunes a model to tag support tickets by category, without first checking whether a well-written prompt with a handful of labeled examples already tags them accurately enough.', solution: 'Build an eval set, test a few-shot prompt against it, and only pursue fine-tuning if the prompt-based approach genuinely underperforms.', risk: 'A fine-tuning project started before anyone tested a simple prompt against the same eval set risks spending real engineering time solving a problem a prompt would have solved in an afternoon.'},
+    {title: 'Fine-tuning a plan-and-pricing assistant on promotions that rotate monthly', problem: 'A customer-facing plan-and-pricing assistant is fine-tuned on this month\'s promotional offers, and next month\'s promotions replace them entirely.', solution: 'Ground pricing and promotion answers in RAG over the current plan catalog, so a promotion change is reflected the moment the catalog updates.', risk: 'Once fine-tuned into the model, an expired promotion keeps getting quoted to customers with full confidence long after it stopped being valid, and no one asked the model to double-check.'},
+    {title: 'Growing a few-shot prompt for a high-volume network-alert triage tool', problem: 'An alert-triage tool handles a constant stream of incoming network alerts and carries an ever-growing set of few-shot examples in its prompt to keep covering new alert types correctly.', solution: 'Fine-tune a smaller, faster model on the accumulated triage examples once alert volume makes the per-alert cost of the long prompt the dominant expense.', risk: 'Every alert in a constant stream still pays the token cost of the long few-shot prompt, and that added latency lands on each triage decision at exactly the moment an incident response needs it fastest.'},
+    {title: 'Launching a RAG-based troubleshooting assistant that never cites its runbook source', problem: 'A troubleshooting assistant retrieves the correct internal runbook section for an issue, and its answer to the customer never mentions or points back to that runbook at all.', solution: 'Check whether the model needs RAFT-style fine-tuning to consistently ground and cite the specific runbook passage it retrieved, rather than answering from its own general knowledge.', risk: 'Running a retrieval step that never visibly shapes the final answer creates the illusion of a grounded system, while leaving every response exposed to the same fabrication risk an ungrounded model already had.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'According to OpenAI\'s guidance, what should you try before committing to fine-tuning, and what two concrete benefits does OpenAI name for fine-tuning "over prompting alone"?', answer: 'OpenAI states that "the prompt engineering process may be all you need in order to get great results for your use case," so prompting should be tried first. The two named benefits of fine-tuning are that "you can use shorter prompts with fewer examples and context data, which saves on token costs at scale and can be lower latency," and that "you can train a smaller, cheaper, faster model to excel at a particular task, where a larger model is not cost-effective."'},
+    {question: 'What core limitation of pretrained language models motivated Lewis et al.\'s original RAG paper, in their own words?', answer: 'Lewis et al. state that pretrained models\' "ability to access and precisely manipulate knowledge is still limited," and that "providing provenance for their decisions and updating their world knowledge remain open research problems." RAG addresses this by combining a parametric model with a non-parametric, retrievable knowledge source.'},
+    {question: 'What three properties does Anthropic name as reasons to reach for RAG specifically?', answer: 'Anthropic states that "RAG can be particularly useful for tasks that require up-to-date information, domain-specific knowledge, or explicit citation of sources." A fine-tuned model cannot offer any of these three on its own, since a fact baked into weights carries no timestamp or source.'},
+    {question: 'What does LoRA change about how fine-tuning works, and what cost reduction does the original paper report against full fine-tuning of a 175-billion-parameter model?', answer: 'LoRA "freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks." Against full fine-tuning of GPT-3 175B, the paper reports LoRA can reduce trainable parameters "by 10,000 times and the GPU memory requirement by 3 times."'},
+    {question: 'Why are prompting, RAG, and fine-tuning not mutually exclusive, and what does RAFT specifically fine-tune a model to do?', answer: 'A mature system commonly combines all three: fine-tuning for a consistent narrow skill, RAG for anything requiring current or citable facts, and prompting for whatever varies request to request. RAFT (Retrieval Augmented Fine-Tuning) is "a training recipe that improves the model\'s ability to answer questions in a \'open-book\' in-domain settings," specifically training the model to distinguish a genuinely relevant retrieved passage from an irrelevant distractor and to cite the one it actually used, closing a gap that a working retrieval pipeline alone does not close.'},
+  ]}
+/>

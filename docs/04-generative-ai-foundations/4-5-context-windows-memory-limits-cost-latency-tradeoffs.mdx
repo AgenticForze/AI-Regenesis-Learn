@@ -1,0 +1,202 @@
+---
+title: "Context Windows, Memory Limits & Cost/Latency Trade-offs"
+sidebar_label: "4.5 Context Windows & Cost/Latency"
+sidebar_position: 5
+phase: 4
+chapter: "4.5"
+lms_presentation: "4.5-Context-Windows-Cost-Latency-Slides.pptx"
+prerequisites: ["2.5", "3.3", "4.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+An LLM's **context window** is the maximum number of tokens, input and output combined, it can
+process at once, bounded both by its positional encoding scheme and by the raw compute and memory
+cost of self-attention (2.5), which scales quadratically with sequence length. Processing the prompt
+(**prefill**) is compute-bound and grows quadratically; generating each new token afterward
+(**decode**, 4.3) instead requires reading a **KV cache**, the stored keys and values for every prior
+token, whose memory footprint grows linearly with sequence length and whose repeated reads make
+decode memory-bandwidth-bound rather than compute-bound. Longer context is therefore never free: it
+raises prefill latency, decode latency, and, on a hosted API, dollar cost, all at once. FlashAttention
+computes the exact same attention output with far less memory traffic; RoPE and ALiBi extend how well
+a model generalizes to sequences longer than it was trained on; grouped-query attention shrinks the
+KV cache itself; and retrieval, previewed here and covered fully in Phase 6, sidesteps the problem
+entirely by fetching only the relevant material instead of lengthening the context at all.
+
+## High-Level Explanation
+
+Picture someone reading a long document to answer a question about it. If the document is short,
+they hold the whole thing in their head at once. As it gets longer, they start needing a growing
+stack of sticky notes summarizing everything they have already read, so they do not have to
+re-read from the beginning every time they turn a new page; that stack of notes is the KV cache, and
+it takes up more desk space the longer the document gets. A faster reader does not understand the
+document any differently, they just get through the same material with less wasted effort, the way
+FlashAttention computes the identical result more efficiently. A reader who trained mostly on short
+documents can sometimes still muddle through a much longer one if given a good general sense of "how
+far back" something was relative to where they are now, which is what RoPE and ALiBi provide, though
+only up to a point. And rather than trying to hold an entire library in their head at once, a smarter
+approach is to have a librarian hand over only the specific pages that are actually relevant to the
+question, which is the idea behind retrieval, covered fully in Phase 6.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-5-prefill-vs-decode.svg').default}
+    alt="A diagram contrasting the prefill phase, which processes the full prompt at once and is compute-bound with quadratic cost in sequence length, against the decode phase, which generates one token at a time and is memory-bandwidth-bound by a linearly growing KV cache."
+  />
+  <figcaption>Prefill and decode are two different phases with two different cost profiles, and a longer context makes both of them more expensive.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Why self-attention is quadratic, and what that costs during prefill.** Standard self-attention
+(2.5) computes an attention score between every pair of tokens in a sequence, so a sequence of length
+n requires on the order of n-squared score computations, and naively, n-squared memory to hold the
+full attention score matrix. This is the direct cost of prefill, the phase where the model processes
+the entire input prompt before generating anything, and it is compute-bound: the GPU is doing genuine
+arithmetic work proportional to the square of the prompt length, and that work parallelizes well
+across the prompt's tokens since they are all already available at once.
+
+**FlashAttention: the exact same output, computed far more efficiently.** Materializing the full
+n-by-n attention score matrix in a GPU's slower main memory, then reading it back for the subsequent
+softmax and weighted sum, wastes enormous memory bandwidth. FlashAttention (Dao et al.,
+[*FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*](https://arxiv.org/abs/2205.14135),
+2022) restructures the computation using tiling, processing the attention calculation in blocks small
+enough to stay in the GPU's much faster on-chip memory, and recomputing certain intermediate values
+during the backward pass rather than storing them. Critically, this is an exact algorithm, not an
+approximation, the same mathematical result as standard attention, produced with dramatically less
+memory traffic and higher throughput, the same "identical output, cheaper to produce" idea speculative
+decoding (4.3) applies to the decoding loop, applied here to the attention computation itself.
+
+**The KV cache and why decode has a different cost profile than prefill.** Once the prompt has been
+processed, generating each new token autoregressively (3.3, 4.3) requires that new token's query
+vector to attend back over every prior token's key and value vectors. Recomputing those key and value
+vectors for the entire sequence at every single new token would be wasteful, so they are cached, the
+KV cache, and reused. This cache must be stored per layer and per attention head, and its size grows
+linearly with sequence length. Because decode generates one token at a time, largely sequentially,
+and each step must read the full, ever-growing KV cache from memory, decode is memory-bandwidth-bound
+rather than compute-bound: at long context lengths, the cost of simply reading the cache, not the
+arithmetic itself, becomes the dominant driver of decode latency and, on a hosted API, of per-token
+cost.
+
+**Positional encoding and generalizing beyond the trained length.** A model's understanding of token
+position is tied to whatever positional encoding scheme it was trained with, and performance can
+degrade sharply once a sequence exceeds the lengths seen during training. RoPE (Su et al.,
+[*RoFormer: Enhanced Transformer with Rotary Position Embedding*](https://arxiv.org/abs/2104.09864),
+2021) encodes position by applying a rotation to query and key vectors as a function of their
+relative position, rather than adding a fixed positional vector, which gives models meaningfully
+better ability to generalize to longer sequences than absolute positional encodings typically allow.
+ALiBi (Press et al.,
+[*Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation*](https://arxiv.org/abs/2108.12409),
+2021) takes a different approach, directly biasing attention scores based on the distance between
+positions rather than modifying the query and key vectors themselves, and reports strong extrapolation
+to sequences considerably longer than the model was trained on. Neither technique makes context length
+unlimited; both extend how gracefully a model degrades past its trained length, rather than removing
+the limit outright.
+
+**Where in the context matters too, not only how long.** Even within a model's supported context
+length, Liu et al. ([*Lost in the Middle: How Language Models Use Long Contexts*](https://arxiv.org/abs/2307.03172),
+2023) find that model performance on retrieving a piece of information is often strongest when that
+information sits near the beginning or end of the context and measurably weaker when it sits in the
+middle, a distinct finding from the length-extrapolation question above: this degradation shows up
+even on sequences comfortably within the model's supported length, meaning where the relevant
+information sits within the context matters, not only how much total context is used.
+
+**Grouped-query attention: shrinking the cache itself.** In standard multi-head attention, every
+attention head maintains its own separate keys and values, multiplying the KV cache's size by the
+number of heads. Grouped-query attention (Ainslie et al.,
+[*GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints*](https://arxiv.org/abs/2305.13245),
+2023) has multiple query heads share one set of key/value heads, a middle ground between standard
+multi-head attention and the more extreme multi-query attention design that shares a single key/value
+head across all queries. This directly cuts the KV cache's memory footprint and the memory-bandwidth
+cost of reading it during decode, and existing multi-head checkpoints can be adapted into this
+structure without training an entirely new model from scratch.
+
+**Putting the cost picture together.** Prefill latency mainly reflects quadratic attention compute
+over the prompt, which FlashAttention reduces without changing the result. Decode latency and
+per-token cost mainly reflect the linear, memory-bandwidth-bound cost of reading an ever-growing KV
+cache once per generated token, which grouped-query attention reduces by shrinking that cache. Both
+map directly to a hosted API's billable resource usage, which is why a longer context or a longer
+multi-turn conversation costs more, not just runs slower. Retrieval, previewed here and covered fully
+in Phase 6, offers a different strategy than optimizing any of these costs directly: instead of
+lengthening the context to include everything that might be relevant, retrieve only the specific
+passages that are, keeping context length, and therefore both cost profiles, bounded regardless of
+how much total source material exists.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['FlashAttention', 'RoPE / ALiBi', 'Grouped-query attention', 'Retrieval (previewed, Phase 6)']}
+  rows={[
+    {aspect: 'What it targets', values: ['Prefill compute/memory traffic', 'Generalization beyond trained sequence length', 'KV cache memory during decode', 'Total context length needed at all'], decisive: true},
+    {aspect: 'Changes the model\'s output?', values: ['No: mathematically exact', 'Changes behavior on long sequences, by design', 'No, if adapted correctly from a checkpoint', 'Changes what the model sees, by design'], decisive: true},
+    {aspect: 'Cost it reduces', values: ['Prefill latency, via less memory I/O', 'Effective usable context length', 'Decode latency and per-token cost', 'Both, by keeping context short regardless of source size'] },
+    {aspect: 'Main limitation', values: ['Only addresses prefill, not decode\'s KV cache cost', 'Extrapolation degrades gradually, not unlimited', 'Some quality trade-off versus full multi-head attention', 'Retrieval quality becomes the new bottleneck'] },
+  ]}
+  caption="These techniques attack different parts of the same underlying cost structure; a real deployment typically combines several of them rather than choosing just one."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Diagnosing and addressing a context-length cost or latency problem"
+  mermaid={`
+flowchart TD
+  PROBLEM[Context-length cost or latency problem] --> WHICH{Which phase is the bottleneck?}
+  WHICH -->|Prefill: long prompt processing is slow| FA[Apply FlashAttention: exact, less memory traffic]
+  WHICH -->|Decode: per-token generation is slow or expensive| GQA[Consider a grouped-query-attention model to shrink the KV cache]
+  PROBLEM --> LENGTH{Does the task need more tokens than the model supports well?}
+  LENGTH -->|Yes, moderately beyond trained length| POSENC[Rely on RoPE/ALiBi extrapolation, expect gradual degradation]
+  LENGTH -->|Yes, source material far exceeds any context window| RETRIEVE[Use retrieval instead of lengthening context, Phase 6]
+  PROBLEM --> POSITION{Is relevant information getting missed mid-context?}
+  POSITION -->|Yes| REORDER[Place critical information near the start or end of the context]
+`}
+  components={[
+    {name: 'FlashAttention', responsibility: 'Reduces prefill cost without changing the model\'s output.'},
+    {name: 'RoPE / ALiBi', responsibility: 'Extends how gracefully a model handles sequences beyond its trained length.'},
+    {name: 'Grouped-query attention', responsibility: 'Reduces the KV cache\'s memory footprint, directly lowering decode cost and latency.'},
+    {name: 'Retrieval (Phase 6)', responsibility: 'Bounds context length regardless of total source material size, by fetching only what is relevant.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Choosing retrieval over full-context stuffing for long contract analysis at scale', problem: 'A team processing thousands of multi-hundred-page loan agreements considers feeding each full document into a long-context model rather than retrieving only relevant clauses.', solution: 'Compare the cost and latency of full-context processing against a retrieval-based approach at the actual production volume, not just on a handful of test documents.', risk: 'Processing every full contract in-context at production volume can make per-document cost scale with document length across thousands of daily filings, turning a workable pilot-scale cost into an unsustainable production bill without a retrieval step bounding it.'},
+    {title: 'Evaluating grouped-query-attention models specifically for low-latency trading-support chat', problem: 'A real-time trading-support assistant needs consistently low decode latency across a long back-and-forth conversation, not just a fast first response.', solution: 'Specifically benchmark decode-phase latency, not just prefill latency, when evaluating candidate models, favoring architectures with a smaller KV cache footprint such as grouped-query attention.', risk: 'A model evaluated only on prefill speed can still exhibit growing per-token decode latency as a trading conversation lengthens, introducing a response delay during a fast-moving market window when timing itself carries financial consequence.'},
+    {title: 'Accounting for KV-cache-driven per-token cost growth in long customer-support chat threads', problem: 'A cost estimate for a customer-support chatbot assumed a flat per-message cost, not accounting for cost that grows as a single conversation thread lengthens.', solution: 'Model hosted-API cost as a function of cumulative conversation length, not a flat per-message estimate, when budgeting for support-chat volume.', risk: 'Underestimating how per-token cost scales with a growing KV cache across a single long support thread can produce a monthly API bill significantly above budget once real customers hold longer, more complex conversations than the flat-rate estimate assumed.'},
+    {title: 'Verifying positional-encoding extrapolation reliability before relying on it for long regulatory-document review', problem: 'A compliance team wants to feed long regulatory filings, some beyond the model\'s trained context length, relying on RoPE or ALiBi extrapolation to handle the excess.', solution: 'Specifically test retrieval accuracy on content placed at various positions within documents at or beyond the model\'s trained length, rather than assuming extrapolation performs uniformly.', risk: 'A compliance review relying on unverified extrapolation past the trained context length could silently miss a clause near the extrapolated tail of a long filing, a gap that would not show up in testing confined to shorter, within-length documents.'},
+  ]}
+  healthcare={[
+    {title: 'Weighing retrieval-based EHR summarization against full-context processing for long patient histories', problem: 'A clinical summarization tool considers feeding a patient\'s entire multi-year EHR history into a long-context model rather than retrieving only the relevant recent and chronic-condition entries.', solution: 'Compare retrieval-based chunking against full-context processing on both cost and clinical completeness, specifically for patients with unusually long histories.', risk: 'Full-context processing of an unusually long patient history can push cost and latency per encounter far above budget for exactly the complex, multi-condition patients whose summaries matter most, unless retrieval keeps the processed context bounded.'},
+    {title: 'Benchmarking decode-latency for real-time clinical-documentation assistants during live encounters', problem: 'A clinical documentation assistant used during a live patient encounter needs consistently low decode latency as the encounter transcript grows longer.', solution: 'Specifically benchmark decode-phase latency growth over the course of a realistic encounter length, favoring cache-efficient architectures such as grouped-query attention.', risk: 'A documentation assistant that slows down as an encounter transcript lengthens can fall behind a live conversation, forcing a clinician to either wait on the tool or lose the real-time note-taking benefit it was adopted for.'},
+    {title: 'Checking whether critical information buried mid-context in a long clinical note is reliably retrieved', problem: 'A long clinical note contains a critical allergy or contraindication notice positioned in the middle of the document rather than near the beginning or end.', solution: 'Specifically test retrieval accuracy for information placed in the middle of long clinical notes, per the documented "lost in the middle" effect, rather than assuming uniform recall across context position.', risk: 'A model that reliably recalls information near the start or end of a long note but not the middle could miss a mid-document allergy notice, a patient-safety-relevant gap that a test using only short notes or start/end-positioned information would never surface.'},
+    {title: 'Modeling per-token cost growth for long multi-turn clinical-documentation chat sessions', problem: 'A budget estimate for a clinical documentation assistant assumed a flat per-encounter cost, not accounting for cost that grows with a long, complex encounter\'s conversation length.', solution: 'Model cost as a function of cumulative session length specifically for complex, longer encounters, not a flat average across all encounter types.', risk: 'Underestimating cost growth for long, complex encounters specifically, the ones most likely to need extended documentation support, can produce a systematic budget shortfall concentrated exactly where the tool is used most heavily.'},
+  ]}
+  telecom={[
+    {title: 'Choosing retrieval over full-context processing for large network-log analysis', problem: 'A network-diagnostics tool considers feeding an entire day\'s raw log file into a long-context model rather than retrieving only log entries relevant to a specific incident.', solution: 'Compare retrieval-based log-entry selection against full-context processing on both cost and diagnostic accuracy at realistic log volumes.', risk: 'Feeding an entire day\'s log volume into a long-context model for every diagnostic query can make per-query cost and latency scale with total daily log volume, an unsustainable pattern during a high-alarm-volume incident when many diagnostic queries run in quick succession.'},
+    {title: 'Evaluating grouped-query-attention models for low-latency network-operations chat during high call volume', problem: 'A network-operations chat assistant used during a major incident needs consistently low decode latency even as operator conversations lengthen under high call volume.', solution: 'Specifically benchmark decode-phase latency growth under realistic incident-length conversations, favoring cache-efficient architectures such as grouped-query attention.', risk: 'An assistant that slows down as an incident conversation lengthens can leave operators waiting on guidance longest exactly during the highest-severity, longest-running incidents, when timely guidance matters most.'},
+    {title: 'Checking whether an early alarm buried mid-context in a long incident timeline is reliably retrieved', problem: 'A long incident timeline contains the earliest, root-cause alarm positioned well before later cascading alarms that fill most of the context.', solution: 'Specifically test retrieval accuracy for information placed early-but-buried within a long incident timeline, per the "lost in the middle" effect, rather than assuming the model recalls it as reliably as the most recent alarms.', risk: 'A root-cause analysis tool that reliably recalls recent alarms but not an early, buried root-cause alarm could misattribute an incident to a later symptom rather than its actual originating cause, delaying the fix that would actually resolve the outage.'},
+    {title: 'Modeling per-token cost growth for long multi-turn network-operations chat sessions during extended incidents', problem: 'A cost estimate for a network-operations chat assistant assumed a flat per-session cost, not accounting for cost that grows as an extended incident\'s conversation lengthens over many hours.', solution: 'Model cost as a function of cumulative conversation length for extended incidents specifically, not a flat average across typical, shorter sessions.', risk: 'Underestimating cost growth for the longest, most complex incidents specifically can produce a budget shortfall concentrated exactly on the highest-severity incidents that already strain operational resources the most.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why is prefill compute-bound with quadratic cost, while decode is memory-bandwidth-bound with linearly growing cost?', answer: 'Prefill processes the entire prompt at once, and self-attention computes a score between every pair of tokens, so cost grows with the square of prompt length and parallelizes well across tokens already available at once. Decode generates one token at a time and must read the full KV cache, which holds every prior token\'s key and value vectors and grows linearly with sequence length, at every single step, making the cost of reading that cache from memory the dominant factor rather than the arithmetic itself.'},
+    {question: 'In what sense is FlashAttention "the same output, computed more efficiently," and how does that compare to what speculative decoding (4.3) does?', answer: 'FlashAttention is an exact algorithm: it produces mathematically identical attention output to standard attention, just with far less memory traffic, by using tiling to keep computation in fast on-chip GPU memory rather than repeatedly reading and writing a full attention matrix from slower memory. This mirrors speculative decoding\'s core idea from 4.3, that speed can be improved without changing what gets produced, applied here to the attention computation itself rather than to the decoding loop.'},
+    {question: 'What is the difference between what RoPE/ALiBi address and what the "lost in the middle" finding (Liu et al., 2023) describes?', answer: 'RoPE and ALiBi address how gracefully a model handles sequences longer than it was trained on, a question about total sequence length relative to training length. The "lost in the middle" finding is distinct: even within a model\'s supported context length, performance at retrieving information can be measurably weaker when that information sits in the middle of the context rather than near the beginning or end, meaning where relevant information sits matters separately from how long the context is overall.'},
+    {question: 'How does grouped-query attention reduce decode cost, and why can existing multi-head checkpoints often be adapted into it rather than retrained from scratch?', answer: 'Standard multi-head attention gives every head its own separate keys and values, multiplying KV cache size by the number of heads. Grouped-query attention has multiple query heads share one set of key/value heads, directly shrinking the cache\'s memory footprint and the cost of reading it during decode. Because it is a middle ground between full multi-head attention and single-shared-head multi-query attention, an existing multi-head checkpoint\'s weights can often be adapted into this shared structure rather than requiring training an entirely new model.'},
+    {question: 'Why does retrieval (previewed here, covered fully in Phase 6) address the context-length cost problem differently than FlashAttention, RoPE/ALiBi, or grouped-query attention?', answer: 'FlashAttention, RoPE/ALiBi, and grouped-query attention all make a given context length cheaper, longer-reaching, or less memory-intensive to process, but they still process however much context is provided. Retrieval instead reduces how much context needs to be provided in the first place, fetching only the specific relevant material rather than lengthening the context to include everything that might be relevant, keeping both cost profiles bounded regardless of how much total source material exists.'},
+  ]}
+/>

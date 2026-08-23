@@ -1,0 +1,197 @@
+---
+title: "Multimodal Generative AI: Text-to-Image, Text-to-Video, Speech"
+sidebar_label: "4.4 Multimodal Generative AI"
+sidebar_position: 4
+phase: 4
+chapter: "4.4"
+lms_presentation: "4.4-Multimodal-Generative-AI-Slides.pptx"
+prerequisites: ["4.1", "4.2", "4.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+The model families from 4.2 and the decoding mechanisms from 4.3 are not tied to text alone; this
+chapter follows them into images, video, and speech. **Text-to-image** generation conditions a
+diffusion model (4.2) on a text prompt using cross-attention to a text encoder's embedding (such as
+CLIP's or a large language model's), strengthened at sampling time by **classifier-free guidance**, a
+technique that sharpens prompt adherence without needing a separate classifier. **Text-to-video**
+extends the same diffusion mechanism across a temporal dimension in addition to space, the added
+complexity being frame-to-frame consistency, which one prominent architecture addresses by treating
+video as spacetime patches processed by a diffusion transformer rather than by generating independent
+frames. **Text-to-speech**, by contrast, frequently abandons diffusion for the **autoregressive,
+token-based mechanism** from 3.3 and 4.1: a neural audio codec first compresses raw audio into
+discrete tokens, and a language model then generates new audio one token at a time, conditioned on
+text and, often, a short reference clip of a target voice. Which mechanism wins is not fixed by
+modality; it follows the same trade-offs the generative learning trilemma (4.1) already established.
+
+## High-Level Explanation
+
+Picture three different specialists given the same request: describe a rainy city street at night.
+An illustrator given that description paints a single still image. A filmmaker given the same
+description shoots a few seconds of moving footage, which is a harder job than the illustrator's
+because every frame has to agree with the frames around it, a car cannot teleport six feet between
+one frame and the next. A voice actor given a written script reads it aloud in a natural-sounding
+voice, which is a different kind of problem again: getting the rhythm, tone, and pronunciation right
+across time, much closer to how a person reads a sentence one word at a time than to painting a
+picture. The interesting result is that the illustrator and the filmmaker usually reach for the same
+underlying technique, painting from noise (diffusion, 4.2), adapted for the filmmaker's extra
+time dimension, while the voice actor's job turns out to resemble the autoregressive, one-piece-at-a-
+time mechanism a text-generating LLM already uses, just applied to chunks of sound instead of words.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-4-three-modalities-pipeline.svg').default}
+    alt="Three parallel pipelines starting from the same text prompt: one producing a still image via text-conditioned diffusion, one producing a short video via diffusion extended across time, and one producing speech audio via an autoregressive audio-token language model."
+  />
+  <figcaption>The same text prompt feeds three structurally different generation pipelines, two of them sharing a diffusion mechanism and one borrowing an autoregressive one.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Conditioning a diffusion model on text.** The diffusion mechanism from 4.2 by itself only knows how
+to reverse noise into "a plausible image from the training distribution," with no way to steer which
+image. Text conditioning adds cross-attention (2.5, 3.3) inside the denoising network: at every
+denoising step, the network attends over an embedding of the text prompt, not just over the noisy
+image itself, letting the prompt steer each step of the reverse process. That text embedding usually
+comes from a separately pretrained text encoder. CLIP (Radford et al.,
+[*Learning Transferable Visual Models From Natural Language Supervision*](https://arxiv.org/abs/2103.00020),
+2021) trains an image encoder and a text encoder together via a contrastive objective so that matching
+image-text pairs land close together in a shared embedding space, giving diffusion models a
+ready-made text embedding aligned with visual content. Imagen (Saharia et al.,
+[*Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding*](https://arxiv.org/abs/2205.11487),
+2022) instead uses a large, frozen general-purpose language model's text encoder (T5), and finds that
+scaling up the text encoder specifically improves prompt fidelity more than scaling up the
+image-diffusion component does, evidence that language understanding, not just image quality, is a
+binding constraint on faithful text-to-image generation.
+
+**Classifier-free guidance.** An earlier technique for steering diffusion toward a condition used a
+separately trained classifier to nudge the sampling process toward images that classifier scored as
+matching the prompt. Classifier-free guidance (Ho and Salimans,
+[*Classifier-Free Diffusion Guidance*](https://arxiv.org/abs/2207.12598), 2022) removes the separate
+classifier entirely: the same diffusion model is trained both with the text conditioning present and,
+some fraction of the time, with it randomly dropped, so one model learns both a conditional and an
+unconditional version of the denoising step. At sampling time, the model runs both versions at each
+step and extrapolates away from the unconditional prediction and toward the conditional one by a
+tunable guidance strength, which sharpens prompt adherence considerably. This technique is now
+standard in essentially all deployed text-to-image and text-to-video diffusion systems, not an
+optional extra.
+
+**Extending diffusion to video: the added complication is time.** A video is not simply a stack of
+independently generated images; if each frame were diffused independently, objects would flicker,
+jitter, or teleport between frames because nothing enforces agreement across time. OpenAI's technical
+report on its Sora video model, [*Video generation models as world
+simulators*](https://openai.com/index/video-generation-models-as-world-simulators/) (2024), describes
+one architectural approach to this problem: representing video as a collection of spacetime patches,
+small chunks of the data that span both a spatial region and a span of time together, rather than
+patches of a single still frame, and processing that representation with a diffusion transformer
+(a transformer-based denoiser, an architectural variant of the diffusion mechanism from 4.2) instead
+of a convolutional U-Net. This lets the same explicit-but-approximate-density diffusion mechanism
+operate over a video's full spatiotemporal volume directly, rather than generating frames
+independently and patching temporal consistency on afterward. This is one documented architectural
+pattern for text-to-video generation, not the only possible one, and the specific systems available
+change quickly; the underlying principle, that the temporal dimension has to be modeled directly
+rather than bolted on, is the durable part.
+
+**Speech generation: borrowing the autoregressive mechanism instead of diffusion.** Unlike image and
+video generation, a substantial share of modern text-to-speech systems do not use diffusion as their
+primary generative mechanism; they instead reuse the autoregressive, explicit-density mechanism from
+3.3, 4.1, and 4.2, applied to audio. A neural audio codec first compresses raw audio into a sequence
+of discrete tokens, conceptually similar to how BPE, WordPiece, or SentencePiece (3.5) tokenize text,
+except learned specifically to compress and reconstruct audio rather than text. VALL-E (Wang et al.,
+[*Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers*](https://arxiv.org/abs/2301.02111),
+2023) then trains a language model to autoregressively predict a sequence of these audio tokens,
+conditioned on the input text and a short reference clip of a target voice, generating new speech in
+that voice one audio token at a time, the same causal, exact-tractable-density mechanism (3.3, 4.1)
+an LLM uses to generate text tokens, just applied to a different, learned vocabulary.
+
+**Mechanism choice still follows the trilemma, not the modality.** Image and video generation lean
+toward diffusion because sample quality and diversity outweigh sampling-speed cost for those
+modalities (4.1's trilemma, 4.2). Speech generation often leans toward the autoregressive route
+instead, because speech is inherently sequential in the way text is, and a well-trained audio-token
+language model can capture natural prosody and voice characteristics token by token without paying
+diffusion's characteristic sampling-speed cost. The lesson is not "images use diffusion, audio uses
+autoregression" as a fixed rule, but that the same trade-offs from 4.1 and 4.2 continue to determine
+the right mechanism, per modality and per task, rather than the modality dictating the mechanism by
+itself.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Text-to-image', 'Text-to-video', 'Text-to-speech']}
+  rows={[
+    {aspect: 'Typical dominant mechanism', values: ['Diffusion, text-conditioned via cross-attention', 'Diffusion, extended across a temporal dimension', 'Autoregressive audio-token language model'], decisive: true},
+    {aspect: 'How text conditioning enters', values: ['Cross-attention to a text encoder embedding (CLIP, T5)', 'Same cross-attention mechanism, applied per spacetime patch', 'Text tokens and a reference-voice clip condition the audio-token LM'], decisive: true},
+    {aspect: 'Key added complexity vs. a single still image', values: ['N/A, this is the baseline case', 'Frame-to-frame temporal consistency', 'Natural prosody, pronunciation, and voice-identity consistency over time'] },
+    {aspect: 'Representative system/paper', values: ['Imagen (Saharia et al., 2022)', 'Sora (OpenAI technical report, 2024)', 'VALL-E (Wang et al., 2023)'] },
+  ]}
+  caption="Classifier-free guidance (Ho and Salimans, 2022) applies across the diffusion-based columns; it has no equivalent step in the autoregressive text-to-speech pipeline, which instead conditions directly through the input tokens the way a text LLM does."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From a text prompt to image, video, or speech"
+  mermaid={`
+flowchart TD
+  PROMPT[Text prompt] --> ENCODE[Text encoder embedding, e.g. CLIP or T5]
+  ENCODE --> MODALITY{Which modality?}
+  MODALITY -->|Image| IMGDIFF[Diffusion model, cross-attention to text embedding]
+  IMGDIFF --> CFG1[Classifier-free guidance at sampling time]
+  CFG1 --> IMAGE[Output image]
+  MODALITY -->|Video| VIDDIFF[Diffusion transformer over spacetime patches]
+  VIDDIFF --> CFG2[Classifier-free guidance at sampling time]
+  CFG2 --> VIDEO[Output video]
+  MODALITY -->|Speech| CODEC[Neural audio codec: audio to discrete tokens]
+  CODEC --> ARLM[Autoregressive language model over audio tokens, conditioned on text and reference voice]
+  ARLM --> SPEECH[Output speech audio]
+`}
+  components={[
+    {name: 'Text encoder embedding', responsibility: 'Turns the input prompt into a representation the downstream generator can attend to, shared across the image and video paths.'},
+    {name: 'Text-conditioned diffusion (image/video)', responsibility: 'Owns high-quality, diverse visual generation, extended across time for video via spacetime patches.'},
+    {name: 'Classifier-free guidance', responsibility: 'Sharpens prompt adherence for the diffusion-based paths without a separate classifier.'},
+    {name: 'Neural audio codec + autoregressive LM (speech)', responsibility: 'Owns sequential audio generation, reusing the same explicit-density mechanism as text generation, applied to a learned audio-token vocabulary.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Governing voice-cloning-capable text-to-speech before deploying it in call-center voice bots', problem: 'A team wants a natural-sounding voice bot for customer calls and is evaluating a VALL-E-style system capable of cloning a specific voice from a short reference clip.', solution: 'Restrict which reference voices the system is permitted to clone to a consented, licensed set, and keep the underlying account-action logic separate from the generated voice audio (previewed further in 4.7).', risk: 'A few-shot voice-cloning capable TTS system deployed without consent controls on reference voices could be used to convincingly reproduce a real customer\'s or employee\'s voice, directly undermining voice-based authentication used elsewhere in the same institution.'},
+    {title: 'Disclosing AI-generated imagery in financial marketing content', problem: 'A marketing team uses text-to-image generation for campaign visuals depicting financial products or scenarios, without a clear internal policy on disclosure.', solution: 'Apply a disclosure and review policy specifically for AI-generated marketing imagery depicting financial products, distinct from ordinary stock-photo review.', risk: 'An undisclosed AI-generated image depicting a financial product or outcome, if it happens to depict something misleading about returns or terms, carries a specific regulatory-marketing exposure beyond the ordinary creative-review risk a stock photo would carry.'},
+    {title: 'Keeping synthetic-document imagery clearly distinguishable from real specimens in fraud-training materials', problem: 'A fraud-training team uses text-to-image generation to create example fraudulent checks or statements for staff training, and the generated images look highly realistic.', solution: 'Apply a clear, persistent visual watermark or label to all generated training specimens, verified specifically for legibility, not just present in metadata.', risk: 'A highly realistic AI-generated training specimen that lacks a clearly visible label could be mistaken for an actual submitted document if it were later extracted from the training material and circulated outside its original context.'},
+    {title: 'Updating voice-based authentication controls in light of realistic voice-cloning TTS', problem: 'A bank\'s voice-based phone authentication system was validated before few-shot voice-cloning TTS systems like VALL-E became broadly available.', solution: 'Re-assess voice-based authentication\'s spoofing resistance specifically against realistic few-shot voice cloning, not just against older recorded-playback attacks.', risk: 'A voice-authentication system validated only against older attack methods can remain vulnerable to a short reference clip being used to clone a customer\'s voice well enough to defeat authentication, a distinct threat model from the one the system was originally tested against.'},
+  ]}
+  healthcare={[
+    {title: 'Validating text-conditioned synthetic medical images for clinically implausible combinations', problem: 'A team uses text-to-image diffusion to generate synthetic medical images for training-data augmentation, and text conditioning can combine findings in ways that do not occur together clinically.', solution: 'Have a radiologist specifically review generated images for clinically implausible finding combinations, not just general visual realism.', risk: 'A synthetic training image combining findings that would not co-occur in a real patient can teach a downstream diagnostic model a false association, one that only surfaces later as an unexplained real-patient misdiagnosis.'},
+    {title: 'Checking text-to-speech pronunciation accuracy for medication names in patient-facing accessibility tools', problem: 'A text-to-speech accessibility tool reading medical instructions aloud can mispronounce a drug name in a way that sounds like a different medication.', solution: 'Specifically validate TTS pronunciation of medication names against a clinical pronunciation reference, rather than relying on general speech-quality review.', risk: 'A mispronounced medication name in a patient-facing TTS tool could lead a patient to believe they were prescribed a different drug, a distinct patient-safety risk that general audio-quality testing would not catch.'},
+    {title: 'Defending against voice-cloned impersonation of clinicians in phishing attempts', problem: 'Realistic voice-cloning TTS raises the risk of a phishing call impersonating a specific clinician\'s voice to a patient or staff member.', solution: 'Train staff and patients on voice-phishing risk specific to cloned clinician voices, and require out-of-band verification for any sensitive request made by phone.', risk: 'A patient who trusts a familiar clinician\'s voice, now reproducible from a short public clip via voice-cloning TTS, could be persuaded to share health information or make a payment based on a call that was never actually from that clinician.'},
+    {title: 'Labeling text-to-video synthetic clinical training simulations as synthetic', problem: 'A clinical training program uses text-to-video generation to create simulated patient scenarios for staff training.', solution: 'Apply a persistent, visible label identifying generated training video as synthetic, distinct from any real patient-recorded material used elsewhere in training.', risk: 'An unlabeled synthetic training video, if later separated from its original training context, could be mistaken for a real patient recording, raising a patient-privacy and consent concern for content that was never actually of a real patient.'},
+  ]}
+  telecom={[
+    {title: 'Detecting AI-generated voice traffic used in vishing scams carried over the network', problem: 'Realistic voice-cloning TTS increasingly powers voice-phishing (vishing) scam calls carried over a telecom operator\'s own voice network.', solution: 'Invest in AI-generated-voice detection specifically for the operator\'s fraud and abuse pipeline, distinct from traditional robocall-pattern detection.', risk: 'A vishing scam using cloned-voice audio can defeat detection systems built only for traditional recorded-robocall patterns, since a cloned voice can be dynamically generated per call rather than replayed from a fixed recording.'},
+    {title: 'Requiring content provenance labeling for AI-generated media on telecom-adjacent media platforms', problem: 'A telecom-affiliated media or messaging platform hosts user-generated content that increasingly includes AI-generated images and video.', solution: 'Require or surface content-provenance signals (previewed further in 4.7) for AI-generated media distributed through the platform.', risk: 'A platform that cannot distinguish AI-generated from camera-captured media risks amplifying convincingly fabricated content around a real network event (an outage, an incident) faster than it can be corrected.'},
+    {title: 'Validating text-to-speech clarity for automated mass outage-notification calls', problem: 'An operator uses text-to-speech to place automated calls at scale notifying customers of an outage and expected restoration time.', solution: 'Specifically validate TTS pronunciation clarity for addresses, times, and area names used in outage notifications, not just general voice naturalness.', risk: 'A TTS system that garbles an address or restoration time in a mass outage-notification call can leave affected customers with incorrect information exactly when accurate, time-sensitive guidance matters most.'},
+    {title: 'Labeling text-to-video synthetic network-topology visualizations as synthetic during live incidents', problem: 'A network-operations team uses text-to-video generation to create training visualizations of network topology and failure scenarios.', solution: 'Apply a persistent, visible label to synthetic network visualizations, and keep them clearly separated from live network-monitoring dashboards.', risk: 'An unlabeled synthetic network visualization, if it were ever displayed alongside real monitoring data during an active incident, could be mistaken for live network state, leading an operator to act on a fabricated topology rather than the actual fault.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What role do cross-attention and a text encoder like CLIP or T5 play in conditioning a diffusion model on a text prompt?', answer: 'Cross-attention lets the denoising network attend, at every step of the reverse diffusion process, to an embedding of the text prompt rather than only to the noisy image itself, letting the prompt steer generation. That text embedding comes from a separately pretrained text encoder, such as CLIP (trained to align image and text embeddings in a shared space) or a large language model\'s encoder as in Imagen.'},
+    {question: 'What problem does classifier-free guidance solve, and how does it work without a separate classifier?', answer: 'It strengthens a diffusion model\'s adherence to its text conditioning, a problem earlier addressed with a separately trained classifier. Instead, the same diffusion model is trained both with the conditioning present and, some fraction of the time, with it randomly dropped, learning both a conditional and unconditional denoising step. At sampling time, extrapolating from the unconditional prediction toward the conditional one sharpens prompt adherence.'},
+    {question: 'What is the key added complexity in extending diffusion from still images to video, and how does the spacetime-patch approach described in Sora\'s technical report address it?', answer: 'The key added complexity is frame-to-frame temporal consistency: generating frames independently would let objects flicker, jitter, or teleport between frames. Representing video as spacetime patches, chunks spanning both space and time together, and processing them with a diffusion transformer lets the model operate over the video\'s full spatiotemporal volume directly, rather than stitching independently generated frames together afterward.'},
+    {question: 'Why does text-to-speech generation often use an autoregressive, token-based mechanism instead of diffusion, and what makes this possible?', answer: 'Speech is inherently sequential the way text is, and a neural audio codec makes it possible to compress raw audio into a sequence of discrete tokens, conceptually similar to how BPE or WordPiece tokenize text. A language model can then autoregressively predict these audio tokens one at a time, the same explicit-density mechanism used for text generation, capturing natural prosody and voice characteristics without paying diffusion\'s characteristic sampling-speed cost.'},
+    {question: 'What does the fact that image/video generation typically favors diffusion while speech generation often favors autoregression tell us about how mechanism choice works?', answer: 'It shows mechanism choice is governed by the same trade-offs established in the generative learning trilemma (4.1) and the family comparison in 4.2, applied per modality and per task, rather than the modality itself dictating a fixed mechanism. Images and video favor diffusion because quality and diversity outweigh its sampling-speed cost for those modalities; speech often favors autoregression because its sequential structure and codec-based tokenization make that mechanism a good fit without that same cost.'},
+  ]}
+/>

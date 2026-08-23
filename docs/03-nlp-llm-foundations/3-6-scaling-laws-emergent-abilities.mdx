@@ -1,0 +1,183 @@
+---
+title: "Scaling Laws & Emergent Abilities"
+sidebar_label: "3.6 Scaling Laws & Emergent Abilities"
+sidebar_position: 6
+phase: 3
+chapter: "3.6"
+lms_presentation: "3.6-Scaling-Laws-Emergent-Abilities-Slides.pptx"
+prerequisites: ["3.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.4 covered how model families differ architecturally. This chapter covers a separate
+question: given a fixed amount of training compute, how should it be spent, and does scaling a model
+up ever change its behavior in kind, not just in degree. Kaplan et al. (2020) found that a language
+model's test loss falls as a smooth power law in model size, dataset size, and compute, holding
+across many orders of magnitude, and their results were initially read as favoring larger models
+trained on comparatively less data. Chinchilla (Hoffmann et al., 2022) corrected this: compute-optimal
+training scales model size and training data roughly together rather than favoring size, and many
+contemporary large models, trained under the earlier heuristic, were undertrained relative to their
+size. A 70-billion-parameter Chinchilla model trained on proportionally more data outperformed the
+280-billion-parameter Gopher model trained under the older heuristic, using the same training compute
+budget. Separately, Wei et al. (2022) documented **emergent abilities**: specific capabilities, such
+as certain multi-step arithmetic tasks, that appear only above a scale threshold rather than improving
+smoothly as scale increases. A widely discussed follow-up (Schaefer et al., 2023) argues that at least
+some of this apparent emergence is an artifact of the evaluation metric used rather than a genuine
+change in the underlying model, an important and still-debated distinction for anyone deciding how to
+evaluate a model before deploying it.
+
+## High-Level Explanation
+
+Think of a fixed training compute budget like a fixed budget for building and stocking a factory: you
+can spend it on a bigger factory (more model parameters) or on more raw material run through it (more
+training data), and getting the best result for the money means balancing both, not maximizing either
+one alone. Scaling laws are the empirical curves that describe how much better a model gets as you add
+more of each ingredient, holding roughly steady across a very wide range of scales, which is what makes
+them useful for planning a training run before running it. Emergent abilities are a different
+phenomenon: rather than a capability gradually improving as scale increases, some specific capabilities
+appear to switch on abruptly only once a model crosses a certain scale threshold, similar to water not
+gradually becoming "more boiled" as its temperature rises but changing state abruptly at exactly
+100 degrees Celsius. Whether that abrupt appearance reflects something real about the underlying model,
+or is instead an artifact of how the capability happens to be measured, is a genuinely open, actively
+debated question covered in this chapter's Deep-Dive.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-6-compute-optimal-frontier.svg').default}
+    alt="A chart showing the Chinchilla compute-optimal frontier: for a fixed training compute budget, model size and training data size should scale together along a balanced curve, rather than favoring a much larger model trained on proportionally less data."
+  />
+  <figcaption>Kaplan-era scaling favored growing model size faster than data; Chinchilla's compute-optimal frontier corrects this toward a more balanced split.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Kaplan et al.'s scaling laws, and the recommendation they were initially read as supporting.** Kaplan
+et al. ([*Scaling Laws for Neural Language Models*](https://arxiv.org/abs/2001.08361), 2020) trained
+many Transformer language models across a wide range of sizes and measured how test loss depends on
+model size (N), dataset size (D), and total training compute (C). They found each relationship follows
+a smooth power law, holding consistently across several orders of magnitude, with no evidence of the
+returns to scale disappearing at the sizes tested. Their compute-allocation analysis was read at the
+time as recommending that, for a fixed compute budget, it is more effective to train a substantially
+larger model for comparatively fewer optimization steps than to train a smaller model on proportionally
+more data, since the larger model reached a given loss with less total compute. This became a widely
+adopted heuristic across the field: scale the model aggressively and treat data quantity as secondary.
+
+**Chinchilla's correction: model size and data size should scale together.** Hoffmann et al.
+([*Training Compute-Optimal Large Language Models*](https://arxiv.org/abs/2203.15556), 2022) retrained
+a large family of models systematically varying both model size and training data size, and derived a
+corrected compute-optimal frontier: for a fixed compute budget, model size and training data size
+should scale roughly in proportion to each other, not favor model size the way the earlier heuristic
+suggested. To demonstrate this, they trained **Chinchilla**, a 70-billion-parameter model, on
+1.4 trillion tokens, using the same total training compute as **Gopher**, a 280-billion-parameter model
+trained on roughly 300 billion tokens under the older heuristic. Chinchilla outperformed Gopher, and
+several other contemporary large models trained the same way, across a wide range of downstream
+benchmarks, despite having a quarter of Gopher's parameters. This was direct evidence that many
+large models trained under the Kaplan-era heuristic were substantially undertrained relative to their
+size: additional parameters were not being matched with enough training data to make full use of them.
+
+**Emergent abilities: capabilities that do not improve smoothly with scale.** Wei et al.
+([*Emergent Abilities of Large Language Models*](https://arxiv.org/abs/2206.07682), 2022) define an
+emergent ability as one that is not present in smaller models, appears in larger models, and cannot be
+predicted by extrapolating the performance trend observed at smaller scales. They document concrete
+examples across benchmark suites including BIG-Bench, where accuracy on tasks such as certain
+multi-step arithmetic problems and specific instruction-following formats stays close to random chance
+until model scale crosses a threshold, then rises sharply, a pattern qualitatively different from the
+smooth power-law curves in test loss that Kaplan et al. and Chinchilla describe.
+
+**The "mirage" critique: some apparent emergence may be a measurement artifact.** Schaefer, Miranda,
+and Koyejo ([*Are Emergent Abilities of Large Language Models a Mirage?*](https://arxiv.org/abs/2304.15004),
+2023) argue that at least some of these observed jumps result from the evaluation metric, not from a
+genuine change in the underlying model. Many emergent-ability benchmarks use a discontinuous,
+all-or-nothing metric, such as exact-match accuracy on a multi-step problem, where getting any single
+token wrong marks the entire answer wrong regardless of how close it was. If the model's underlying
+per-token error rate is actually improving smoothly and gradually as scale increases, that smooth
+improvement can still produce a sharp, sudden jump in sequence-level exact-match accuracy once the
+per-token error rate drops low enough for whole sequences to start succeeding reliably. The paper shows
+that switching from a discontinuous metric to a continuous one (such as token-edit distance or
+per-token cross-entropy) on the same models and tasks turns several previously "emergent" curves into
+smooth, predictable ones. This does not settle the question for every documented case of emergence, and
+the debate remains active in the research literature, but it establishes a genuinely important
+operational lesson distinct from the scaling-law findings themselves: the choice of evaluation metric
+can materially affect whether a capability looks like a sudden phase transition or a gradual
+improvement, which matters directly when deciding how to validate a model before deployment.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Kaplan-era scaling (2020)', 'Chinchilla compute-optimal scaling (2022)', 'Emergent abilities framing']}
+  rows={[
+    {aspect: 'What it describes', values: ['How test loss falls as model size, data size, or compute grows', 'How to split a fixed compute budget between model size and data size', 'Specific capabilities appearing only above a scale threshold'], decisive: true},
+    {aspect: 'Compute allocation implication', values: ['Favor a larger model over proportionally more data', 'Scale model size and data size roughly together', 'Not a compute-allocation finding; a capability-measurement finding'], decisive: true},
+    {aspect: 'Nature of the underlying curve', values: ['Smooth power law', 'Smooth power law, re-derived with a corrected optimal split', 'Apparently discontinuous; contested whether genuinely so'], },
+    {aspect: 'Key evidence', values: ['Loss curves across many model sizes and compute budgets', 'Chinchilla (70B) outperforming Gopher (280B) at equal compute', 'BIG-Bench tasks with sharp accuracy jumps at a scale threshold'], },
+  ]}
+  caption="These three findings are related but answer different questions: how loss scales, how to allocate a compute budget, and whether specific capabilities appear discontinuously."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Planning a training run and validating it, with both findings in mind"
+  mermaid={`
+flowchart TD
+  BUDGET[Fixed training compute budget] --> SPLIT{Compute-optimal split of model size and data size?}
+  SPLIT -->|Yes: Chinchilla-style| BALANCED[Model size and data size scaled together]
+  SPLIT -->|No: size-favoring heuristic| RISK1[Risk: oversized, undertrained model]
+  BALANCED --> TRAIN[Train model]
+  RISK1 --> TRAIN
+  TRAIN --> EVAL{Evaluation metric type?}
+  EVAL -->|"Discontinuous (exact-match)"| RISK2[Risk: apparent capability jump may be a metric artifact]
+  EVAL -->|"Continuous (per-token / graded)"| SMOOTH[Reveals whether improvement is actually gradual]
+  RISK2 --> DECIDE[Deployment decision]
+  SMOOTH --> DECIDE
+`}
+  components={[
+    {name: 'Compute-optimal split', responsibility: 'Balances model size against training data size for a fixed compute budget, per Chinchilla-style scaling, rather than assuming bigger is automatically better.'},
+    {name: 'Evaluation metric choice', responsibility: 'Determines whether a capability appears to emerge suddenly or improve gradually; a continuous metric reveals gradual change a discontinuous metric can mask.'},
+    {name: 'Deployment decision', responsibility: 'Weighs both the training-time compute-allocation choice and the evaluation-time metric choice before committing to a specific model and scale.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Choosing between a larger base model and more task-specific training data', problem: 'A team must decide whether additional budget is better spent on a larger base model or on more fine-tuning data for document classification at scale.', solution: 'Apply Chinchilla-style compute-optimal reasoning explicitly, rather than defaulting to the older assumption that a bigger model always needs comparatively less data.', risk: 'An oversized, undertrained model can silently underperform on unusual transaction types underrepresented in its training data, a gap a generic accuracy benchmark would not reveal and that model-risk-management would need to specifically test for.'},
+    {title: 'Revalidating a numerical-reasoning capability after downgrading to a cheaper model', problem: 'A multi-step reasoning capability used for calculating a regulatory financial ratio may have been an emergent capability specific to the previously deployed model\'s scale.', solution: 'Explicitly revalidate the specific reasoning capability whenever the underlying model is downgraded or swapped for a cheaper one, not just recheck aggregate benchmark scores.', risk: 'A cost-driven downgrade to a smaller model can silently lose a specific numerical-reasoning capability relied on for a regulatory ratio calculation, since emergent capabilities do not necessarily degrade gracefully with scale the way overall accuracy does.'},
+    {title: 'Choosing evaluation metrics for model-risk-management validation', problem: 'A discontinuous pass-fail benchmark can make a capability look stable right up until a sudden failure, when a continuous metric might have shown it was already degrading gradually.', solution: 'Validate automated decisioning models with continuous or graded metrics in addition to pass-fail benchmarks before sign-off.', risk: 'A model-risk-management sign-off based only on a discontinuous benchmark can create false confidence that a capability is stable across small model updates, missing a gradual degradation until it manifests as a visible failure.'},
+    {title: 'Evaluating a self-hosted model\'s advertised parameter count against its actual training data scale', problem: 'A vendor\'s parameter count alone does not indicate whether a model was trained on a compute-optimal amount of data.', solution: 'Estimate a candidate model\'s actual compute-optimal training requirements before committing infrastructure budget, rather than treating parameter count as a capability proxy.', risk: 'Committing infrastructure budget to a self-hosted model sized by parameter count alone, without confirming compute-optimal training, can lock in a persistently undertrained model whose real capability never matches its advertised size, a vendor-risk exposure distinct from an ordinary accuracy shortfall.'},
+  ]}
+  healthcare={[
+    {title: 'Underestimating training-data requirements for a domain-adapted clinical model', problem: 'Assuming a bigger clinical model automatically needs comparatively less training data reflects the outdated Kaplan-era heuristic rather than compute-optimal scaling.', solution: 'Apply Chinchilla-style compute-optimal reasoning explicitly when planning a clinical-domain-adapted model\'s training budget.', risk: 'An undertrained, oversized clinical model can silently underperform on rarer clinical scenarios underrepresented in training data, a patient-safety-relevant gap driven by data scale rather than model scale, which a generic benchmark score would not reveal.'},
+    {title: 'Revalidating an emergent multi-step clinical reasoning capability after a model change', problem: 'A multi-step differential-diagnosis reasoning capability supporting a clinical decision-support tool may be specific to the currently deployed model\'s scale.', solution: 'Revalidate the specific reasoning capability whenever a clinical decision-support model is downgraded, updated, or replaced, not just recheck aggregate accuracy.', risk: 'A cost- or latency-driven downgrade can silently drop a specific reasoning capability relied on for a clinical decision-support recommendation, since emergent capabilities can vanish abruptly rather than degrade gracefully, and this needs its own regulatory-clearance revalidation.'},
+    {title: 'Choosing evaluation metrics before regulatory clearance submission', problem: 'A pass-fail benchmark used for a diagnostic-support tool\'s validation can obscure a capability that a continuous metric would show is already gradually eroding.', solution: 'Validate diagnostic-support capability with continuous or graded scoring in addition to pass-fail metrics before regulatory submission.', risk: 'A regulatory-clearance validation based only on a discontinuous benchmark can miss a safety-relevant capability that is gradually eroding, delaying detection until it manifests as a hard failure in the field.'},
+    {title: 'Weighing a larger general model against a smaller model fine-tuned on institutional data', problem: 'A hospital must choose between a larger general-purpose model and a smaller model fine-tuned on its own abundant clinical documentation.', solution: 'Weigh compute-optimal considerations explicitly (is the larger model\'s advantage from more training data or mostly from more parameters) rather than assuming bigger is always better.', risk: 'An oversized general model that is relatively undertrained for the institution\'s specific clinical vocabulary can produce worse real-world extraction accuracy than a smaller, thoroughly fine-tuned alternative, a mismatch a parameter-count-based vendor comparison would not catch.'},
+  ]}
+  telecom={[
+    {title: 'Compute-optimal model selection for real-time network-log analysis', problem: 'Choosing among candidate models with different size and training-data combinations affects both accuracy and inference latency for time-sensitive network monitoring.', solution: 'Apply compute-optimal reasoning to check whether a smaller, more thoroughly trained model can match a larger, undertrained one before selecting.', risk: 'Choosing an oversized model based on parameter-count marketing alone, without confirming compute-optimal training, can add unnecessary inference latency to a real-time outage-detection pipeline without buying additional accuracy, directly threatening detection-time SLA commitments.'},
+    {title: 'Revalidating a multi-hop root-cause reasoning capability after a cost-driven model downgrade', problem: 'Automated root-cause analysis across correlated network alarms may rely on a multi-hop reasoning capability specific to the currently deployed model\'s scale.', solution: 'Revalidate the specific multi-hop reasoning capability whenever swapping to a cheaper or smaller model, not just recheck aggregate benchmark scores.', risk: 'A cost-driven downgrade can silently lose the multi-hop reasoning capability relied on for automated incident correlation, and because emergent capabilities can disappear abruptly, the loss may not surface until a live multi-site outage is misdiagnosed.'},
+    {title: 'Evaluation-metric choice masking gradual drift in an automated ticket-triage classifier', problem: 'A discontinuous pass-fail triage-accuracy threshold can hide gradual accuracy erosion that a continuous metric would reveal earlier.', solution: 'Monitor triage quality with continuous scoring in addition to pass-fail thresholds to catch gradual drift before it crosses a visible failure point.', risk: 'Relying only on a pass-fail accuracy threshold can let a gradually degrading classifier pass every check until an outage volume spike pushes it past the threshold precisely when triage accuracy matters most.'},
+    {title: 'Allocating compute budget between a multilingual model and a single-language regional model', problem: 'A fixed training budget must be split between broader multilingual coverage and thorough training on one region\'s dominant language.', solution: 'Apply compute-optimal reasoning to check whether a multilingual model\'s added scale is matched by proportionally more training data per language, rather than assuming broader coverage is free.', risk: 'A multilingual model whose added scale was not matched by proportionally more per-language data can perform worse on the dominant regional language than a smaller single-language alternative, an outcome invisible in aggregate multilingual benchmark averages but directly affecting that region\'s population during a live incident.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What did Kaplan et al.\'s 2020 scaling laws paper find about how test loss relates to model size, dataset size, and compute, and how was this initially read as a compute-allocation recommendation?', answer: 'Test loss falls as a smooth power law in model size, dataset size, and compute, holding across many orders of magnitude. This was initially read as recommending that, for a fixed compute budget, training a substantially larger model for fewer steps was more effective than training a smaller model on proportionally more data.'},
+    {question: 'What did Chinchilla correct about the Kaplan-era heuristic, and what evidence supported the correction?', answer: 'Chinchilla showed that compute-optimal training scales model size and training data roughly together rather than favoring model size. A 70-billion-parameter Chinchilla model trained on 1.4 trillion tokens outperformed the 280-billion-parameter Gopher model trained on roughly 300 billion tokens, at equal total training compute, showing Gopher and similar models were undertrained relative to their size.'},
+    {question: 'What is an emergent ability, per Wei et al. 2022, and how does its pattern differ from the scaling curves Kaplan et al. and Chinchilla describe?', answer: 'An emergent ability is a capability not present in smaller models that appears in larger models and cannot be predicted by extrapolating smaller models\' performance trend. Unlike the smooth power-law curves in test loss, emergent abilities show accuracy near random chance until a scale threshold, then a sharp rise.'},
+    {question: 'What does the "emergent abilities mirage" critique argue, and what does it suggest about evaluation metric choice?', answer: 'It argues that at least some observed emergent jumps result from using a discontinuous, all-or-nothing metric (such as exact-match on a multi-step problem) applied to a model whose underlying per-token error rate is actually improving smoothly; switching to a continuous metric on the same models turned several "emergent" curves smooth. This shows metric choice can materially affect whether a capability looks like a sudden jump or a gradual improvement, though it does not settle the question for every documented case.'},
+    {question: 'Why does the choice between a discontinuous and a continuous evaluation metric matter operationally, not just academically?', answer: 'A discontinuous metric can mask gradual degradation in a deployed model, creating false confidence that a capability is stable right up until a visible failure, while a continuous metric can reveal that degradation earlier, which matters directly when deciding how and when to revalidate a model before or after a change.'},
+  ]}
+/>

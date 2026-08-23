@@ -1,0 +1,188 @@
+---
+title: "Generative Model Families Compared: LLMs, Diffusion Models, GANs, VAEs"
+sidebar_label: "4.2 Generative Model Families Compared"
+sidebar_position: 2
+phase: 4
+chapter: "4.2"
+lms_presentation: "4.2-Generative-Model-Families-Slides.pptx"
+prerequisites: ["4.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 4.1 split generative models into explicit-density and implicit-density, and named the
+generative learning trilemma: no family gets high sample quality, full data diversity, and fast
+sampling all at once. This chapter puts four concrete families on that map. **Autoregressive LLMs**
+(3.3) compute an exact, tractable probability one token at a time, the same explicit-density
+mechanism whether the output is text or, less commonly, pixels. **Generative Adversarial Networks
+(GANs)** are implicit-density: a generator and a discriminator train against each other, producing
+fast, sharp samples at the cost of the mode-collapse risk covered in 4.1. **Variational Autoencoders
+(VAEs)** are explicit-density too, but only approximately: an encoder compresses input into a
+compact latent distribution and a decoder reconstructs from it, trained by maximizing a lower bound
+on the likelihood rather than the exact likelihood itself. **Diffusion models** learn to reverse a
+gradual noising process step by step, and as of 2026 are the dominant family for high-quality image,
+video, and audio generation, because their combination of quality and diversity outweighs their
+sampling-speed cost for those modalities, especially once fast-sampling techniques like distillation
+are applied.
+
+## High-Level Explanation
+
+Picture four different ways an art student could learn to produce a new painting after studying a
+gallery of originals. The autoregressive approach paints one brushstroke at a time, each stroke
+chosen from a genuine probability distribution over what could come next given every stroke so far,
+the way an LLM chooses one token at a time. The GAN approach is two students working against each
+other: a forger who paints quickly and a critic who tries to catch fakes, with the forger improving
+only by fooling the critic, never by any direct feedback about the original gallery. The VAE approach
+first compresses every painting down to a short, structured description, then learns to expand any
+plausible description back into a full painting, so new paintings come from picking a new
+description and expanding it. The diffusion approach starts from pure static and slowly, over many
+small steps, cleans the static up into a painting, having only ever practiced by adding static to
+real paintings and learning to undo exactly that.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/4-2-four-families-metaphor.svg').default}
+    alt="Four panels illustrating an autoregressive model painting one stroke at a time, a GAN as a forger and a critic in competition, a VAE compressing a painting to a short code and expanding it back, and a diffusion model cleaning static into a painting over many steps."
+  />
+  <figcaption>Four structurally different recipes for the same goal: producing a new sample that looks like it came from the training distribution.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Autoregressive models, extended beyond text.** The causal, one-token-at-a-time mechanism from 3.3
+is not inherently text-specific; PixelRNN and PixelCNN (van den Oord et al., 2016) applied the same
+autoregressive factorization to individual pixels, predicting each pixel's value from every pixel
+generated before it in a fixed scan order. This confirms the mechanism generalizes, but it also shows
+its cost: an image has vastly more elements than a sentence has tokens, so a strictly pixel-by-pixel
+autoregressive image model is far slower to sample from than a comparably capable diffusion model,
+which is why autoregressive generation remains the default for text but not for images.
+
+**VAEs: explicit density, but only approximately.** A VAE's encoder does not map an input to a single
+latent vector; it maps the input to the parameters of a distribution (typically a mean and variance)
+over a compact latent space, and a specific latent vector is then sampled from that distribution. The
+decoder reconstructs an output from that sampled latent. Training maximizes the evidence lower bound
+(ELBO), which combines a reconstruction term (the decoder should recover the original input from its
+latent code) with a term that pulls the encoder's output distribution toward a simple prior, usually
+a standard normal distribution, so that new samples can later be produced by drawing from that same
+prior and decoding. Unlike an autoregressive model's exact tractable likelihood, the ELBO is only a
+lower bound on the true data likelihood (Kingma and Welling, [*Auto-Encoding Variational
+Bayes*](https://arxiv.org/abs/1312.6114), 2013), which is why VAEs are explicit-density in spirit but
+only approximately so in practice, a middle position between an autoregressive model's exact density
+and a GAN's complete absence of one. In exchange, a well-trained VAE's latent space tends to be
+smooth and structured enough to interpolate between two samples meaningfully, a property GANs and
+raw diffusion models do not automatically provide.
+
+**GANs, revisited mechanically.** 4.1 introduced GANs as the standard implicit-density example;
+Goodfellow et al.'s original formulation ([*Generative Adversarial Networks*](https://arxiv.org/abs/1406.2661),
+2014) frames training as a minimax game: the generator tries to maximize the discriminator's error
+rate, the discriminator tries to correctly classify real versus generated samples, and at the
+game's theoretical equilibrium the generator's output distribution matches the real data
+distribution exactly. In practice, this equilibrium is difficult to reach reliably, which is the
+deeper reason GANs are prone to mode collapse (4.1) and to unstable training dynamics that later GAN
+variants (not covered here) attempt to address.
+
+**Diffusion models: reversing a known corruption process.** A diffusion model defines a forward
+process that gradually adds a small amount of Gaussian noise to a real training sample over many
+steps (commonly on the order of a thousand), until the sample is indistinguishable from pure noise.
+Denoising Diffusion Probabilistic Models (Ho, Jain, and Abbeel,
+[*Denoising Diffusion Probabilistic Models*](https://arxiv.org/abs/2006.11239), 2020) show that a
+neural network can be trained to reverse this process one small step at a time, predicting and
+removing a bit of noise at each step, so that starting from pure random noise and repeatedly applying
+the trained reverse step produces a new, realistic sample. Like a VAE, this training objective is a
+variational bound rather than an exact likelihood, making diffusion models explicit-but-approximate
+density as well; the key practical difference from a VAE is that a diffusion model reaches high
+quality and diversity by spreading the generation task across many small, individually easy steps
+rather than one large one, which is precisely the slow-sampling cost the generative learning
+trilemma (4.1) describes. Running the full noising-and-denoising process directly on raw pixels is
+expensive; Latent Diffusion Models (Rombach et al.,
+[*High-Resolution Image Synthesis with Latent Diffusion Models*](https://arxiv.org/abs/2112.10752),
+2022, the architecture behind Stable Diffusion) instead run the diffusion process inside a much
+smaller, VAE-compressed latent space and only decode back to pixels at the end, combining a VAE's
+compression with a diffusion model's denoising to make high-resolution image generation practical.
+Techniques such as Consistency Models (Song et al.,
+[*Consistency Models*](https://arxiv.org/abs/2303.01469), 2023) further address diffusion's slow
+sampling directly, training a model to map a noisy input to a clean sample in a small handful of
+steps, or even one, trading a small amount of quality for a large reduction in sampling cost. This is
+the trilemma being actively pushed on rather than resolved: as of 2026, diffusion-family models
+remain the dominant choice for image, video, and audio generation precisely because techniques like
+these have narrowed their speed disadvantage without giving up their quality and diversity advantage
+over GANs.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Autoregressive LLM', 'VAE', 'GAN', 'Diffusion model']}
+  rows={[
+    {aspect: 'Density type', values: ['Explicit, exact/tractable', 'Explicit, approximate (ELBO)', 'Implicit (none computed)', 'Explicit, approximate (variational bound)'], decisive: true},
+    {aspect: 'Core mechanism', values: ['Predict next token from all previous tokens', 'Encode to a latent distribution, decode back', 'Generator vs. discriminator adversarial game', 'Learn to reverse a gradual noising process'], decisive: true},
+    {aspect: 'Sampling speed', values: ['One token at a time; slow for very long outputs', 'Fast: one encode/decode pass', 'Fast: single generator pass', 'Slow by default; faster with distillation (e.g., consistency models)'] },
+    {aspect: 'Typical dominant use today', values: ['Text generation (3.3, 3.4)', 'Compression, structured latent spaces, component inside latent diffusion', 'Narrower niches after diffusion became dominant for images', 'Image, video, and audio generation'] },
+    {aspect: 'Main practical risk', values: ['Hallucination (previewed in 4.6)', 'Blurrier outputs than GANs or diffusion', 'Mode collapse, unstable training', 'High compute cost per sample without distillation'] },
+  ]}
+  caption="All four families can be understood through the same explicit/implicit density lens from 4.1; where they differ is the mechanism used to reach a distribution to sample from, and which side of the trilemma each mechanism trades away."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing a generative model family for a task"
+  mermaid={`
+flowchart TD
+  NEED[What does the output need?] --> MODALITY{Primarily sequential text/code?}
+  MODALITY -->|Yes| AR[Autoregressive LLM: exact tractable density]
+  MODALITY -->|No, mainly image/video/audio| QUALITY{Quality and diversity matter more than sampling speed?}
+  QUALITY -->|Yes| DIFF[Diffusion model, optionally distilled for speed]
+  QUALITY -->|No, speed matters most| SPEEDCHECK{Structured, interpolatable latent space needed?}
+  SPEEDCHECK -->|Yes| VAE[VAE, or a VAE component inside latent diffusion]
+  SPEEDCHECK -->|No| GAN[GAN, accepting mode-collapse risk]
+`}
+  components={[
+    {name: 'Autoregressive LLM', responsibility: 'Owns sequential, exact-likelihood generation, primarily text, building on the causal LM objective from 3.3.'},
+    {name: 'Diffusion model', responsibility: 'Owns high-quality, high-diversity generation for image, video, and audio, at a sampling-speed cost that distillation techniques can reduce.'},
+    {name: 'VAE', responsibility: 'Owns compression to a structured, interpolatable latent space, either standalone or as the compression stage inside a latent diffusion pipeline.'},
+    {name: 'GAN', responsibility: 'Owns fast single-pass sampling where mode-collapse risk is acceptable or specifically mitigated.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Using an autoregressive LLM, not a GAN, for financial document drafting', problem: 'A team drafting regulatory filings or client-facing summaries needs a coherent, sequential document, not a single-pass image-style output.', solution: 'Use an autoregressive LLM for text drafting; reserve GANs and diffusion models for any genuinely image-based synthetic-data work elsewhere in the pipeline.', risk: 'A team that repurposes an image-generation architecture into a text pipeline to save engineering time can end up with a regulatory filing assembled from spatially-generated fragments with no coherent sentence-by-sentence likelihood behind them, which a compliance reviewer or examiner has no reliable way to audit the way they can audit an autoregressive model\'s token-by-token generation.'},
+    {title: 'Choosing a VAE for anomaly-detection latent spaces in transaction monitoring', problem: 'A fraud-detection team wants a latent space where "distance" between transactions is meaningful, to flag transactions that fall far from any learned cluster.', solution: 'Use a VAE specifically for its structured, smooth latent space, rather than a GAN or diffusion model, which do not provide the same interpolation guarantee.', risk: 'Building an anomaly-distance metric on a GAN\'s latent space, which has no such structure guarantee, can produce distance scores that do not actually correspond to how anomalous a transaction really is.'},
+    {title: 'Auditing diffusion-generated synthetic market data for realistic tail events', problem: 'A risk-modeling team uses a diffusion model to generate synthetic market scenarios for stress testing, valuing its higher diversity over a GAN\'s.', solution: 'Specifically validate that the diffusion model\'s synthetic scenarios include realistic tail events (crashes, liquidity shocks), not just realistic typical-day data.', risk: 'A diffusion model tuned mainly for visual/statistical realism on typical data can still underweight rare tail scenarios, giving stress tests false confidence if tail coverage is not separately checked.'},
+    {title: 'Weighing a distilled (few-step) diffusion model\'s speed against its quality trade-off for real-time use', problem: 'A real-time trading-support tool wants diffusion-quality synthetic data but cannot tolerate a full thousand-step sampling process for a live workflow.', solution: 'Evaluate a distilled, few-step diffusion variant (e.g., a consistency-model-style approach) and explicitly measure how much quality is traded for the required latency.', risk: 'Adopting a distilled diffusion model without measuring its specific quality loss can silently degrade the realism of synthetic data used in a live decision process, below what was validated for the original, undistilled model.'},
+  ]}
+  healthcare={[
+    {title: 'Choosing diffusion models for synthetic medical imaging, not GANs, when diversity matters most', problem: 'A team generating synthetic medical images for training data augmentation needs broad coverage of rare pathology presentations, which GANs are prone to under-represent via mode collapse.', solution: 'Prefer a diffusion model for this specific use case given its typically stronger diversity coverage, and validate that choice against the actual rare-presentation coverage achieved.', risk: 'Choosing a GAN for this task without accounting for mode collapse can leave a training-augmentation pipeline blind to exactly the rare pathology presentations that matter most for diagnostic coverage.'},
+    {title: 'Using a VAE\'s structured latent space for patient-similarity clustering', problem: 'A clinical research team wants to group similar patient presentations in a latent space for cohort discovery, requiring the latent space itself to be meaningfully structured.', solution: 'Use a VAE specifically for this property rather than a GAN\'s latent space, which offers no equivalent structure guarantee.', risk: 'Clustering patients using an unstructured GAN latent space can produce cohorts that look coherent visually but do not correspond to any consistent clinical similarity, misleading downstream research conclusions.'},
+    {title: 'Validating an autoregressive clinical-note generator\'s hallucination risk before deployment', problem: 'A clinical documentation assistant uses an autoregressive LLM, which can hallucinate details not present in the source encounter.', solution: 'Apply hallucination-specific validation (previewed in 4.6) before deployment, distinct from the density-mechanism validation applied to image-generation tools elsewhere in the same health system.', risk: 'Treating an autoregressive text generator\'s output with the same validation checklist built for image-generation tools can miss the specific hallucination failure mode text generation carries, that image-diffusion validation does not surface.'},
+    {title: 'Checking sampling-speed trade-offs for real-time diffusion-based image enhancement in imaging workflows', problem: 'A radiology tool wants diffusion-based image enhancement but cannot tolerate the latency of a full diffusion sampling process during a live reading session.', solution: 'Evaluate a distilled or few-step diffusion variant, explicitly measuring diagnostic-relevant quality against the original full-step model before adopting it clinically.', risk: 'Deploying a distilled diffusion model in a diagnostic-adjacent workflow without measuring its specific quality trade-off against the full model can introduce a subtle image-quality regression in a clinically sensitive context.'},
+  ]}
+  telecom={[
+    {title: 'Choosing an autoregressive LLM for network-incident report generation', problem: 'A telecom operations team needs coherent, sequential incident-report text generated from structured alarm data.', solution: 'Use an autoregressive LLM for this drafting task, keeping image-generation-family models reserved for genuinely image-based synthetic network-topology visualization work.', risk: 'A diffusion or GAN-family model adapted for incident-report text, rather than an autoregressive LLM, has no token-by-token probability an on-call engineer can use to judge how confident the system actually was about a specific claimed root cause, which matters during an active outage when a wrong but fluent-sounding report can send the wrong team to the wrong equipment.'},
+    {title: 'Using a VAE\'s latent space for cell-tower traffic-pattern clustering', problem: 'A capacity-planning team wants a latent space where similar traffic patterns across cell towers cluster meaningfully, to identify towers needing similar interventions.', solution: 'Use a VAE specifically for this structured-latent-space property, validating that clusters correspond to genuinely similar operational traffic patterns.', risk: 'Clustering cell towers in a GAN\'s unstructured latent space can group towers that look superficially similar in generated samples but do not share the operational traffic characteristics that actually matter for capacity planning.'},
+    {title: 'Auditing diffusion-generated synthetic network traffic for rare surge coverage before load-testing', problem: 'A network-testing team generates synthetic traffic with a diffusion model, valuing its diversity advantage for capturing rare surge patterns like a viral event.', solution: 'Specifically validate rare-surge coverage in the generated traffic, not just aggregate similarity to typical traffic, before using it for load-testing decisions.', risk: 'A diffusion model that looks realistic in aggregate can still underweight rare surge patterns if not specifically validated, leaving load tests blind to exactly the surge conditions that most threaten network stability.'},
+    {title: 'Measuring a distilled diffusion model\'s quality loss before using it for real-time network-visualization tools', problem: 'A live network-operations dashboard wants diffusion-quality synthetic visualizations but needs low latency to remain useful during an active incident.', solution: 'Evaluate a distilled, few-step diffusion variant, explicitly measuring its visualization fidelity against the full model before adopting it for live incident use.', risk: 'Adopting a distilled diffusion model for live incident visualization without measuring its specific fidelity trade-off can present operators with a subtly misleading network-state picture during exactly the high-stakes moments that matter most.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why are VAEs described as "explicit-density, but only approximately," in a way that autoregressive LLMs are not?', answer: 'A VAE is trained by maximizing the evidence lower bound (ELBO), which is only a lower bound on the true data likelihood, not the exact likelihood itself. An autoregressive LLM computes an exact, tractable probability for each output token directly, with no approximation involved.'},
+    {question: 'What is the core mechanical difference between how a GAN and a diffusion model each learn to generate samples?', answer: 'A GAN trains a generator and a discriminator against each other in an adversarial game, with the generator learning only from whether it fooled the discriminator. A diffusion model learns to reverse a known, gradual noising process by predicting and removing a small amount of noise at each of many steps, learning directly from how real data was corrupted rather than from an adversarial signal.'},
+    {question: 'Why do latent diffusion models (the architecture behind Stable Diffusion) combine a VAE with a diffusion process, rather than running diffusion directly on raw pixels?', answer: 'Running the full noising-and-denoising process directly on raw pixels is computationally expensive. Latent diffusion models use a VAE to compress images into a much smaller latent space, run the diffusion process inside that compressed space, and only decode back to pixels at the end, making high-resolution generation practical.'},
+    {question: 'How do techniques like consistency models address the generative learning trilemma for diffusion models, and what do they trade away to do it?', answer: 'Consistency models train a model to map a noisy input to a clean sample in a small handful of steps, or even one, directly attacking diffusion\'s slow-sampling weakness. In exchange, they typically trade away some sample quality compared to the full, many-step diffusion process.'},
+    {question: 'Why would a team pick a VAE over a GAN specifically for a latent space used in patient-similarity or transaction-anomaly clustering?', answer: 'A VAE\'s training objective explicitly encourages a smooth, structured latent space where distance between latent codes is meaningful. A GAN\'s latent space carries no equivalent structural guarantee, so distances or clusters computed in it may not correspond to any real similarity between the underlying inputs.'},
+  ]}
+/>

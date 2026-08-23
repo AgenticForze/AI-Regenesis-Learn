@@ -1,0 +1,203 @@
+---
+title: "Prompting Fundamentals: Zero-Shot, Few-Shot, Instruction Following"
+sidebar_label: "5.1 Prompting Fundamentals"
+sidebar_position: 1
+phase: 5
+chapter: "5.1"
+lms_presentation: "5.1-Prompting-Fundamentals-Slides.pptx"
+prerequisites: ["3.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Prompting is how a task is communicated to an LLM without updating any of its weights. In **zero-shot**
+prompting, the prompt contains only a natural-language task description; in **few-shot** prompting, it
+also includes a handful of worked input-output examples, letting the model infer the task's format
+from demonstrations rather than instructions alone (Brown et al., in-context learning, no gradient
+updates in either case). **Instruction tuning** (FLAN, Wei et al., 2021) fine-tunes a model on many
+tasks phrased as instructions, teaching it to generalize to new, unseen instructions in a zero-shot
+setting rather than needing examples to infer the expected format. A further step, reinforcement
+learning from human feedback (InstructGPT, Ouyang et al., 2022, previewed here and covered fully in
+Phase 7), trains a model specifically to follow a user's actual intent, closing the gap between a raw
+pretrained base model, which treats a prompt as a text-continuation problem, and a model that reliably
+obeys a plain instruction. Even with a capable, instruction-tuned model, few-shot prompts remain
+sensitive to how they are built: example order (Lu et al., 2021) and systematic biases toward
+majority, recent, or common labels (Zhao et al., 2021) can swing accuracy substantially, and
+semantically similar example selection (Liu et al., 2021) outperforms random choice.
+
+## High-Level Explanation
+
+Think of onboarding two different new hires for the same task. One hire has no general training and
+needs to see several completed examples of the specific task, in the specific format expected, before
+producing correct work themselves, the equivalent of few-shot prompting: showing worked examples so the
+model can infer the expected pattern. A second hire has been broadly trained to follow written
+instructions across many kinds of tasks, and can often do this new task correctly from a plain
+instruction alone, no examples needed, the equivalent of an instruction-tuned model responding well to
+a zero-shot prompt. But even the well-trained second hire's output can shift noticeably depending on
+which examples happen to be shown first, in what order, or how similar those examples are to the actual
+task at hand, which is exactly the sensitivity few-shot prompts exhibit even with a capable model
+underneath them.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/5-1-zero-shot-vs-few-shot-vs-instruction-tuned.svg').default}
+    alt="A diagram comparing three prompting scenarios: a base model given a zero-shot instruction that it may not reliably follow, the same base model given a few-shot prompt with worked examples that it can follow, and an instruction-tuned model given only a zero-shot instruction that it follows reliably."
+  />
+  <figcaption>Zero-shot prompting works reliably with an instruction-tuned model; a base model often needs few-shot examples to infer the expected task format.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Defining zero-shot, one-shot, and few-shot precisely.** Brown et al.
+([*Language Models are Few-Shot Learners*](https://arxiv.org/abs/2005.14165), 2020) define these
+three settings purely by how many worked examples appear in the prompt alongside a natural-language
+task description: zero for zero-shot, one for one-shot, and a handful, typically ten to a hundred or so,
+for few-shot. Critically, no gradient updates or weight changes happen in any of the three settings;
+the model's parameters are entirely fixed, and everything the model has to work with is contained in
+the prompt itself, sometimes called in-context learning. This is a fundamentally different mechanism
+from fine-tuning, which does update weights on a task-specific dataset ahead of time.
+
+**Instruction tuning: teaching a model to generalize across instructions, not just examples.** Wei et
+al. ([*Finetuned Language Models Are Zero-Shot Learners*](https://arxiv.org/abs/2109.01652), FLAN,
+2021) fine-tune a language model on a large mixture of tasks, each phrased as a natural-language
+instruction, and show this substantially improves zero-shot performance specifically on held-out task
+types the model was never instruction-tuned on. The mechanism is generalization across instruction
+phrasing and task structure, not memorization of any single task's format: a model instruction-tuned
+this way can often follow a new instruction it has never seen phrased that way before, closing much of
+the gap between zero-shot and few-shot performance that a purely pretrained model exhibits.
+
+**RLHF: training a model to follow actual user intent.** InstructGPT (Ouyang et al.,
+[*Training Language Models to Follow Instructions with Human Feedback*](https://arxiv.org/abs/2203.02155),
+2022, previewed here and covered fully in Phase 7) goes a step further than FLAN's multitask
+instruction fine-tuning. The pipeline first fine-tunes a model on human-written demonstrations of
+desired behavior, then trains a separate reward model on human rankings of multiple candidate outputs,
+then uses that reward model to further fine-tune the original model via reinforcement learning. The
+paper's headline result, that human evaluators preferred outputs from a 1.3-billion-parameter
+InstructGPT model over the far larger 175-billion-parameter base GPT-3 model, demonstrates that this
+alignment pipeline, not raw scale, is what drives reliable instruction-following. This is a distinct
+mechanism from FLAN: FLAN uses only supervised instruction data across many tasks, with no human
+preference model or reinforcement learning step involved.
+
+**Why a base model and an instruction-tuned model respond so differently to the same prompt.** A base
+model, one that has only been pretrained on next-token prediction and not further tuned as described
+above, is fundamentally a text-continuation engine: given a prompt that looks like an instruction, it
+may continue the text in an unexpected way, such as generating more instructions rather than following
+the one given, since nothing in its training specifically taught it that a prompt shaped like an
+instruction should be obeyed. An instruction-tuned model, having been trained through a process like
+FLAN's or InstructGPT's, is expected to treat the prompt as something to act on rather than merely
+continue, which is precisely why zero-shot prompting becomes far more reliable once instruction tuning
+has happened, and why a base model more often needs few-shot examples to demonstrate the expected
+input-output pattern instead.
+
+**Few-shot prompts remain sensitive to example order.** Even with a capable model, Lu et al.
+([*Fantastically Ordered Prompts and Where to Find Them*](https://arxiv.org/abs/2104.08786), 2021)
+show that simply permuting the order of the same few-shot examples, with none added, removed, or
+reworded, can swing accuracy on the same task from near state-of-the-art to close to random chance.
+This means the specific sequence in which examples are presented is not a cosmetic detail; it is a
+variable that measurably affects output quality on its own.
+
+**Few-shot prompts carry systematic biases that calibration can correct.** Zhao et al.
+([*Calibrate Before Use: Improving Few-Shot Performance of Language Models*](https://arxiv.org/abs/2102.09690),
+2021) identify three specific biases in few-shot prompted models: majority-label bias, favoring
+whichever label appeared most often among the shown examples; recency bias, favoring the label of
+whichever example was shown last; and common-token bias, favoring tokens that are simply more frequent
+in the model's pretraining data, regardless of the actual task. Their proposed fix, contextual
+calibration, probes the model with a content-free input, such as the literal string "N/A," to estimate
+this bias directly and then adjusts the output distribution to cancel it out, which both raises average
+accuracy and reduces the variance introduced by different example choices or orderings.
+
+**Choosing which examples to show matters as much as how many.** Liu et al.
+([*What Makes Good In-Context Examples for GPT-3?*](https://arxiv.org/abs/2101.06804), 2021) find that
+selecting few-shot examples that are semantically similar to the specific test input, for instance via
+nearest-neighbor retrieval in an embedding space, substantially and consistently outperforms randomly
+chosen few-shot examples across a range of task types. This means the same fixed pool of candidate
+examples can produce meaningfully different results depending purely on which ones are selected for a
+given input, independent of prompt wording.
+
+**Putting prompting fundamentals together.** Whether zero-shot prompting is reliable at all depends
+heavily on whether the model in hand has been instruction-tuned; a base model more often needs few-shot
+demonstrations to behave predictably. Once few-shot prompting is in play, three additional variables,
+example order, example selection, and susceptibility to majority/recency/common-token bias, can each
+independently swing accuracy as much as the underlying task's difficulty does. Treating prompt
+construction as a deliberate design decision, not an afterthought, is the foundation the next chapter
+builds on with more advanced reasoning-elicitation patterns.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Zero-shot (base model)', 'Few-shot (base model)', 'Zero-shot (instruction-tuned model)', 'Calibrated few-shot']}
+  rows={[
+    {aspect: 'What it requires', values: ['Only a task description', 'A task description plus worked examples', 'Only a task description', 'Worked examples plus a calibration step'], decisive: true},
+    {aspect: 'Typical reliability', values: ['Often unreliable: may continue text rather than obey', 'More reliable than zero-shot on a base model', 'Reliable, closes most of the zero/few-shot gap', 'More stable across different example choices'], decisive: true},
+    {aspect: 'Sensitive to example order/selection?', values: ['Not applicable, no examples', 'Yes, substantially', 'Not applicable, no examples', 'Reduced, but not eliminated'] },
+    {aspect: 'Main limitation', values: ['Model may not treat the prompt as an instruction at all', 'Order and selection can swing accuracy independently of the task', 'Requires an instruction-tuned or RLHF-trained checkpoint', 'Requires an extra calibration pass per prompt template'] },
+  ]}
+  caption="These are points on a spectrum, not a strict ranking; which combination is appropriate depends on the model available and the task's tolerance for variance."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing a prompting strategy for the model and task at hand"
+  mermaid={`
+flowchart TD
+  PROBLEM[Need to prompt an LLM for a task] --> TUNED{Is the model instruction-tuned or RLHF-trained?}
+  TUNED -->|Yes| ZEROSHOT[Try zero-shot prompting first]
+  TUNED -->|No, a base model| FEWSHOT[Use few-shot prompting with worked examples]
+  ZEROSHOT --> RELIABLE{Is zero-shot output reliable enough?}
+  RELIABLE -->|No| FEWSHOT
+  FEWSHOT --> ORDER[Test example order, do not assume it is neutral]
+  FEWSHOT --> SELECT[Select semantically similar examples over random ones]
+  FEWSHOT --> BIAS{Does accuracy vary a lot across example sets?}
+  BIAS -->|Yes| CALIBRATE[Apply contextual calibration with a content-free input]
+`}
+  components={[
+    {name: 'Zero-shot prompting', responsibility: 'The simplest approach, reliable mainly with an instruction-tuned model.'},
+    {name: 'Few-shot prompting', responsibility: 'Demonstrates the expected task format via worked examples.'},
+    {name: 'Example selection and ordering', responsibility: 'Independently affects accuracy, separate from prompt wording.'},
+    {name: 'Contextual calibration', responsibility: 'Corrects systematic label biases introduced by the specific examples shown.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Choosing zero-shot versus few-shot prompting for a document-classification pipeline', problem: 'A team building a transaction-memo classification tool assumes zero-shot prompting will work reliably without first confirming whether the underlying model is instruction-tuned.', solution: 'Confirm the model\'s instruction-tuning status before committing to a zero-shot design, and fall back to few-shot prompting with worked examples if zero-shot accuracy is not reliable enough.', risk: 'Deploying a zero-shot prompt against a base model that was never confirmed to be instruction-tuned can produce inconsistent classification behavior in production, since the model may treat the prompt as text to continue rather than a category to assign.'},
+    {title: 'Testing few-shot example order sensitivity in a compliance-review prompt', problem: 'A compliance-review prompt uses a fixed set of few-shot examples but has never been tested against reordering those same examples.', solution: 'Specifically test the prompt\'s accuracy across multiple orderings of the same example set before finalizing it for production compliance use.', risk: 'A compliance-review prompt that happens to work well with one arbitrary example ordering could silently degrade in accuracy if the examples are later reordered during a routine prompt-template edit, with no code change that would otherwise draw scrutiny.'},
+    {title: 'Correcting majority-label bias in a fraud-flag few-shot prompt', problem: 'A fraud-flagging prompt\'s few-shot examples happen to include more non-fraud examples than fraud examples, and the prompt has not been checked for majority-label bias as a result.', solution: 'Apply contextual calibration, or deliberately balance the few-shot example set, to reduce the model\'s tendency to favor whichever label appeared more often among the shown examples.', risk: 'A fraud analyst relying on the tool\'s output could see genuinely fraudulent transactions slip through unflagged, not because the model cannot recognize fraud, but because it has learned to lean toward whichever label dominated its example set, a pattern that would look like normal performance right up until an actual loss event forced a manual review of what the tool had been missing.'},
+    {title: 'Selecting semantically similar few-shot examples for varied regulatory-filing types', problem: 'A single fixed set of few-shot examples is used across many different regulatory-filing types, regardless of how similar a given filing actually is to those examples.', solution: 'Retrieve few-shot examples that are semantically similar to the specific filing being processed, rather than using one static example set for every filing type.', risk: 'Using a static example set poorly matched to an unusual filing type can produce a lower-accuracy classification specifically for that filing type, a gap a general accuracy metric averaged across common filing types would not surface.'},
+  ]}
+  healthcare={[
+    {title: 'Confirming instruction-tuning status before deploying a zero-shot clinical-note summarizer', problem: 'A clinical-note summarization tool is designed around zero-shot prompting without confirming whether the deployed model is instruction-tuned or a base checkpoint.', solution: 'Confirm the model\'s instruction-tuning status before finalizing a zero-shot prompt design, falling back to few-shot prompting if zero-shot reliability is insufficient.', risk: 'A base checkpoint mistaken for an instruction-tuned one could respond to a summarization prompt by drafting a plausible-looking continuation of the note rather than an actual summary, and a clinician skimming a fluent but non-responsive output might not notice the mismatch before relying on it.'},
+    {title: 'Testing few-shot example order sensitivity in a triage-priority prompt', problem: 'A triage-priority prompt\'s few-shot examples have never been tested against reordering, despite the prompt influencing how urgently a case gets flagged.', solution: 'Specifically test the triage prompt\'s output across multiple orderings of its few-shot examples before relying on it for prioritization.', risk: 'If a routine edit to the triage prompt template happens to reorder its examples, the same patient case could receive a lower urgency flag than it would have the day before, a shift in queue position a triage nurse would have no way to notice without deliberately re-testing the prompt.'},
+    {title: 'Correcting recency bias in a symptom-severity few-shot prompt', problem: 'A symptom-severity classification prompt\'s few-shot examples happen to end with a severe-case example, and the prompt has not been checked for recency bias as a result.', solution: 'Apply contextual calibration, or deliberately vary which severity level appears last across example sets, to reduce the model\'s tendency to favor whichever label was shown most recently.', risk: 'Because the model leans toward whichever severity level it saw last regardless of the actual case description, a mild presentation could be classified as severe purely from that positional artifact, prompting an unnecessary escalation that consumes a clinician\'s time that a genuinely severe case elsewhere might have needed instead.'},
+    {title: 'Selecting semantically similar few-shot examples for varied patient-education requests', problem: 'A single fixed set of few-shot examples is used to generate patient-education material across many different conditions, regardless of how similar a given condition is to those examples.', solution: 'Retrieve few-shot examples that are semantically similar to the specific condition being explained, rather than using one static example set for every condition.', risk: 'A patient asking about a rare condition poorly represented by the static example set could receive an explanation that borrows structure or emphasis from an unrelated, more common condition the examples happened to cover, since nothing about the prompt adapts to how well-matched its examples actually are.'},
+  ]}
+  telecom={[
+    {title: 'Choosing zero-shot versus few-shot prompting for a network-incident categorization tool', problem: 'A network-incident categorization tool assumes zero-shot prompting will work reliably without confirming whether the underlying model is instruction-tuned.', solution: 'Confirm the model\'s instruction-tuning status before committing to a zero-shot design, falling back to few-shot prompting with worked examples if needed.', risk: 'An on-call engineer paging based on the tool\'s category label could be routed to the wrong specialist team entirely if an unconfirmed base model latches onto surface wording in the incident description rather than reasoning about the actual fault category, a mismatch most visible during exactly the high-volume incident windows when engineers have the least time to double-check it.'},
+    {title: 'Testing few-shot example order sensitivity in a customer-support escalation prompt', problem: 'A support-escalation prompt\'s few-shot examples have never been tested against reordering, despite the prompt determining which conversations get escalated to a human agent.', solution: 'Specifically test the escalation prompt\'s output across multiple orderings of its few-shot examples before relying on it in production.', risk: 'A customer whose conversation genuinely warranted a human agent could be kept in the automated flow simply because a template update happened to shuffle the few-shot example order that day, with no one noticing until the customer had already given up and escalated through a different channel entirely.'},
+    {title: 'Correcting common-token bias in a service-plan-recommendation few-shot prompt', problem: 'A service-plan-recommendation prompt\'s few-shot examples happen to favor commonly discussed plan names, and the prompt has not been checked for common-token bias as a result.', solution: 'Apply contextual calibration to reduce the model\'s tendency to favor tokens that are simply more frequent in its pretraining data rather than genuinely the best-fitting plan.', risk: 'A customer whose usage pattern actually fits a newer or less-marketed plan could still be steered toward whichever plan name the model has simply seen more often in its training data, a mismatch that shows up as a support callback once the customer notices their bill does not reflect what they were told would fit best.'},
+    {title: 'Selecting semantically similar few-shot examples for varied outage-report types', problem: 'A single fixed set of few-shot examples is used to draft outage-report summaries across many different incident types, regardless of how similar a given incident is to those examples.', solution: 'Retrieve few-shot examples that are semantically similar to the specific incident type being reported on, rather than using one static example set for every incident.', risk: 'A regulator reading an outage report for an unusual incident type could receive a summary that reads as if it were adapted from a routine outage template, omitting the specific detail a genuinely novel failure mode would need explained, since the static examples never modeled that kind of incident in the first place.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'How do Brown et al. define zero-shot, one-shot, and few-shot prompting, and what do all three settings have in common?', answer: 'They are defined purely by how many worked examples appear in the prompt alongside a task description: zero, one, or a handful. All three involve no gradient updates or weight changes at all; everything the model has to work with is contained entirely within the prompt itself, sometimes called in-context learning, which is fundamentally different from fine-tuning.'},
+    {question: 'What is the key difference between what FLAN\'s instruction tuning does and what InstructGPT\'s RLHF pipeline adds on top of that?', answer: 'FLAN fine-tunes a model on a large mixture of tasks phrased as natural-language instructions, teaching it to generalize to new, unseen instructions in a zero-shot setting. InstructGPT\'s pipeline adds supervised fine-tuning on human demonstrations, then trains a reward model on human preference rankings, then uses reinforcement learning with that reward model to align the model specifically with actual user intent, a distinct mechanism involving human preference data and reinforcement learning that FLAN does not use.'},
+    {question: 'Why does a base model often need few-shot examples while an instruction-tuned model can often work well zero-shot?', answer: 'A base model has only been trained on next-token prediction and may treat an instruction-shaped prompt as text to continue rather than something to obey, since nothing in its training specifically taught it to treat instructions that way. An instruction-tuned model has been trained, through a process like FLAN\'s or InstructGPT\'s, to treat the prompt as something to act on, which is why zero-shot prompting becomes far more reliable once that training has happened.'},
+    {question: 'What did Lu et al. find about few-shot example order, and why does this matter in practice?', answer: 'Simply permuting the order of the same few-shot examples, with none added, removed, or reworded, can swing accuracy on the same task from near state-of-the-art to close to random chance. This matters because example order is not a cosmetic detail; it is a variable that measurably affects output quality on its own, independent of which examples were chosen or how the task itself is described.'},
+    {question: 'What three biases did Zhao et al. identify in few-shot prompted models, and how does contextual calibration address them?', answer: 'Majority-label bias favors whichever label appeared most often among the shown examples; recency bias favors the label of whichever example was shown last; and common-token bias favors tokens that are simply frequent in the model\'s pretraining data. Contextual calibration probes the model with a content-free input, such as the string "N/A," to estimate this bias directly, then adjusts the output distribution to cancel it out, raising average accuracy and reducing variance across different example choices or orderings.'},
+  ]}
+/>

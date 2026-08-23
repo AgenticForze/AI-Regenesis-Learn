@@ -1,0 +1,210 @@
+---
+title: "Advanced Prompting Patterns: Chain-of-Thought, Self-Consistency, Tree-of-Thought"
+sidebar_label: "5.2 Advanced Prompting Patterns"
+sidebar_position: 2
+phase: 5
+chapter: "5.2"
+lms_presentation: "5.2-Advanced-Prompting-Patterns-Slides.pptx"
+prerequisites: ["3.6", "5.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chain-of-thought (CoT) prompting (Wei et al., 2022) writes out intermediate reasoning steps in
+few-shot examples instead of just final answers, substantially improving multi-step reasoning, an
+effect that emerges mainly around 100 billion or more parameters (3.6) and can actively hurt smaller
+models, which tend to produce fluent but illogical reasoning chains. Zero-shot CoT (Kojima et al.,
+2022) shows that simply appending "Let's think step by step," with no worked examples at all, elicits
+similar step-by-step reasoning and dramatically improves accuracy over a plain zero-shot prompt (5.1).
+Self-consistency (Wang et al., 2022/2023) goes further: instead of committing to one greedily decoded
+reasoning path, it samples several diverse paths via temperature or nucleus sampling (4.3) and takes a
+majority vote over their final answers, discarding the reasoning text itself. Tree-of-thought (Yao et
+al., 2023) generalizes this further still, maintaining a tree of intermediate reasoning steps, scoring
+how promising each partial path looks, and using search with backtracking to abandon unpromising
+branches, something neither chain-of-thought nor self-consistency ever do. Each technique adds
+reliability at the cost of more inference calls, and none of them guarantees that a fluent-sounding
+reasoning trace actually reflects how the model arrived at its answer (Turpin et al., 2023).
+
+## High-Level Explanation
+
+Picture four different ways to solve a hard word problem. Standard prompting is answering directly,
+with no shown work. Chain-of-thought prompting is showing your work the way a math teacher asks: write
+out each step that leads to the answer, which makes it easier to get multi-step problems right and
+easier to catch a mistake along the way. Self-consistency is solving the same problem several times
+independently, on separate scratch sheets, and then going with whichever final answer came up most
+often, since a genuinely correct answer tends to be reached more consistently than a wrong one
+arrived at by chance. Tree-of-thought is the most deliberate approach: sketching out several different
+next steps on scratch paper, judging which ones look most promising, pursuing the best one further, and
+being willing to cross out a branch entirely and back up to try a different approach if it stops
+looking promising, rather than plowing ahead with the first idea that came to mind.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/5-2-four-reasoning-strategies-compared.svg').default}
+    alt="A diagram comparing four prompting strategies: standard prompting with no shown reasoning, chain-of-thought prompting with one linear reasoning path shown, self-consistency sampling several independent reasoning paths and taking a majority vote, and tree-of-thought exploring a branching tree of partial reasoning steps with backtracking."
+  />
+  <figcaption>Each strategy adds more deliberate reasoning and more inference cost, from a single direct answer to a searched, backtracking tree of partial solutions.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Chain-of-thought prompting, and why it mainly helps large models.** Wei et al.
+([*Chain-of-Thought Prompting Elicits Reasoning in Large Language Models*](https://arxiv.org/abs/2201.11903),
+2022) show that including a few few-shot exemplars whose reasoning steps are written out in full,
+rather than jumping straight to the final answer, substantially improves accuracy on arithmetic,
+commonsense, and symbolic reasoning benchmarks compared to standard answer-only few-shot prompting
+(5.1). Critically, the paper reports that this benefit is scale-dependent: chain-of-thought prompting
+"does not positively impact performance for small models, and only yields performance gains when used
+with models of approximately 100 billion parameters." Below that scale, the paper finds models tend to
+produce "fluent but illogical chains of thought," which can leave performance worse than standard
+prompting, not merely unimproved. This is a specific instance of the emergent-ability pattern already
+covered in 3.6: a capability that is close to absent below a scale threshold and substantially present
+above it.
+
+**Zero-shot chain-of-thought: no worked examples required.** Kojima et al.
+([*Large Language Models are Zero-Shot Reasoners*](https://arxiv.org/abs/2205.11916), 2022) show that
+appending the single phrase "Let's think step by step" before the model's answer, with zero
+chain-of-thought demonstrations in the prompt at all, reliably elicits similar step-by-step reasoning
+and produces large accuracy gains over a plain zero-shot prompt, for instance raising accuracy on one
+benchmark from roughly 18% to roughly 79% using the identical model. This means the reasoning benefit
+chain-of-thought prompting provides does not strictly require worked examples; a simple instruction to
+reason step by step can elicit much of the same behavior on its own, at a fraction of the prompt-design
+effort.
+
+**Self-consistency: sampling multiple paths and voting on the answer.** Wang et al.
+([*Self-Consistency Improves Chain of Thought Reasoning in Language Models*](https://arxiv.org/abs/2203.11171),
+2022, ICLR 2023) replace a single, greedily decoded chain-of-thought path with several independently
+sampled reasoning paths, generated via temperature or nucleus sampling (4.3) rather than always
+choosing the single highest-probability continuation, and then take a majority vote over the final
+answers those paths reach, discarding the intermediate reasoning text itself. The intuition is that a
+genuinely correct answer tends to be reachable by multiple different valid lines of reasoning, while an
+incorrect answer is less likely to be reproduced consistently by chance across independently sampled
+paths. This reliably improves accuracy over single-path chain-of-thought, at the direct cost of running
+inference multiple times per question instead of once.
+
+**Tree-of-thought: searching and backtracking across partial solutions.** Yao et al.
+([*Tree of Thoughts: Deliberate Problem Solving with Large Language Models*](https://arxiv.org/abs/2305.10601),
+2023) generalize chain-of-thought and self-consistency further. Rather than committing to one linear
+path or sampling several complete paths independently, the model maintains a tree of intermediate
+reasoning steps, self-evaluates how promising each partial path looks so far, and uses a search
+strategy such as breadth-first or depth-first search to decide which branches to continue exploring
+and which to abandon, backtracking to try a different branch when a path stops looking promising. This
+is the key capability chain-of-thought and self-consistency both lack: neither ever revisits or
+abandons a reasoning path once started. On a constrained arithmetic puzzle task, this deliberate search
+raised success from 4% under standard chain-of-thought prompting to 74%, though at substantially higher
+inference cost, since evaluating and searching a tree of partial solutions requires many more model
+calls than generating one or several complete paths.
+
+**A related pattern: decomposing a problem instead of reasoning through it in one pass.**
+Least-to-most prompting (Zhou et al.,
+[*Least-to-Most Prompting Enables Complex Reasoning in Large Language Models*](https://arxiv.org/abs/2205.10625),
+2022) takes a structurally different approach: rather than reasoning through an entire problem in one
+continuous pass, it first decomposes the problem into a sequence of simpler subproblems, then solves
+them in order, feeding each subproblem's solution in as context for solving the next one. This proved
+especially effective for problems requiring generalization to inputs harder than anything seen in the
+prompt's examples, reaching over 99% accuracy on one compositional generalization benchmark where
+standard chain-of-thought prompting reached only about 16%, since decomposition lets the model solve a
+genuinely novel combination of familiar subproblems rather than needing the whole novel combination
+demonstrated at once.
+
+**A caution: a fluent reasoning trace is not proof of a genuine reasoning process.** Turpin et al.
+([*Language Models Don't Always Say What They Think*](https://arxiv.org/abs/2305.04388), 2023) show
+that chain-of-thought explanations can be systematically unfaithful to what actually drove a model's
+answer. By deliberately biasing inputs, for instance always placing the correct multiple-choice answer
+in the same position, they show a model's answer shifts to follow that bias while its stated reasoning
+never mentions the biasing feature at all, instead constructing a plausible-sounding rationale for
+whatever answer the bias produced. Accuracy dropped by as much as 36 percentage points across the
+biased tasks studied. The practical implication is that a chain-of-thought trace can be a genuinely
+useful tool for eliciting better answers while still being an unreliable explanation of why a
+particular answer was reached, two different things that are easy to conflate.
+
+**Choosing among these patterns is a cost-versus-reliability trade-off.** Zero-shot chain-of-thought
+costs almost nothing extra beyond a single generation. Few-shot chain-of-thought costs a longer prompt
+but still one generation. Self-consistency multiplies inference cost by however many paths are sampled,
+in exchange for a more reliable final answer. Tree-of-thought multiplies cost further still, since it
+requires generating, self-evaluating, and potentially backtracking across many partial paths, in
+exchange for the ability to recover from a reasoning path that chain-of-thought or self-consistency
+would have been stuck with. None of these techniques, including the more expensive ones, guarantees a
+faithful account of the model's actual reasoning process, which matters most when the reasoning trace
+itself, not just the final answer, is what a downstream process or reviewer intends to rely on.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Chain-of-thought (few-shot)', 'Zero-shot CoT', 'Self-consistency', 'Tree-of-thought']}
+  rows={[
+    {aspect: 'Core mechanism', values: ['Worked reasoning examples in the prompt', '"Let\'s think step by step," no examples', 'Multiple sampled paths, majority vote', 'A searched, self-evaluated tree of partial paths'], decisive: true},
+    {aspect: 'Backtracks on a bad path?', values: ['No', 'No', 'No, paths run independently', 'Yes, this is its defining feature'], decisive: true},
+    {aspect: 'Relative inference cost', values: ['One generation, longer prompt', 'One generation, minimal extra cost', 'Multiplies cost by number of sampled paths', 'Highest: many partial-path evaluations'] },
+    {aspect: 'Best suited for', values: ['Multi-step reasoning with large models', 'Quick reasoning boost with minimal setup', 'Tasks where a majority-correct answer is likely', 'Hard problems needing exploration and recovery'] },
+  ]}
+  caption="Each pattern trades additional inference cost for additional reasoning reliability; none of them guarantees the reasoning trace itself is a faithful account of how the answer was reached."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing a reasoning-elicitation pattern for a task"
+  mermaid={`
+flowchart TD
+  PROBLEM[Task needs multi-step reasoning] --> SCALE{Is the model large enough for CoT to help, roughly 100B+ parameters?}
+  SCALE -->|No| PLAIN[Use standard prompting, CoT may not help or could hurt]
+  SCALE -->|Yes| SETUP{Are worked reasoning examples available to include?}
+  SETUP -->|No| ZEROCOT["Try zero-shot CoT: append Let's think step by step"]
+  SETUP -->|Yes| FEWCOT[Use few-shot chain-of-thought prompting]
+  FEWCOT --> RELIABLE{Is a single reasoning path reliable enough?}
+  RELIABLE -->|No, and sampling cost is affordable| SELFCON[Apply self-consistency: sample paths, majority vote]
+  RELIABLE -->|No, and the task needs exploration/backtracking| TOT[Apply tree-of-thought: search with backtracking]
+  PROBLEM --> TRUST{Does a reviewer need to trust the reasoning trace itself, not just the final answer?}
+  TRUST -->|Yes| FAITHFUL[Treat the trace as a tool for better answers, not proof of faithful reasoning]
+`}
+  components={[
+    {name: 'Zero-shot CoT', responsibility: 'Elicits step-by-step reasoning with minimal prompt-design effort.'},
+    {name: 'Few-shot CoT', responsibility: 'Demonstrates the expected reasoning structure via worked examples.'},
+    {name: 'Self-consistency', responsibility: 'Improves reliability by sampling multiple paths and voting on the answer.'},
+    {name: 'Tree-of-thought', responsibility: 'Searches and backtracks across partial reasoning paths for hard problems.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Applying chain-of-thought prompting to multi-step loan-covenant calculations', problem: 'A covenant-compliance calculation requires combining several financial ratios in sequence, and a standard answer-only prompt has produced silently wrong final figures on complex cases.', solution: 'Switch to chain-of-thought prompting so each intermediate ratio and threshold comparison is written out, making an error in one step visible before it propagates into the final compliance determination.', risk: 'A covenant miscalculated as compliant when it was not could let a loan continue funding under terms the borrower no longer actually meets, a gap likely to surface only once the borrower\'s financial position deteriorates far enough to trigger a separate review.'},
+    {title: 'Using self-consistency for a high-stakes fraud-amount estimation task', problem: 'A single chain-of-thought pass estimating disputed transaction amounts occasionally reaches a materially different figure on a rerun of the same case.', solution: 'Apply self-consistency, sampling several independent reasoning paths for the same case and taking the majority-reached figure rather than trusting a single run.', risk: 'Relying on one greedily decoded estimate for a disputed-amount determination risks an inconsistent figure being finalized purely because of which particular reasoning path the model happened to generate that run, undermining confidence in the number if it is later challenged.'},
+    {title: 'Evaluating tree-of-thought for structuring a complex multi-party settlement', problem: 'Structuring a multi-party settlement involves several candidate allocation approaches, some of which turn out to violate a constraint only after being partially worked through.', solution: 'Use a tree-of-thought approach so an allocation path that turns out to violate a constraint partway through can be abandoned and a different branch pursued, rather than committing to the first approach attempted.', risk: 'A settlement structure finalized without ever backtracking past the point where a constraint was violated could allocate funds in a way that directly breaches one party\'s priority claim, a breach that would only come to light once that party challenges the distribution after the fact.'},
+    {title: 'Treating a chain-of-thought trace as a coaching tool rather than an audit trail for credit decisions', problem: 'A credit-decision support tool\'s chain-of-thought output is being treated by reviewers as a faithful record of why a recommendation was made, without independent verification.', solution: 'Explicitly train reviewers that a chain-of-thought trace can be a plausible-sounding rationale rather than a faithful account of the actual decision process, and require independent verification of any recommendation used for an adverse credit action.', risk: 'A reviewer who signs off on an adverse credit action because the model\'s stated reasoning sounds sound could be unable to produce, under a fair-lending inquiry, any actual explanation for the decision beyond a rationale that was never verified as the real basis for the recommendation in the first place.'},
+  ]}
+  healthcare={[
+    {title: 'Applying chain-of-thought prompting to multi-step dosage calculations', problem: 'A weight-based, multi-factor dosage calculation has produced a wrong final dose on complex cases when computed via a standard answer-only prompt.', solution: 'Switch to chain-of-thought prompting so each calculation step, such as weight-based scaling and any dose adjustments, is written out and can be independently checked before the final dose is used.', risk: 'A miscalculated dose that reaches a patient before anyone catches the arithmetic error could trigger a genuine adverse reaction, since a pharmacist double-checking the order against a bare final number, with no exposed calculation chain, has no specific step to verify and only a total to trust or reject.'},
+    {title: 'Using self-consistency for an ambiguous differential-diagnosis reasoning task', problem: 'A single chain-of-thought pass generating a differential diagnosis for an ambiguous presentation occasionally reaches a different leading diagnosis on a rerun of the same case.', solution: 'Apply self-consistency, sampling multiple independent diagnostic reasoning paths and surfacing the diagnosis that a majority of paths converge on, rather than a single run\'s result.', risk: 'Acting on a single run\'s leading diagnosis without knowing it was the least-supported of several plausible readings could delay starting treatment for the condition a majority of independently reasoned paths would actually have flagged, a delay most costly precisely on the ambiguous presentations where this shortcut is most tempting to take.'},
+    {title: 'Evaluating tree-of-thought for planning a complex, multi-condition treatment sequence', problem: 'Planning a treatment sequence for a patient with multiple interacting conditions involves candidate orderings that can turn out to conflict with a contraindication only partway through the plan.', solution: 'Use a tree-of-thought approach so a treatment-sequence branch that turns out to conflict with a contraindication can be abandoned and an alternative sequence explored, rather than finalizing the first sequence attempted.', risk: 'A treatment sequence finalized without reconsidering an earlier step could have a patient start a medication that a contraindication discovered too late makes actively unsafe to combine with what comes next, a risk only a genuine backtrack to that earlier decision point would have caught in time.'},
+    {title: 'Treating a diagnostic chain-of-thought trace as a coaching tool rather than a verified rationale', problem: 'A diagnostic-support tool\'s chain-of-thought output is being treated by clinical staff as a faithful record of the actual reasoning behind a suggested diagnosis, without independent verification.', solution: 'Train clinical staff that a chain-of-thought trace can be a plausible-sounding rationale rather than a faithful account of the model\'s actual reasoning, and require independent clinical verification of any suggested diagnosis before it informs care.', risk: 'A clinician who proceeds based on a diagnostic rationale that reads as sound could miss that the same conclusion would not actually have been reached through the reasoning described, a mismatch that may only surface if an unrelated finding later contradicts the diagnosis and forces a second look.'},
+  ]}
+  telecom={[
+    {title: 'Applying chain-of-thought prompting to multi-step network-capacity calculations', problem: 'A multi-factor network-capacity planning calculation has produced a wrong final recommendation on complex cases when computed via a standard answer-only prompt.', solution: 'Switch to chain-of-thought prompting so each intermediate capacity calculation is written out and can be checked before the final buildout recommendation is used.', risk: 'A wrong final capacity recommendation produced with no visible intermediate steps gives a reviewing engineer nothing to check the calculation against, risking an under-provisioned buildout that only surfaces once real traffic exceeds the miscalculated capacity.'},
+    {title: 'Using self-consistency for an ambiguous root-cause diagnosis during a complex outage', problem: 'A single chain-of-thought pass diagnosing the root cause of a complex, multi-symptom outage occasionally reaches a different leading cause on a rerun of the same incident data.', solution: 'Apply self-consistency, sampling multiple independent root-cause reasoning paths and surfacing the cause a majority converge on, rather than a single run\'s conclusion.', risk: 'An on-call engineer dispatched to chase the single run\'s stated root cause could spend the most time-critical part of an outage investigating a lead that a majority of independently sampled paths would never have converged on, time a correctly identified cause would have spent on the actual fix instead.'},
+    {title: 'Evaluating tree-of-thought for planning a complex network-migration sequence', problem: 'Planning a multi-stage network migration involves candidate stage orderings that can turn out to conflict with a dependency only partway through the plan.', solution: 'Use a tree-of-thought approach so a migration-sequence branch that turns out to conflict with a dependency can be abandoned and an alternative sequence explored, rather than finalizing the first sequence attempted.', risk: 'A migration plan finalized without reconsidering an earlier stage could execute a later step whose dependency was never actually satisfied, causing an outage that traces back to a stage the plan treated as already settled rather than open to revision.'},
+    {title: 'Treating a network-diagnostic chain-of-thought trace as a coaching tool rather than a verified rationale', problem: 'A network-diagnostics tool\'s chain-of-thought output is being treated by operations staff as a faithful record of the actual reasoning behind a suggested root cause, without independent verification.', solution: 'Train operations staff that a chain-of-thought trace can be a plausible-sounding rationale rather than a faithful account of the model\'s actual reasoning, and require independent verification of any suggested root cause before major remediation action is taken.', risk: 'An engineer who authorizes a costly remediation based on a fluent-sounding root-cause narrative could commit crew and equipment to fixing a component the model\'s actual process never truly implicated, a misallocation that only becomes visible once the remediation fails to resolve the underlying fault.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does chain-of-thought prompting change about a few-shot prompt, and why does Wei et al.\'s paper say it mainly benefits large models?', answer: 'Chain-of-thought prompting writes out the intermediate reasoning steps leading to the answer in the few-shot examples, rather than showing only the final answer. The paper reports this benefit is scale-dependent: it does not positively impact performance for small models and only yields gains around 100 billion parameters or more, since smaller models tend to produce fluent but illogical reasoning chains that can leave performance worse than standard prompting.'},
+    {question: 'What did Kojima et al. show about zero-shot chain-of-thought, and why is this notable given what chain-of-thought normally requires?', answer: 'They showed that simply appending "Let\'s think step by step" before the answer, with zero chain-of-thought demonstrations in the prompt, reliably elicits step-by-step reasoning and produces large accuracy gains over a plain zero-shot prompt. This is notable because standard chain-of-thought prompting normally requires worked reasoning examples in the prompt, while this shows a simple instruction alone can elicit much of the same behavior.'},
+    {question: 'How does self-consistency differ from standard chain-of-thought prompting, and what is the underlying intuition for why it improves accuracy?', answer: 'Instead of generating one greedily decoded reasoning path, self-consistency samples several diverse reasoning paths via temperature or nucleus sampling and takes a majority vote over their final answers, discarding the reasoning text itself. The intuition is that a genuinely correct answer tends to be reachable by multiple different valid lines of reasoning, while an incorrect answer is less likely to be reproduced consistently by chance across independently sampled paths.'},
+    {question: 'What capability does tree-of-thought have that neither chain-of-thought nor self-consistency have, and what is the cost of that capability?', answer: 'Tree-of-thought can backtrack: it maintains a tree of intermediate reasoning steps, self-evaluates how promising each partial path looks, and uses search to abandon unpromising branches and explore alternatives, something chain-of-thought and self-consistency never do once a path is started. The cost is substantially higher inference cost, since evaluating and searching a tree of partial solutions requires many more model calls than generating one or several complete paths.'},
+    {question: 'What did Turpin et al. find about the faithfulness of chain-of-thought explanations, and why does this matter in practice?', answer: 'By deliberately biasing inputs, such as always placing the correct answer in the same position, they showed a model\'s answer shifts to follow the bias while its stated reasoning never mentions the biasing feature, instead constructing a plausible-sounding rationale for whatever answer the bias produced. This matters because a chain-of-thought trace can genuinely help produce better answers while still being an unreliable explanation of why a particular answer was reached, which is a problem specifically when a reviewer intends to trust the reasoning trace itself rather than just the final answer.'},
+  ]}
+/>

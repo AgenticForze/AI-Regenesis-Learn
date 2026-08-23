@@ -1,0 +1,188 @@
+---
+title: "Tokenizers Deep Dive: BPE, WordPiece, SentencePiece"
+sidebar_label: "3.5 Tokenizers Deep Dive"
+sidebar_position: 5
+phase: 3
+chapter: "3.5"
+lms_presentation: "3.5-Tokenizers-Deep-Dive-Slides.pptx"
+prerequisites: ["3.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.1 introduced tokenization as a pipeline step without specifying how a tokenizer actually
+builds its vocabulary. This chapter covers the three subword segmentation algorithms behind nearly
+every production tokenizer in use today. **Byte Pair Encoding (BPE)** starts from individual
+characters (or bytes) and repeatedly merges whichever adjacent pair occurs most frequently in the
+training corpus, a purely frequency-driven, bottom-up process; GPT-family models use a byte-level
+variant that guarantees any input string is encodable with no unknown-token fallback ever required.
+**WordPiece** follows the same bottom-up merge structure as BPE but scores each candidate merge by
+how much it increases the training corpus's likelihood rather than by raw frequency alone, and is the
+tokenizer BERT uses. **SentencePiece** is a tokenizer framework, not a single algorithm: it treats
+input as a raw stream of characters, including whitespace as an ordinary symbol, which makes it
+language-independent, and it can run either BPE-style merging or a genuinely different algorithm,
+the Unigram language model tokenizer, which starts from a large candidate vocabulary and prunes it
+down rather than building it up. T5, mT5, ALBERT, and XLNet use SentencePiece. The choice between
+these algorithms is rarely visible to a model's end user, but it shapes vocabulary size, sequence
+length, out-of-vocabulary robustness, and multilingual behavior in ways that matter operationally.
+
+## High-Level Explanation
+
+Think of building a subword vocabulary like designing a set of building blocks for constructing
+words. Full common words make efficient blocks, but a vocabulary of only whole words runs into rare
+or novel words it has never seen and cannot build. Subword tokenizers solve this by keeping a mix of
+block sizes: common whole words stay as single blocks, while rare or unfamiliar words get built out of
+smaller, more common pieces, so nothing is ever unbuildable. The three algorithms in this chapter
+differ mainly in **how they decide which blocks belong in the set**. BPE and WordPiece both start
+from the smallest possible blocks (individual characters) and repeatedly glue two blocks together into
+a bigger one, working their way up: BPE glues together whichever pair shows up most often, and
+WordPiece glues together whichever pair most improves how well the resulting vocabulary explains the
+training text. SentencePiece is a different kind of choice: it is the framework that decides whether
+spaces are treated as an ordinary character (so tokenization is fully reversible and doesn't need to
+know where words start and end ahead of time), and inside that framework, the actual block-choosing
+algorithm can be BPE, or it can be the Unigram algorithm, which works in the opposite direction, from
+a large set of candidate blocks down to a smaller, final set.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-5-three-tokenizers-compared.svg').default}
+    alt="Three tokenizer algorithms side by side: BPE merging the most frequent adjacent character pair bottom-up, WordPiece merging the pair that most improves training-data likelihood bottom-up, and SentencePiece's Unigram algorithm pruning a large candidate vocabulary down top-down, each with the model families that use them."
+  />
+  <figcaption>Two of the three algorithms build a vocabulary up from characters; the third prunes one down from a large candidate set.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**BPE's merge algorithm, mechanically.** BPE (Sennrich et al.,
+[*Neural Machine Translation of Rare Words with Subword Units*](https://arxiv.org/abs/1508.07909),
+2016) starts by splitting every training word into individual characters and counting every adjacent
+symbol pair across the entire corpus. It then merges the single most frequent pair into one new
+symbol, adds that symbol to the vocabulary, and recounts pairs in the now-updated corpus. This merge
+step repeats until the vocabulary reaches a target size, commonly tens of thousands of entries. Each
+merge is chosen purely by frequency, with no notion of what a merge means linguistically: two
+characters that happen to co-occur often, whether or not they form a meaningful unit, get merged
+before a rarer but more meaningful pair does. GPT-2 (Radford et al., 2019) introduced **byte-level
+BPE**, which runs this exact merge algorithm over raw UTF-8 bytes rather than Unicode characters. Because
+there are only 256 possible starting bytes, byte-level BPE has a complete, fixed starting alphabet, so
+every possible input string, including one containing a character never seen during tokenizer
+training, can always be encoded as some sequence of byte-level tokens. This eliminates the
+out-of-vocabulary problem entirely: there is no unknown-token fallback because none is ever needed.
+
+**WordPiece's scoring change, and why it produces a different vocabulary from the identical corpus.**
+WordPiece (Schuster and Nakajima, 2012; adopted by BERT) uses the same bottom-up merge structure as
+BPE, characters up to larger units, but changes the criterion for choosing which pair to merge next.
+Instead of picking the most frequent adjacent pair, WordPiece picks the pair whose merge most
+increases the likelihood of the training data under a language model built from the resulting
+vocabulary, which in practice reduces to preferring a pair whose joint frequency is high relative to
+the product of each symbol's individual frequency, a criterion closer to pointwise mutual information
+than to raw frequency. Two symbols that each appear often on their own, but rarely appear together,
+score lower under WordPiece than two rarer symbols that almost always appear together, even if the
+first pair's raw joint frequency happens to be numerically higher. Run on the same training corpus,
+BPE and WordPiece can therefore converge on different final vocabularies, because they are optimizing
+different objectives at every single merge step, not because either implementation is buggy or
+approximate.
+
+**SentencePiece: why whitespace-as-a-symbol matters, and the Unigram algorithm it also supports.**
+SentencePiece (Kudo and Richardson,
+[*SentencePiece: A Simple and Language Independent Subword Tokenizer and Detokenizer for Neural Text
+Processing*](https://arxiv.org/abs/1808.06226), 2018) treats an entire input string as a raw sequence
+of characters, replacing every space with a reserved meta-symbol (commonly rendered as "▁") rather
+than using whitespace to pre-split the input into words before tokenizing. This makes tokenization
+fully reversible; the original text, including its exact spacing, can be reconstructed from the token
+sequence alone, and it makes the same tokenizer usable on languages like Japanese or Chinese that do
+not mark word boundaries with whitespace at all, with no separate language-specific pre-tokenizer
+required. SentencePiece is a framework in the sense that it can run either BPE merging internally, or
+a separate algorithm called the **Unigram language model tokenizer** (Kudo,
+[*Subword Regularization: Improving Neural Network Translation Models with Multiple Subword
+Candidates*](https://arxiv.org/abs/1804.10959), 2018). Unigram works in the opposite direction from
+BPE and WordPiece: it starts from a large candidate vocabulary of possible subwords and iteratively
+removes whichever tokens contribute least to the training corpus's overall likelihood, using an
+expectation-maximization procedure, until the vocabulary shrinks to the target size. Because it treats
+segmentation probabilistically rather than as one fixed set of merge rules, Unigram can also assign
+probabilities to multiple different valid segmentations of the same input string, which enables
+**subword regularization**: sampling a different valid segmentation of the same training example on
+different training passes, which exposes a model to more segmentation variety and can improve
+robustness to unusual or noisy input at inference time. T5 and mT5 use SentencePiece with the Unigram
+algorithm; ALBERT and XLNet use SentencePiece as well.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['BPE (byte-level)', 'WordPiece', 'SentencePiece (Unigram)']}
+  rows={[
+    {aspect: 'Vocabulary construction direction', values: ['Bottom-up: merge characters/bytes into larger units', 'Bottom-up: merge characters into larger units', 'Top-down: prune a large candidate set down'], decisive: true},
+    {aspect: 'Merge/prune criterion', values: ['Raw pair frequency', 'Likelihood gain (pointwise-mutual-information-like)', 'Expectation-maximization likelihood loss'], decisive: true},
+    {aspect: 'Whitespace handling', values: ['Typically pre-splits on whitespace first', 'Typically pre-splits on whitespace first', 'Treats whitespace as an ordinary symbol, no pre-split needed'], },
+    {aspect: 'Out-of-vocabulary behavior', values: ['None, if byte-level: any string is encodable', 'Falls back to `[UNK]` for truly unencodable input', 'Falls back to `<unk>` for characters outside the trained vocabulary'], },
+    {aspect: 'Segmentation of a given string', values: ['Deterministic, one fixed result', 'Deterministic, one fixed result', 'Can be probabilistic (subword regularization) or deterministic at inference'], },
+    {aspect: 'Representative models', values: ['GPT-2, GPT-3, GPT-4', 'BERT, DistilBERT', 'T5, mT5, ALBERT, XLNet'], },
+  ]}
+  caption="All three are subword segmentation strategies; they differ in how the vocabulary is built and how a given string gets split, not in the general subword idea itself."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From raw text to token IDs: where each algorithm's choice lives"
+  mermaid={`
+flowchart TD
+  RAW[Raw input text] --> NORM[Normalization: unicode/case handling]
+  NORM --> PRETOK{Whitespace-based pre-tokenization?}
+  PRETOK -->|"Yes (BPE, WordPiece)"| SPLIT[Split into whitespace-bounded chunks]
+  PRETOK -->|"No (SentencePiece)"| RAWSTREAM[Treat whole string as one symbol stream]
+  SPLIT --> SEG[Subword segmentation: BPE merges or WordPiece merges]
+  RAWSTREAM --> SEG2[Subword segmentation: SentencePiece BPE or Unigram]
+  SEG --> VOCAB[Fixed vocabulary lookup]
+  SEG2 --> VOCAB
+  VOCAB --> IDS[Token ID sequence]
+`}
+  components={[
+    {name: 'Normalization', responsibility: 'Applies consistent unicode normalization and casing rules before any segmentation decision is made.'},
+    {name: 'Pre-tokenization (optional)', responsibility: 'Splits on whitespace before subword segmentation; BPE and WordPiece typically do this, SentencePiece typically does not.'},
+    {name: 'Subword segmentation', responsibility: 'Applies the trained algorithm (BPE merges, WordPiece merges, or SentencePiece Unigram) to split each chunk into vocabulary entries.'},
+    {name: 'Vocabulary lookup', responsibility: 'Maps each resulting subword string to its fixed integer token ID, the same lookup step covered in 3.1.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Fragmentation of ticker symbols and fund codes in a general-purpose vocabulary', problem: 'Proprietary internal fund codes and less common ticker symbols are rare tokens that a general-purpose tokenizer fragments into pieces with no coherent meaning.', solution: 'Evaluate a tokenizer\'s fragmentation of the firm\'s actual ticker and fund-code vocabulary before deployment, extending the vocabulary with dedicated tokens where warranted.', risk: 'A ticker symbol that tokenizes differently across a model version upgrade can silently break exact-match logic in sanctions-list screening or trade-surveillance pattern matching that depends on stable token boundaries.'},
+    {title: 'Revalidating keyword-based AML rules after a base model upgrade', problem: 'Switching to a new base model usually changes the tokenizer underneath it, which can change how existing regulatory keyword phrases get segmented.', solution: 'Treat any base model upgrade as a trigger to revalidate keyword and pattern-based monitoring rules against the new tokenizer\'s output, not just against overall model accuracy.', risk: 'An AML rule tuned for a specific token boundary can silently stop matching after a tokenizer change, creating an undetected gap in transaction-monitoring coverage until the next audit surfaces it.'},
+    {title: 'SentencePiece for multilingual regulatory filing review', problem: 'Multinational compliance teams process filings across languages and scripts, including ones without whitespace-delimited words.', solution: 'A SentencePiece-based pipeline handles Latin-script and CJK filings with one consistent tokenizer, since it does not assume whitespace marks word boundaries.', risk: 'Probabilistic Unigram segmentation used during training but disabled at inference can create a train/inference mismatch that affects consistency in an automated disclosure-review workflow subject to its own audit trail.'},
+    {title: 'Token-count-based context and cost budgeting for 10-K review automation', problem: 'A model\'s context window and per-token billing both depend directly on how efficiently its tokenizer represents a given document type.', solution: 'Benchmark tokens-per-page specifically on dense financial documents, including numeric tables, before committing to a model and tokenizer combination.', risk: 'A tokenizer that fragments numeric figures inefficiently can silently exceed a context limit mid-filing, truncating an automated review of a long 10-K exactly where the truncation is least likely to be noticed.'},
+  ]}
+  healthcare={[
+    {title: 'Fragmentation of clinical drug names and dosage units in WordPiece vocabularies', problem: 'Clinical drug names and dosage abbreviations often split into many subword pieces that lose their meaning as a coherent unit for a BERT-based clinical NLP model.', solution: 'Extend or specialize a clinical WordPiece vocabulary with dedicated tokens for the institution\'s common drug names and dosage units rather than relying on the general-purpose vocabulary.', risk: 'A drug name that fragments differently between two model versions can silently change which spans a downstream entity-extraction model flags, a medication-reconciliation gap with direct patient-safety consequences.'},
+    {title: 'Byte-level BPE\'s lack of an unknown-token fallback for un-redacted identifiers', problem: 'Byte-level BPE guarantees every string is encodable, including any pasted patient identifier or account number that should have been redacted before reaching the model.', solution: 'Enforce de-identification upstream of tokenization rather than relying on tokenizer behavior to surface leftover identifiers.', risk: 'A team that treats an unknown-token signal as an implicit safety net for catching un-redacted identifiers gets no such signal from byte-level BPE, since it has no unknown-token fallback at all, a distinct PHI-exposure mechanism from a WordPiece pipeline that would at least emit an `[UNK]`.'},
+    {title: 'SentencePiece for multi-script patient intake forms', problem: 'Patient intake data spans multiple scripts, including languages without reliable whitespace-delimited word boundaries.', solution: 'A SentencePiece-based intake pipeline processes multi-script text without a language-specific pre-tokenizer, since whitespace is treated as an ordinary symbol rather than a boundary marker.', risk: 'A script the SentencePiece vocabulary was undertrained on can silently over-fragment into many single-character tokens, degrading extraction accuracy specifically for that patient population\'s intake data with no explicit error raised.'},
+    {title: 'Vocabulary efficiency and truncation risk in long clinical note summarization', problem: 'A less efficient tokenizer produces longer token sequences per note, and clinical notes already run long relative to typical context windows.', solution: 'Benchmark tokens-per-note for the institution\'s actual documentation style before selecting a model and tokenizer combination for a summarization deployment.', risk: 'Silent truncation of a long note due to tokenizer inefficiency can drop the assessment-and-plan section, the clinically highest-stakes part of the note, with no explicit error signal to the clinician relying on the summary.'},
+  ]}
+  telecom={[
+    {title: 'BPE fragmenting equipment model numbers and error codes in log analysis', problem: 'Network equipment model numbers and vendor-specific error codes are highly specific strings a general-purpose BPE vocabulary was never trained on.', solution: 'Train or extend the tokenizer\'s vocabulary against a corpus dominated by the operator\'s actual log and ticket text rather than general-domain text.', risk: 'An equipment error code that fragments inconsistently between tokenizer versions can silently break exact-match log-correlation rules used to auto-triage an outage, delaying detection of a systemic fault pattern across many sites.'},
+    {title: 'WordPiece\'s likelihood-based criterion underweighting rare high-severity alarm codes', problem: 'WordPiece\'s likelihood-based merge criterion favors common patterns, so a rare but high-severity alarm code appearing infrequently in training data may never earn its own token.', solution: 'Specifically verify stable tokenization of the rare, high-severity alarm codes that matter operationally, rather than checking only aggregate tokenizer quality metrics.', risk: 'A rare critical alarm code that never gets a dedicated token can be systematically underweighted by a downstream severity classifier precisely because it looks like generic fragments, at exactly the moment during an outage when correct triage matters most.'},
+    {title: 'Cross-vendor tokenizer inconsistency in multi-vendor documentation search', problem: 'An operator ingests documentation from multiple equipment vendors, each potentially processed through a different model with a different tokenizer.', solution: 'Standardize on one tokenizer and embedding pipeline for cross-vendor documentation search rather than mixing vendor-specific model outputs.', risk: 'Two vendors\' functionally identical technical terms can end up with different token and embedding representations across pipelines, causing a cross-vendor search or retrieval system to silently miss equivalent documentation from the other vendor during an active multi-vendor incident.'},
+    {title: 'Skipping SentencePiece subword regularization for voice-to-text ticket transcription', problem: 'Transcribed call and ticket text contains transcription noise, such as typos and ASR errors, that a deterministic tokenizer segments inconsistently.', solution: 'Train with SentencePiece\'s Unigram subword regularization, sampling multiple valid segmentations per example, to make the downstream model more robust to this kind of noisy input.', risk: 'Skipping subword regularization and training on only the single best segmentation creates a train/inference distribution mismatch that shows up as degraded triage accuracy specifically on voice-originated tickets, not on text-originated ones.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What criterion does BPE use to choose which pair to merge next, and how does WordPiece\'s criterion differ?', answer: 'BPE merges whichever adjacent pair occurs most frequently in the training corpus, a purely frequency-driven choice. WordPiece merges whichever pair most increases the training data\'s likelihood under the resulting vocabulary, which in practice favors pairs with high joint frequency relative to their individual frequencies, closer to a pointwise-mutual-information criterion than to raw frequency.'},
+    {question: 'Why does byte-level BPE eliminate the out-of-vocabulary problem entirely?', answer: 'Byte-level BPE operates over raw UTF-8 bytes, and there are only 256 possible starting bytes, so every possible input string can always be encoded as some sequence of byte-level tokens. There is no unknown-token fallback because none is ever needed.'},
+    {question: 'How does the Unigram algorithm used by SentencePiece differ structurally from BPE and WordPiece?', answer: 'BPE and WordPiece both build a vocabulary bottom-up, starting from characters and merging pairs into larger units. Unigram works top-down: it starts from a large candidate vocabulary and iteratively removes whichever tokens contribute least to the training corpus\'s likelihood, using an expectation-maximization procedure, until the vocabulary shrinks to the target size.'},
+    {question: 'Why does SentencePiece treat whitespace as an ordinary symbol instead of pre-splitting on it, and what does that make possible?', answer: 'Treating whitespace as an ordinary symbol makes tokenization fully reversible, since the original text and its exact spacing can be reconstructed from the token sequence alone, and it makes the same tokenizer usable on languages like Japanese or Chinese that do not mark word boundaries with whitespace, with no separate language-specific pre-tokenizer required.'},
+    {question: 'What is subword regularization, and which algorithm in this chapter enables it?', answer: 'Subword regularization is training on multiple different valid segmentations of the same input example, sampled according to the probabilities Unigram assigns to each possible segmentation, rather than always using one fixed segmentation. This is possible because Unigram treats segmentation probabilistically; BPE and WordPiece produce one deterministic segmentation per string and do not support it.'},
+  ]}
+/>

@@ -1,0 +1,180 @@
+---
+title: "The 2026 Model Landscape: Open vs. Closed, Size Classes, Choosing a Base Model"
+sidebar_label: "3.7 The 2026 Model Landscape"
+sidebar_position: 7
+phase: 3
+chapter: "3.7"
+lms_presentation: "3.7-2026-Model-Landscape-Slides.pptx"
+prerequisites: ["3.6"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 3.4 covered how model families differ by architecture and training objective. This chapter
+covers a separate, practical question: how a team actually chooses a specific model to deploy, across
+three related dimensions. **Open versus closed** describes whether a model's trained weights can be
+downloaded and self-hosted (open-weight) or are usable only through a vendor's API (closed). Closed
+frontier models, from vendors such as OpenAI, Anthropic, and Google, are accessed entirely through an
+API, with the vendor controlling hosting and versioning. Open-weight models, from vendors such as Meta,
+DeepSeek, Alibaba's Qwen team, and Mistral, can be downloaded and run on infrastructure the deploying
+organization controls, but "open-weight" is not synonymous with "unrestricted": license terms vary
+considerably, from genuinely permissive licenses like Apache 2.0 or MIT to conditional community
+licenses. Meta's Llama 4 license, for example, requires requesting a separate license from Meta if a
+licensee's products or services exceeded 700 million monthly active users as of the Llama 4 release
+date. **Size class** is a second,
+largely independent dimension: frontier or flagship models offer the highest capability at the highest
+cost and latency, mid-size models trade some capability for lower cost and self-hosting feasibility, and
+small or edge models trade further capability for the ability to run on limited hardware, including
+on-device. Choosing a base model means deciding across openness, size class, and licensing together,
+not any one dimension alone.
+
+## High-Level Explanation
+
+Think of choosing a base model like choosing transportation for a specific job. A closed frontier model
+is like hiring a chauffeured car: someone else owns, maintains, and upgrades the vehicle, and you pay
+per trip, but you can never look under the hood or take it apart to see how it works. An open-weight
+model is like buying your own vehicle: you own it outright, can inspect and modify it, and can keep
+driving it even if the dealership closes, but the purchase agreement itself may still restrict certain
+uses, the way some open-weight licenses restrict deployment past a certain scale. Size class is a
+separate choice layered on top, closer to choosing between a delivery truck, a sedan, and a scooter:
+each is suited to a different job's constraints of capacity, cost, and where it can actually go, rather
+than one simply being a better version of another. The rest of this chapter looks at what "open" and
+"restricted" actually mean in a real license, and how the three dimensions combine into a single
+deployment decision.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/3-7-open-vs-closed-size-classes.svg').default}
+    alt="A grid showing the model landscape along two dimensions: open-weight versus closed access on one axis, and frontier, mid-size, and small/edge size class on the other, with representative model families placed in each cell."
+  />
+  <figcaption>Openness and size class are independent dimensions; a real deployment decision has to weigh both, plus the specific license terms attached to whichever open-weight option is chosen.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**"Open-weight" is not the same thing as "open-source," and the difference matters operationally.**
+A model is open-weight when its trained parameter values are published for download. That alone says
+nothing about whether the training data, training code, or full methodology used to produce those
+weights is also published, the standard that a stricter "open-source" definition would require. Most
+models marketed as "open" in 2026 release only the weights and inference code, not the training data,
+making them open-weight rather than fully open-source in the traditional software sense. This
+distinction matters practically: an open-weight model can be inspected, fine-tuned, and self-hosted
+regardless of this gap, but a team cannot reproduce or fully audit how it was trained, which is a
+different guarantee than what "open source" implies in traditional software licensing.
+
+**Real license terms vary enormously, and the label "open" does not tell you which kind you are
+getting.** A genuinely permissive license, such as Apache 2.0 or MIT, imposes no usage restriction:
+free commercial use, modification, and redistribution, with no threshold that changes the terms. A
+conditional community license imposes usage restrictions above a stated threshold. Meta's Llama 4
+license is a concrete, verifiable example: it permits free use, modification, and redistribution of the
+weights, but requires the licensee to request a separate license directly from Meta if, as measured on
+the Llama 4 version release date, the monthly active users of the licensee's own products or services
+was greater than 700 million monthly active users in the calendar month preceding that release date, a
+threshold Meta may grant or decline at its sole discretion. The test is anchored to that fixed release
+date, not an ongoing condition a licensee must keep monitoring as its own user count changes over time.
+This means
+"open-weight" describes a spectrum of actual legal freedom, not one fixed category, and the specific
+license text has to be checked for the model actually being deployed, not inferred from how the model
+is marketed or from another vendor's terms.
+
+**Size class is a distinct axis from openness, and both matter independently to a deployment decision.**
+Frontier or flagship models sit at the top of the capability range and typically require either API
+access to a vendor's infrastructure or, for open-weight frontier-scale models, a multi-GPU cluster to
+self-host. Mid-size models, typically tens of billions of parameters, trade some capability for
+meaningfully lower cost, lower latency, and feasible self-hosting on a small number of GPUs. Small or
+edge models, sometimes called SLMs, trade further capability for the ability to run on a single
+consumer GPU or directly on-device, with no network dependency at all. A smaller model fine-tuned
+tightly on one narrow task can sometimes match or exceed a much larger general-purpose frontier model
+on that specific task, since the capability a deployment actually needs is task-specific, not simply a
+function of parameter count, a point that connects directly to chapter 3.6's discussion of what
+additional scale actually buys.
+
+**Choosing a base model means weighing several decision axes together, not optimizing one in
+isolation.** In practice a team has to weigh: the task's actual capability requirement, whether data
+residency or privacy requirements permit sending data to a third-party API at all, the total cost of
+ownership (API per-token pricing versus self-hosting infrastructure and engineering cost), latency
+requirements, whether the specific license terms actually permit the intended use at the intended
+deployment scale, and the vendor-concentration risk of depending entirely on one API vendor's uptime,
+pricing, and deprecation decisions versus owning a downloadable checkpoint that keeps working
+regardless of what the original vendor does next. No single axis determines the right answer; a model
+that wins on capability can still be the wrong choice on licensing, latency, or vendor risk grounds.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Closed frontier models', 'Open-weight frontier-scale models', 'Open-weight mid-size / small models']}
+  rows={[
+    {aspect: 'Access method', values: ['API only; weights never released', 'Downloadable weights, self-hostable', 'Downloadable weights, self-hostable'], decisive: true},
+    {aspect: 'Typical hosting', values: ['Vendor-hosted only', 'Self-hosted (multi-GPU cluster) or vendor-hosted', 'Self-hosted on a small number of GPUs, or on-device'], decisive: true},
+    {aspect: 'Licensing model', values: ['Set entirely by the vendor\'s API terms of service', 'Ranges from permissive (Apache 2.0, MIT) to conditional community licenses with usage thresholds', 'Same range; must be checked per model'], },
+    {aspect: 'Representative families', values: ['OpenAI GPT, Anthropic Claude, Google Gemini', 'Meta Llama, DeepSeek, Qwen, Mistral, and similar frontier-scale open-weight families', 'Smaller variants of the same families, sized for a single GPU or on-device'], },
+  ]}
+  caption="Openness, size class, and licensing are three separate dimensions; a real deployment decision has to check all three for the specific model in question, not assume one implies the others."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing a base model across three dimensions at once"
+  mermaid={`
+flowchart TD
+  TASK[Task capability requirement] --> CAP{Requires frontier-scale capability?}
+  CAP -->|Yes| FRONTIER[Frontier-scale: closed API or open-weight frontier model]
+  CAP -->|No| MIDSMALL[Mid-size or small open-weight model]
+  FRONTIER --> RESID{Data residency or privacy rules out a third-party API?}
+  MIDSMALL --> RESID
+  RESID -->|Yes| SELFHOST[Must be open-weight and self-hosted]
+  RESID -->|No| EITHER[Closed API or self-hosted, both viable]
+  SELFHOST --> LICENSE["Check the specific license's terms against deployment scale"]
+  EITHER --> LICENSE
+  LICENSE --> DECISION[Base model decision]
+`}
+  components={[
+    {name: 'Capability check', responsibility: 'Determines whether the task genuinely needs frontier-scale capability, or whether a mid-size or small model would perform as well on this specific task.'},
+    {name: 'Data residency check', responsibility: 'Determines whether privacy, security, or regulatory requirements rule out sending data to a third-party API at all, which forces a self-hosted open-weight choice regardless of capability.'},
+    {name: 'License check', responsibility: 'Verifies the specific license terms of the chosen open-weight model, such as a monthly-active-user threshold, permit the intended deployment at its actual scale.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Choosing a closed API model for proprietary trading-strategy analysis', problem: 'Sending proprietary trading-strategy text to a third-party API for analysis risks exposing alpha-generating information.', solution: 'Evaluate whether a self-hosted open-weight model is required specifically because the workload involves information that should never leave the firm\'s own infrastructure.', risk: 'Sending proprietary trading-strategy content to a closed third-party API creates a competitive-exposure risk distinct from ordinary customer-data handling, since any signal reaching a competitor or the vendor itself is a direct business risk, not just a compliance one.'},
+    {title: 'Verifying an open-weight model\'s license against deployment scale before adoption', problem: 'Assuming "open-weight" means unrestricted commercial use without checking the specific license\'s scale threshold.', solution: 'Have legal and compliance review the exact license text, such as a monthly-active-user threshold, against the firm\'s actual deployment scale before committing to an open-weight model for a customer-facing product.', risk: 'Deploying an open-weight model at a scale that triggers a license\'s separate-agreement requirement, without having obtained that agreement, creates a licensing-compliance exposure and a possible forced shutdown of the product if discovered later.'},
+    {title: 'Choosing model size class for real-time fraud-detection scoring', problem: 'Fraud scoring must run within tight latency budgets at very high transaction volume.', solution: 'Evaluate a smaller, self-hosted open-weight model against a larger closed API model specifically on latency and cost at the required transaction volume, not on capability benchmarks alone.', risk: 'A frontier-scale closed API model\'s per-call latency and cost, viable at low volume, can become operationally infeasible at fraud-scoring transaction volume, a distinct operational-risk exposure from an accuracy shortfall.'},
+    {title: 'Vendor concentration risk in a core compliance workflow', problem: 'Building a critical compliance workflow entirely around one closed API vendor creates a single point of dependency.', solution: 'Assess vendor-dependency risk, such as pricing changes, deprecation, or policy changes, specifically for workflows the firm cannot quickly migrate off.', risk: 'A closed API vendor\'s unilateral price increase, deprecation, or policy change for a model a compliance workflow depends on can force an unplanned, time-pressured revalidation of a regulated workflow, an operational-resilience exposure an owned, downloadable checkpoint would not create.'},
+  ]}
+  healthcare={[
+    {title: 'Data residency requirements ruling out a closed API model for PHI processing', problem: 'Processing protected health information through a third-party API may conflict with data-residency or business-associate-agreement requirements.', solution: 'Evaluate whether self-hosting an open-weight model within the institution\'s own controlled environment is required specifically because of PHI handling rules, rather than assuming any vendor\'s general compliance certification is sufficient.', risk: 'Sending PHI to a closed API without a proper business-associate agreement or adequate data-residency guarantee is a direct HIPAA exposure, and self-hosting an open-weight model may be the only compliant option for certain workflows.'},
+    {title: 'Verifying an open-weight model\'s license permits the institution\'s deployment scale', problem: 'A health system\'s deployment might cross an open-weight license\'s usage threshold without anyone checking.', solution: 'Have legal counsel review the specific license\'s terms, not just its marketing as "open," against the health system\'s actual patient volume or user count before adoption.', risk: 'Adopting an open-weight model under a license whose scale threshold the health system unknowingly exceeds creates a licensing-compliance exposure that could force an abrupt, patient-care-disrupting model change if discovered later.'},
+    {title: 'Choosing model size class for an on-device clinical documentation assistant', problem: 'A bedside or mobile clinical documentation tool may need to operate without reliable network connectivity.', solution: 'Evaluate a small, on-device-deployable open-weight model specifically for its ability to run without a network connection, not solely for benchmark capability relative to a larger model.', risk: 'Choosing a frontier-scale closed API model for a use case that actually requires offline operation creates a patient-care availability gap during a connectivity outage, separate from any accuracy consideration.'},
+    {title: 'Vendor concentration risk for a regulatory-cleared clinical decision-support tool', problem: 'Building regulatory-cleared clinical decision support around one closed API vendor risks the tool depending on a model version the vendor could silently change.', solution: 'Assess whether an owned, versioned, self-hosted open-weight checkpoint is safer for a regulatory-cleared tool\'s long-term stability than a closed API model the vendor can update unilaterally.', risk: 'A closed API vendor updating or deprecating the underlying model without the health system\'s control can invalidate the specific validated behavior a regulatory clearance was based on, forcing an unplanned revalidation.'},
+  ]}
+  telecom={[
+    {title: 'Security exposure from processing live network telemetry through a closed API', problem: 'Network telemetry can reveal infrastructure topology and vulnerability details that should not leave the operator\'s own infrastructure.', solution: 'Evaluate self-hosting an open-weight model specifically for telemetry-processing workloads where sending data to a third-party API creates a security exposure beyond ordinary data privacy.', risk: 'Sending live network telemetry to a closed third-party API introduces a distinct network-security exposure, since telemetry can reveal infrastructure topology and vulnerability details a general data-privacy review would not fully capture.'},
+    {title: 'Verifying an open-weight model\'s license permits deployment across the full subscriber base', problem: 'A subscriber-facing deployment might cross an open-weight license\'s usage threshold without review.', solution: 'Have legal review the specific license\'s monthly-active-user or similar threshold against the operator\'s actual subscriber count before deploying an open-weight model subscriber-facing.', risk: 'Deploying an open-weight model to a subscriber base that exceeds its license\'s stated threshold, without obtaining the required separate agreement, can force an emergency mid-deployment model swap across a subscriber-facing service already wired into live network operations and billing systems, a carrier-scale unwind that is far more disruptive than an equivalent swap in a smaller, less deeply integrated deployment.'},
+    {title: 'Choosing model size class for cell-site-deployed network diagnostics', problem: 'Diagnostics running at a remote cell site may need to operate without reliable backhaul connectivity to a central API.', solution: 'Evaluate a small, edge-deployable open-weight model specifically for its ability to run at the cell site without depending on connectivity back to a central API.', risk: 'Choosing a closed API model for a diagnostic tool that actually needs to run at a remote site during a backhaul outage creates a self-defeating availability gap, failing during precisely the event the diagnostic exists to help resolve.'},
+    {title: 'Vendor concentration risk in a core outage-detection workflow', problem: 'Building an outage-detection workflow around one closed API vendor risks that workflow\'s availability depending on the vendor\'s own uptime.', solution: 'Assess whether an owned, self-hosted open-weight model reduces this specific vendor-dependency risk for a workflow whose purpose is detecting availability problems.', risk: 'An outage-detection workflow that itself depends entirely on a single external API vendor\'s uptime can fail during exactly the kind of broader internet or cloud-provider outage that compounds, rather than helps diagnose, the operator\'s own incident.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the difference between "open-weight" and "open-source" as applied to a language model, and why does this distinction matter?', answer: 'A model is open-weight when its trained parameter values are published for download; this says nothing about whether the training data, training code, or full methodology is also published, which a stricter open-source definition would require. Most models marketed as open in 2026 release only weights and inference code, so a team can inspect, fine-tune, and self-host the model but cannot reproduce or fully audit how it was trained.'},
+    {question: 'What specific commercial-use condition does Meta\'s Llama 4 community license impose, and at what threshold does it apply?', answer: 'If, as measured on the Llama 4 version release date, the monthly active users of the licensee\'s own products or services was greater than 700 million in the calendar month preceding that release date, the licensee must request a separate license directly from Meta, which Meta may grant or decline at its sole discretion. The test is anchored to that fixed release date, not an ongoing condition.'},
+    {question: 'What are the three broad size classes discussed in this chapter, and what trade-off does each represent?', answer: 'Frontier or flagship models offer the highest capability at the highest cost, latency, and hardware requirement. Mid-size models trade some capability for lower cost, lower latency, and feasible self-hosting on a small number of GPUs. Small or edge models trade further capability for the ability to run on a single consumer GPU or on-device, with no network dependency.'},
+    {question: 'Why might data residency or privacy requirements rule out a closed API model even if it offers the highest capability?', answer: 'A closed API sends data to a third-party vendor for processing, which can conflict with data-residency, business-associate-agreement, or security requirements regardless of how capable the model is. In that situation, a self-hosted open-weight model may be the only option that keeps data within the organization\'s own controlled environment.'},
+    {question: 'Why is vendor concentration a distinct risk from model capability when choosing a base model?', answer: 'A closed API model can be highly capable today and still expose a workflow to a vendor\'s unilateral pricing changes, deprecation decisions, or policy changes tomorrow, which is a risk about dependency and control rather than about accuracy. An owned, downloadable open-weight checkpoint keeps working regardless of what the original vendor does next, which is a different kind of guarantee than capability alone provides.'},
+  ]}
+/>

@@ -1,0 +1,201 @@
+---
+title: "Structured Outputs & Tool/Function Calling, the Basics"
+sidebar_label: "5.3 Structured Outputs & Tool Calling"
+sidebar_position: 3
+phase: 5
+chapter: "5.3"
+lms_presentation: "5.3-Structured-Outputs-Tool-Calling-Slides.pptx"
+prerequisites: ["4.3", "5.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Asking a model to "output JSON" purely through prompt wording gives no guarantee it actually will:
+the result can arrive wrapped in prose, missing a field, or using the wrong type. Native tool and
+function calling, introduced by OpenAI in June 2023 and by Anthropic's tool use feature, is a
+distinct API primitive: the caller supplies one or more tool schemas alongside the prompt, and the
+model returns a structured call to a specific tool with typed arguments, or a plain response if no
+tool is needed. OpenAI's Structured Outputs mode (2024) goes a step further, using constrained
+decoding to restrict token sampling at each step to only what a target JSON schema allows,
+reporting 100% schema-valid outputs in its own evaluations versus under 40% for prompting alone.
+None of this guarantees the values inside a schema-valid call are correct: a syntactically perfect
+tool call can still name the wrong tool or hallucinate a plausible-looking argument. The ReAct
+pattern (Yao et al., 2022) interleaves reasoning with tool actions and their observations across
+multiple steps, the conceptual ancestor of today's agent tool-calling loops, and Gorilla (Patil et
+al., 2023) showed that fine-tuning a model specifically for API-calling accuracy, together with
+retrieval over the available API pool, meaningfully reduces hallucinated calls.
+
+## High-Level Explanation
+
+Picture three ways to get a colleague to fill out a form. The first is to describe the form in
+words and ask them to write back "in the format of the form," hoping they remember every field, use
+the right units, and do not add a paragraph of commentary around the edges. The second is to hand
+them the actual form: a fixed set of labeled boxes, one per field, so there is a specific place for
+each answer and no ambiguity about structure, though they could still write the wrong thing in a box
+that expects a number. The third is to hand them the form printed on paper that physically has no
+room to write outside the boxes and rejects a letter typed into a numeric field before it is even
+submitted. Tool calling adds a further piece: instead of writing an answer at all, the colleague is
+handed a small set of labeled buttons, each wired to a specific real action, like "look up account
+balance" or "check current inventory," and pressing one hands over the exact inputs that action
+needs, rather than describing in prose what should happen.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/5-3-structured-output-approaches-compared.svg').default}
+    alt="A diagram comparing three approaches to getting structured output from a language model: prompted JSON with no enforcement, native function or tool calling where the model selects a tool and fills typed arguments, and constrained structured-output decoding where invalid tokens are excluded from sampling at every step."
+  />
+  <figcaption>Each approach narrows the gap between what the model is asked for and what it reliably returns, from a plain request to a decoding-time guarantee.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The naive approach: asking for JSON in the prompt, and where it breaks.** The simplest way to get
+structured output is to describe the desired shape in the prompt itself, for instance "respond only
+with a JSON object containing fields x and y," and hope the model complies. This works often enough
+to be tempting, and fails in familiar ways: the model wraps the JSON in a sentence of commentary,
+produces a subtly malformed object such as a trailing comma or an unescaped quote, fills a field with
+the wrong type, or simply omits a field it was not confident about. None of these failures are rare
+edge cases; they are the direct motivation OpenAI and Anthropic each cite for building native
+alternatives, since a downstream system parsing this output has to defensively handle a family of
+malformed responses no schema enforcement was ever applied to.
+
+**Function and tool calling as a distinct API primitive.** OpenAI introduced function calling in
+June 2023: the caller passes one or more function schemas, each with a name, a description, and a
+JSON Schema of expected parameters, alongside the normal prompt. The model can then respond either
+with a normal message or with a request to call a specific function with specific, typed arguments,
+leaving the actual execution of that function to the calling application. Anthropic's tool use
+feature follows the same shape: tools are defined with an `input_schema` written as JSON Schema, and
+a model that decides to use one returns a `tool_use` content block carrying the tool's name and its
+structured input, with the API response's stop reason indicating a tool call is being requested
+rather than a finished answer. In both cases, the decision to call a tool and the values used to call
+it come from the model, but the wiring between "get called" and "produce a real effect" belongs to
+the surrounding application, not the model itself.
+
+**Constrained decoding: a stronger guarantee than either of the above.** OpenAI's Structured Outputs
+mode, released in 2024, does not merely ask the model to follow a schema, it constrains token
+sampling itself: at each decoding step, the set of candidate next tokens is restricted to only those
+that keep the output on a path consistent with the target JSON schema, using a context-free-grammar
+style constraint over the model's vocabulary (a mechanism this chapter previews and 5.4 covers in
+full depth). OpenAI reported 100% schema-valid outputs across its evaluations for its newer model in this mode,
+compared with under 40% for its older gpt-4-0613 model prompted to produce the same schema without
+enforcement, and about 93% for that same newer model prompted without enforcement at all,
+illustrating that even a substantially improved base model still falls meaningfully short of a hard
+guarantee without decoding-time constraints, and that the constraint itself, not just newer model
+capability, is what closes the remaining gap.
+
+**A schema-valid call is not the same as a correct call.** Constraining the grammar of an output
+guarantees its shape, not its content. A tool call can be perfectly well-formed JSON, naming a real
+tool with arguments of the right type, and still be wrong: the wrong tool for the situation, or a
+plausible-looking argument value the model effectively hallucinated because nothing in the decoding
+constraint checks whether that value is actually correct. This is a semantic problem, not a syntactic
+one, and no amount of schema enforcement resolves it; catching it requires evaluation, in the sense
+this curriculum returns to when covering evaluation and observability for LLM applications, not a
+tighter grammar.
+
+**Multi-step tool use: the ReAct pattern.** Many real tasks need more than one tool call before a
+final answer is possible, for instance looking something up, then reasoning about the result, then
+looking up something else. ReAct (Yao et al.,
+[*ReAct: Synergizing Reasoning and Acting in Language Models*](https://arxiv.org/abs/2210.03629),
+2022, ICLR 2023) formalizes this as an interleaved loop of reasoning traces, actions, and the
+observations those actions return, letting the model's next reasoning step take the actual result of
+a prior action into account rather than planning an entire sequence of actions blindly upfront. On
+an interactive decision-making benchmark, this interleaving raised task success by 34 percentage
+points over a comparable baseline, and separately reduced hallucinated, unsupported claims relative
+to chain-of-thought prompting on knowledge-intensive question answering. Today's native tool-calling
+APIs are the direct infrastructure for running exactly this kind of loop: call a tool, feed its
+result back as an observation, let the model decide the next action, and repeat until it produces a
+final answer instead of another tool call.
+
+**Fine-tuning specifically for API-calling accuracy.** Gorilla (Patil et al.,
+[*Gorilla: Large Language Model Connected with Massive APIs*](https://arxiv.org/abs/2305.15334),
+2023) takes a different angle: rather than relying purely on a general-purpose model's in-context
+ability to pick the right API and fill it in correctly, it fine-tunes a model specifically on
+API-calling behavior, retrieving relevant API documentation at inference time to keep the model
+grounded in APIs it may not have memorized precisely. This measurably reduces hallucinated API calls
+compared to prompting a general-purpose model directly, and the same team's Berkeley
+Function-Calling Leaderboard now evaluates function-calling accuracy across categories including
+single calls, choosing among multiple candidate functions, and issuing several calls in parallel,
+reflecting that "can this model call a function correctly" is now treated as a benchmarkable
+capability in its own right rather than an incidental side effect of general capability.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Prompted JSON (no enforcement)', 'Native function/tool calling', 'Constrained structured outputs', 'ReAct-style tool loop']}
+  rows={[
+    {aspect: 'Guarantees valid syntax?', values: ['No', 'Improves reliability, not guaranteed', 'Yes, by construction', 'Inherits guarantees of whichever call mechanism it uses'], decisive: true},
+    {aspect: 'Guarantees correct values?', values: ['No', 'No', 'No', 'No, but observations can correct a later step'], decisive: true},
+    {aspect: 'Requires special API support?', values: ['No, works with any model', 'Yes, a function/tool-calling API', 'Yes, a constrained-decoding-capable API', 'Built on top of a call mechanism, plus app-side orchestration'] },
+    {aspect: 'Best suited for', values: ['Low-stakes, easily re-parsed output', 'Single-step actions with typed arguments', 'Downstream systems that require a hard schema guarantee', 'Multi-step tasks needing information gathered along the way'] },
+  ]}
+  caption="Each approach solves a different part of the problem; none of them, on its own, verifies that the values inside a structured response are actually correct."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Choosing how to get structured output from a model"
+  mermaid={`
+flowchart TD
+  NEED[Task needs structured or tool-callable output] --> SCHEMA{Is the target schema known in advance?}
+  SCHEMA -->|No| PROMPTED[Use prompted JSON, validate and retry on parse failure]
+  SCHEMA -->|Yes| STEPS{Does the task need one call or several in sequence?}
+  STEPS -->|One call| SUPPORT{Does the API support native function or tool calling?}
+  SUPPORT -->|No| PROMPTED
+  SUPPORT -->|Yes| GUARANTEE{Does a downstream system require a hard schema guarantee?}
+  GUARANTEE -->|No| FUNCTION[Use native function or tool calling]
+  GUARANTEE -->|Yes| STRUCTURED[Use constrained structured-output decoding]
+  STEPS -->|Several, informed by intermediate results| REACT[Use a ReAct-style loop: call, observe, reason, call again]
+  NEED --> VALUES{Must the values themselves be verified, not just the shape?}
+  VALUES -->|Yes| EVALUATE[Add evaluation on top, schema enforcement alone will not catch this]
+`}
+  components={[
+    {name: 'Prompted JSON', responsibility: 'Fallback when no native structured-output support is available; needs defensive parsing.'},
+    {name: 'Function/tool calling', responsibility: 'Lets the model select and populate a typed single-step action.'},
+    {name: 'Constrained structured outputs', responsibility: 'Guarantees schema-valid output via decoding-time constraints.'},
+    {name: 'ReAct-style loop', responsibility: 'Chains calls, observations, and reasoning across multiple steps.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Replacing prompted-JSON parsing in a transaction-categorization pipeline', problem: 'A pipeline asking a model to describe each transaction\'s category "in JSON format" occasionally receives a response wrapped in a sentence of commentary that breaks the downstream parser.', solution: 'Switch to native structured outputs so the response is constrained to the target schema at the decoding level rather than hoped for through prompt wording.', risk: 'A category field that arrives as an empty string instead of failing the parse outright could get silently coerced to a default category, understating exposure in a risk report that assumes every transaction was actually reviewed.'},
+    {title: 'Using a ReAct-style loop for a multi-step account-investigation task', problem: 'Investigating a flagged account requires looking up a transaction history, then a related account, then a prior dispute record, each lookup informed by what the previous one returned.', solution: 'Run a ReAct-style loop where the model calls a lookup tool, reasons over the returned observation, and decides the next lookup rather than planning every step blindly in advance.', risk: 'An investigation that commits upfront to checking a specific related account, before the transaction-history lookup even returns, could spend its effort on an account that turns out to be irrelevant once the actual history comes back, while the account that mattered goes unchecked in the same review cycle.'},
+    {title: 'Adopting native tool calling for a real-time balance-check action', problem: 'A support assistant\'s free-text instructions for when and how to check a balance are inconsistently followed, sometimes triggering an unnecessary lookup and sometimes skipping a needed one.', solution: 'Define a balance-check tool with a typed schema so the model\'s decision to invoke it, and the account identifier it passes, are both structured and auditable.', risk: 'An assistant that only sometimes triggers the lookup could quote a customer a stale balance during exactly the call where an accurate one mattered most, such as one about a potential overdraft.'},
+    {title: 'Catching a schema-valid but hallucinated account number in a funds-transfer tool call', problem: 'A funds-transfer tool call arrives perfectly schema-valid, with a well-formed account number field, but the number itself does not match any account the customer actually holds.', solution: 'Add a verification step after the tool call that checks the argument\'s value against the customer\'s actual account records, not just its shape, before the transfer executes.', risk: 'A funds-transfer tool call that passes every schema check could still carry an account number transposed from a similar-looking one mentioned earlier in the conversation, sending money to a real account that simply is not the customer\'s, an error no amount of type-checking on the field would ever surface.'},
+  ]}
+  healthcare={[
+    {title: 'Replacing prompted-JSON parsing in a lab-result extraction pipeline', problem: 'A pipeline asking a model to extract lab values "as JSON" occasionally returns a response with an extra explanatory sentence that breaks strict parsing.', solution: 'Switch to native structured outputs so lab-value extraction is constrained to the target schema at the decoding level.', risk: 'A lab-result parser that recovers from a malformed response by leaving the affected field blank, rather than failing loudly, could deliver a chart that looks complete to a clinician who has no way to tell a value was silently skipped from one that was simply never drawn.'},
+    {title: 'Using a ReAct-style loop for a multi-step medication-reconciliation task', problem: 'Reconciling a patient\'s medication list requires checking a current prescription record, then a pharmacy fill history, then a documented allergy list, each check informed by what came before.', solution: 'Run a ReAct-style loop so each lookup\'s result shapes the next lookup, rather than committing to a fixed lookup sequence decided before any data was retrieved.', risk: 'A medication-reconciliation process that checks the allergy list before the pharmacy fill history returns could miss an interaction the fill history alone would have surfaced, since the allergy list was never going to answer that particular question in the first place.'},
+    {title: 'Adopting native tool calling for an order-entry action', problem: 'A clinical documentation assistant\'s free-text instructions for when to place a lab order are inconsistently followed, occasionally triggering a duplicate order or missing an indicated one.', solution: 'Define an order-entry tool with a typed schema so the decision to place an order, and its exact parameters, are structured and reviewable before submission.', risk: 'An order-entry tool that fires because a trigger phrase happened to appear in a note, even when a clinician was only discussing a hypothetical, could place a real lab order the patient never actually needed, adding a cost and a blood draw with no clinical indication behind it.'},
+    {title: 'Catching a schema-valid but hallucinated dosage in a prescribing tool call', problem: 'A prescribing tool call is schema-valid, with a well-typed dosage field, but the value itself does not match any dosage actually appropriate for the patient\'s weight or condition.', solution: 'Add a clinical-range verification step after the tool call that checks the dosage value itself against the patient\'s record, not merely that a number was supplied in the right field.', risk: 'A prescribing tool call with a perfectly typed dosage field could still carry a number copied from the wrong line of a patient\'s chart entirely, clinically plausible for an adult but not for the child actually being treated, a mismatch the schema has no way to represent, let alone catch.'},
+  ]}
+  telecom={[
+    {title: 'Replacing prompted-JSON parsing in a network-alert triage pipeline', problem: 'A pipeline asking a model to classify an alert "as JSON" occasionally returns a response with commentary wrapped around the object, breaking strict downstream parsing during an active incident.', solution: 'Switch to native structured outputs so alert classification is constrained to the target schema at the decoding level, especially during high-alert-volume periods.', risk: 'A malformed alert classification could get retried automatically into a generic catch-all category, one that then sits at the bottom of triage priority exactly when a genuine high-severity alert needed to surface first.'},
+    {title: 'Using a ReAct-style loop for a multi-step outage root-cause investigation', problem: 'Diagnosing a complex outage requires checking a device-health status, then a related routing table, then a recent configuration-change log, each check informed by what the previous one returned.', solution: 'Run a ReAct-style loop so the investigation adapts to each lookup\'s actual result rather than following a fixed sequence decided before any data was gathered.', risk: 'A root-cause investigation that reports back to the on-call engineer before its configuration-change check has even run could hand off a conclusion that check would have overturned, sending the wrong team to work the incident while the outage continues.'},
+    {title: 'Adopting native tool calling for a service-restart action', problem: 'An operations assistant\'s free-text instructions for when to restart a service are inconsistently followed, occasionally restarting a healthy service or skipping a genuinely stuck one.', solution: 'Define a service-restart tool with a typed schema so the decision to restart, and the specific service identifier passed, are structured and logged for review.', risk: 'A restart tool triggered by an assistant that misread a routine status update as a failure signal could take down a service actively handling live customer traffic, converting a false alarm into a real outage the alert was never actually reporting.'},
+    {title: 'Catching a schema-valid but hallucinated device identifier in a configuration tool call', problem: 'A configuration-change tool call is schema-valid, with a well-formed device-identifier field, but the identifier itself does not correspond to any device actually involved in the incident.', solution: 'Add a verification step after the tool call that checks the device identifier against the incident\'s actual affected-device list, not just its formatting.', risk: 'A configuration-change tool call with a well-formed device identifier could still name a device from a previous, unrelated incident that the model\'s context happened to still contain, applying a fix to hardware with nothing wrong with it while the actual faulty device goes untouched.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What are the main ways a naive "ask the model to output JSON" prompt can fail, and why do these failures motivate native function/tool calling?', answer: 'Common failures include wrapping the JSON in extra prose, producing subtly malformed JSON such as a trailing comma, filling a field with the wrong type, or omitting a field entirely. These are the exact failures OpenAI and Anthropic cite as motivation for building native function/tool calling and structured-output features, since a downstream parser otherwise has to defensively handle a wide family of malformed responses.'},
+    {question: 'How does OpenAI\'s Structured Outputs mode differ mechanically from simply prompting a model to follow a schema, and what reliability difference did OpenAI report?', answer: 'Structured Outputs constrains token sampling itself at each decoding step, restricting candidate tokens to only those consistent with the target JSON schema via a context-free-grammar-style constraint, rather than merely instructing the model to follow the schema through the prompt. OpenAI reported 100% schema-valid outputs in this mode versus under 40% for an equivalent model prompted without enforcement, and about 93% for a newer model prompted without enforcement.'},
+    {question: 'Why does a schema-valid tool call not guarantee a correct tool call, and what is needed to catch the gap?', answer: 'Schema or grammar constraints only guarantee the shape of an output, not its content: a tool call can be well-formed JSON naming a real tool with correctly typed arguments while still containing a hallucinated or wrong value, such as an account number or device identifier that does not correspond to anything real. Catching this requires an evaluation or verification step that checks the actual values, not a tighter schema.'},
+    {question: 'What is the core idea behind the ReAct pattern, and what concrete benefit did Yao et al. report from it?', answer: 'ReAct interleaves reasoning traces with tool-use actions and the observations those actions return, letting each reasoning step take the actual result of a prior action into account rather than planning an entire action sequence blindly upfront. Yao et al. reported a 34 percentage point improvement in task success on an interactive decision-making benchmark, along with reduced hallucinated, unsupported claims compared to chain-of-thought prompting on knowledge-intensive question answering.'},
+    {question: 'What does Gorilla contribute beyond what native function-calling APIs already provide, and how does the Berkeley Function-Calling Leaderboard relate to it?', answer: 'Gorilla fine-tunes a model specifically for API-calling accuracy and retrieves relevant API documentation at inference time to keep the model grounded in APIs it may not have memorized precisely, measurably reducing hallucinated API calls compared to prompting a general-purpose model directly. The Berkeley Function-Calling Leaderboard, built by the same team, evaluates function-calling accuracy across categories such as single calls, choosing among multiple candidate functions, and parallel calls, treating function-calling accuracy as a benchmarkable capability in its own right.'},
+  ]}
+/>

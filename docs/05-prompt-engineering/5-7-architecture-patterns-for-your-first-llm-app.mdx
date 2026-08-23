@@ -1,0 +1,236 @@
+---
+title: "Architecture Patterns for Your First LLM App"
+sidebar_label: "5.7 Architecture Patterns for Your First LLM App"
+sidebar_position: 7
+phase: 5
+chapter: "5.7"
+lms_presentation: "5.7-LLM-App-Architecture-Patterns-Slides.pptx"
+prerequisites: ["5.3", "5.5"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A single call to a model API is a prototype, not a product. Bornstein and Radovanovic's widely
+cited reference architecture for LLM applications (a16z, June 2023) named the layers that
+sit around that call once an app has real users: an orchestration framework to assemble prompts,
+tools, and conversation history; an LLM cache to avoid paying for the same question twice; an LLM
+gateway to keep the app running when a single model provider has an outage; a logging and
+observability layer to trace what a multi-step request actually did; and a validation layer to
+catch a bad output before it reaches a user, the guardrail discipline covered in 5.5. Two API-level
+facts shape all of this: chat completion APIs are stateless per request, so the calling application,
+not the API, is responsible for resending conversation history every turn, and both OpenAI and
+Anthropic explicitly recommend exponential backoff for handling rate-limit errors rather than
+naive immediate retries. Streaming a response token by token, over server-sent events, reduces how
+long a user waits before seeing anything, at the real cost of making that partial output harder to
+moderate before it reaches them. None of this is retrieval or multi-step autonomous behavior yet,
+those are Phase 6 and Phase 8 territory, but a first LLM app that skips this scaffolding does not
+survive contact with real traffic.
+
+## High-Level Explanation
+
+Picture a restaurant built around one excellent chef. The chef alone is not a restaurant: someone
+has to take orders and hand them to the kitchen, the kitchen needs a way to avoid recooking a dish
+that was just made for the table next door, there has to be a backup supplier if today's usual one
+runs out of a key ingredient, a manager needs a log of what went out and when in case a customer
+complains, and someone has to taste a dish before it leaves the kitchen rather than trusting every
+plate is fine by default. None of those roles cook the food. They are what turns a talented cook
+into a restaurant that can serve a dining room on a busy night without falling over. A model API is
+the chef. Everything in this chapter is the rest of the restaurant.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/5-7-llm-app-request-lifecycle.svg').default}
+    alt="A diagram showing a request's path through an LLM application: entering the app backend, checking a semantic cache for a near-duplicate prior answer, passing through an LLM gateway that selects a provider and handles fallback and retries, being assembled by an orchestration layer with conversation history and tools, passing an input guardrail, reaching the model API, streaming back through an output guardrail, and being logged by an observability layer before reaching the user."
+  />
+  <figcaption>A model API call is one box in a larger request lifecycle; a first production LLM app needs the rest of the boxes too.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The a16z reference architecture.** Bornstein and Radovanovic's *Emerging Architectures for LLM
+Applications* (a16z, June 2023) is the most widely cited map of what a production LLM application
+stack actually contains, drawn from what they observed across "AI startups and sophisticated tech
+companies." Their diagram lays the stack out in three stages, data preprocessing and embedding,
+prompt construction and retrieval, and prompt execution and inference, with named layers at each
+stage: contextual data pipelines and a vector database feeding an embedding model; an orchestration
+layer (their examples: LangChain, LlamaIndex) that, in their words, "abstract[s] away many of the
+details of prompt chaining; interfacing with external APIs...retrieving contextual data from vector
+databases; and maintaining memory across multiple LLM calls"; an LLM cache sitting in front of the
+model call itself; a logging and LLMops layer that can "log, track, and evaluate LLM outputs"; a
+validation layer; and, at the base, the LLM APIs themselves, split into proprietary and open-weight
+rows, sitting on top of cloud infrastructure. This chapter's scope is the layers that apply before
+your app has a retrieval pipeline of its own, orchestration, caching, the gateway, observability,
+and validation. Data pipelines and vector databases are Phase 6's subject.
+
+**Orchestration: what it abstracted in 2023, and where it has moved since.** In the 2023 framing
+this reference architecture describes, an orchestration framework's job was composing a sequence of
+model calls, tools, and retrieved context into one coherent request, and carrying conversation
+memory across turns, exactly the "prompt chaining...memory across multiple LLM calls" role quoted
+above. Two of the best-known frameworks illustrate the same underlying job from different starting
+points: LangChain's original framing centered on chaining LLM calls together with tools and memory,
+while LlamaIndex described itself as a "data framework" whose job was connecting an LLM to a
+developer's own data through connectors, indices, and a retrieval interface. Both projects have
+since repositioned toward building autonomous agents rather than single-pass chains, a shift worth
+noting here because it previews exactly where this course goes in Phase 8; the orchestration role
+this chapter describes, assembling one request well, is the foundation that multi-step agentic
+orchestration is built on top of, not a replacement for it.
+
+**Chat APIs are stateless: your app owns the conversation.** Neither OpenAI's Chat Completions
+pattern nor Anthropic's Messages API remembers a conversation between requests. Anthropic states
+this directly: "The Messages API is stateless, which means that you always send the full
+conversational history to the API. You can use this pattern to build up a conversation over time."
+OpenAI's documentation describes the same default: "each text generation request is independent and
+stateless," with multi-turn behavior implemented by the calling application appending prior messages
+to each new request. OpenAI has since added an optional server-managed alternative, a
+`previous_response_id` parameter and a Conversations API that let a caller chain responses without
+resending full history, but the default, and the pattern every calling application needs to
+understand first, is that history management is the app's job, not the API's.
+
+**Streaming: faster to first token, harder to moderate.** Both major providers stream a response
+incrementally over server-sent events rather than returning it all at once. OpenAI's own rationale
+is direct: "Streaming responses lets you start printing or processing the beginning of the model's
+output while it continues generating the full response," trading total completion time for a much
+shorter wait before anything appears. The same OpenAI guidance names the cost of that choice
+plainly: "streaming the model's output in a production application makes it more difficult to
+moderate the content of the completions, as partial completions may be more difficult to evaluate."
+A validation layer built to check one complete response, the pattern covered in 5.5, has to be
+redesigned to work incrementally, or accept that it is only ever checking what has streamed so far,
+if the app streams at all.
+
+**Reliability at the single-request level: rate limits and backoff.** A 429 response means a rate
+limit was hit, and both providers are explicit that the fix is not an immediate retry. OpenAI: "Note
+that unsuccessful requests contribute to your per-minute limit, so continuously resending a request
+won't work," recommending exponential backoff instead, waiting briefly after a failure and
+increasing the delay after each subsequent one. Anthropic's guidance is the same in substance: their
+official SDKs "automatically retry transient failures (such as connection errors, rate limits, and
+5xx server errors) with exponential backoff...honoring the retry-after header when present." This is
+a single-provider concern: it handles a request that failed against the provider you are already
+using. It does not help if that provider is down entirely.
+
+**Reliability across providers: the LLM gateway pattern.** A gateway sits in front of the model
+call and solves a different problem than backoff: routing to more than one provider so an outage at
+one does not take down the app. LiteLLM describes its own role as "a single, unified interface to
+call 100+ LLM providers...using the OpenAI format," deployable as a library or as a standalone proxy
+offering "load balancing" and provider-agnostic routing. Portkey's gateway documents the fallback
+behavior explicitly: "Fallback to another provider or model on failed requests using the LLM
+gateway. You can specify the errors on which to trigger the fallback," alongside its own automatic
+retry logic with exponential backoff. Where per-request backoff handles a transient failure against
+one provider, a gateway is what keeps an app answering when that provider is unavailable outright.
+
+**Cutting cost with a cache that understands meaning, not just exact text.** An ordinary cache only
+helps when a later request is byte-for-byte identical to an earlier one, which is rare for natural
+language. GPTCache's semantic cache instead embeds each incoming query, stores it in a vector index,
+and serves a cached response whenever a new query falls within a similarity threshold of one already
+answered, exactly the embedding-and-similarity-search mechanism covered in Phase 3 applied to
+requests instead of documents. The project's own framing states the motivation directly: as an
+application's traffic grows, "the expenses related to LLM API calls can become substantial,"
+alongside slower response times, and its cache exists to serve a repeated or near-duplicate question
+from storage instead of paying for a fresh model call every time.
+
+**Seeing what actually happened: observability and tracing.** A multi-step request, several tool
+calls, an orchestration step, a retrieved context, can fail or drift in ways that are invisible
+without a trace of what each step actually returned. This is a different concern from 5.6's
+prompt-versioning tools, which compare prompt versions before deployment; observability tools trace
+what already happened to live traffic. LangSmith's own description is direct: it lets a team
+"instrument your LLM application, investigate traces, and monitor performance in production."
+Langfuse frames its role similarly, tracking "LLM calls and other relevant logic in your app such as
+retrieval, embedding, or agent actions," so a complex request's actual path can be inspected after
+the fact rather than reconstructed from scattered logs. Helicone bundles the same observability role
+with gateway functionality, describing itself as tracking "cost, latency, quality, and more" across
+a request's full lifecycle.
+
+**The layer this chapter is not re-explaining.** A validation or guardrail layer, checking a
+response before it reaches a user and treating retrieved or tool-returned content as data rather
+than instruction, was covered in full in 5.5 and is not repeated here beyond noting where it sits:
+last, right before a response leaves the app, and complicated in exactly the way the streaming
+section above describes when the app streams.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Orchestration framework', 'LLM gateway', 'Semantic cache', 'Observability / tracing platform']}
+  rows={[
+    {aspect: 'What problem it solves', values: ['Assembling one request: prompt, tools, conversation history', 'Keeping the app answering when a provider is slow, rate-limited, or down', 'Avoiding a fresh model call for a repeated or near-duplicate question', 'Seeing what a multi-step request actually did, after the fact'], decisive: true},
+    {aspect: 'Sits in the request path?', values: ['Yes, builds the request itself', 'Yes, between the app and the model providers', 'Yes, checked before a model call is made', 'No, observes and logs, does not alter the request'], decisive: true},
+    {aspect: 'Requires code changes to adopt?', values: ['Yes, the app is built around it', 'Usually minimal, an API-compatible drop-in', 'Minimal, added in front of existing calls', 'Minimal, usually an instrumentation call or wrapper'] },
+    {aspect: 'Best used', values: ['Any app composing more than a single bare model call', 'Any app that cannot tolerate a single provider\'s outage', 'High-volume apps with naturally repetitive queries', 'Any app complex enough that a failure is hard to explain from logs alone'] },
+  ]}
+  caption="These are complementary layers of the same stack, not alternatives; a serious first LLM app typically adopts orchestration and observability immediately, and adds a gateway and a cache as traffic and reliability demands grow."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Routing a request through a first LLM app"
+  mermaid={`
+flowchart TD
+  REQ[A user request arrives at the app backend] --> CACHE{Does a semantic cache hit exist?}
+  CACHE -->|Yes| RETURN[Return the cached response, no model call needed]
+  CACHE -->|No| GATEWAY[Pass to the LLM gateway]
+  GATEWAY --> HEALTHY{Is the primary provider healthy?}
+  HEALTHY -->|No| FALLBACK[Route to a fallback provider or model]
+  HEALTHY -->|Yes| PRIMARY[Route to the primary provider]
+  FALLBACK --> ORCH[Orchestration layer assembles prompt, history, and tools]
+  PRIMARY --> ORCH
+  ORCH --> INGUARD{Does the input pass validation?}
+  INGUARD -->|No| REJECT[Reject or sanitize before it ever reaches the model]
+  INGUARD -->|Yes| CALL[Call the model, streaming or complete]
+  CALL --> OUTGUARD{Does the output pass validation?}
+  OUTGUARD -->|No| BLOCK[Block or rewrite before it reaches the user]
+  OUTGUARD -->|Yes| DELIVER[Deliver the response to the user]
+  DELIVER --> TRACE[Observability layer logs the full trace]
+  RETURN --> TRACE
+  REJECT --> TRACE
+  BLOCK --> TRACE
+`}
+  components={[
+    {name: 'Semantic cache', responsibility: 'Serves a stored response for a near-duplicate prior query, skipping the model call entirely.'},
+    {name: 'LLM gateway', responsibility: 'Routes to a healthy provider and falls back automatically when the primary one is unavailable.'},
+    {name: 'Orchestration layer', responsibility: 'Assembles the prompt, conversation history, and any tool calls into one coherent request.'},
+    {name: 'Validation / guardrail layer', responsibility: 'Checks input and output against policy before either reaches the model or the user, per 5.5.'},
+    {name: 'Observability layer', responsibility: 'Records what each step of the request actually did, independent of whether it succeeded.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Adding a semantic cache to a high-volume compliance-question chatbot', problem: 'A compliance chatbot answers the same handful of underlying questions phrased hundreds of different ways each day, and every rephrasing triggers a full, billed model call.', solution: 'Add a semantic cache that embeds each query and serves a stored answer for anything within a similarity threshold of a question already answered.', risk: 'Skipping a cache layer means every near-duplicate question triggers a full model call, and the resulting per-query cost can make an otherwise viable feature economically unsustainable at real usage volumes.'},
+    {title: 'Adding an LLM gateway with fallback to a trading-desk assistant', problem: 'A trading-desk assistant calls a single model provider directly, with no path to another provider if that vendor has an outage.', solution: 'Route calls through an LLM gateway configured to fall back to a secondary provider automatically when the primary one fails.', risk: 'Without a configured fallback, the assistant goes completely dark the moment its primary vendor has an outage, at precisely the moment intraday decisions cannot wait for a status page to update.'},
+    {title: 'Adding tracing to a multi-step research-summary pipeline', problem: 'A research pipeline chains retrieval, summarization, and formatting steps, and an occasional bad output cannot be traced back to which step actually failed.', solution: 'Instrument the pipeline with an observability layer that traces every step of a request, not only its final output.', risk: 'A multi-step pipeline that fails silently partway through leaves nobody able to tell whether a delivered summary reflects the full analysis or a truncated one, because no trace exists showing which steps actually ran.'},
+    {title: 'Streaming a client-facing investment-explanation response without adapting the guardrail', problem: 'A client-facing explanation feature streams its response token by token, while its output guardrail was built to check only a complete response.', solution: 'Redesign the guardrail to evaluate streamed output incrementally, or hold delivery a fixed number of tokens behind the model\'s generation.', risk: 'Streaming a response token by token means a policy-violating recommendation can already be visible to a client well before a guardrail check on the complete response ever finishes evaluating it.'},
+  ]}
+  healthcare={[
+    {title: 'Adding a semantic cache to a patient-facing symptom-information tool', problem: 'A symptom-information tool answers a small set of underlying medical questions phrased differently by every patient, and an exact-match cache catches almost none of the repetition.', solution: 'Replace the exact-match cache with a semantic cache that recognizes when a differently worded question is asking the same thing.', risk: 'A naive exact-match cache catches almost nothing when patients phrase the same question a dozen different ways, so the cost savings promised by caching never materialize unless the cache actually understands semantic similarity.'},
+    {title: 'Adding an LLM gateway with fallback to a clinical-documentation tool', problem: 'A clinical-documentation tool integrates with a single model provider, and any outage at that vendor becomes an outage of the documentation tool itself.', solution: 'Route calls through a gateway with an automatic fallback provider configured for exactly this scenario.', risk: 'A single-provider integration turns any outage at that vendor into an outage of the clinical tool itself, and nothing about the failure mode gives a clinician warning before they start dictating into a tool that will silently fail to save.'},
+    {title: 'Adding tracing to a multi-step clinical-documentation pipeline', problem: 'A documentation pipeline retrieves prior notes, then summarizes them, and an occasional incomplete note cannot be traced back to which step actually produced the gap.', solution: 'Instrument the pipeline so each step\'s input and output are traced, not only the final note.', risk: 'When a pipeline\'s retrieval step quietly returns nothing and the summarization step proceeds anyway, the resulting note reads as complete, and without tracing nobody has a way to notice a step went missing.'},
+    {title: 'Streaming a patient-facing answer without adapting the guardrail', problem: 'A patient-facing answer feature streams its response token by token, while its safety guardrail only evaluates a finished response.', solution: 'Redesign the guardrail to evaluate the stream incrementally, or delay display enough for a check to complete first.', risk: 'An output guardrail built to check only complete responses has nothing to evaluate until the last token arrives, by which point a patient reading a stream in real time may have already acted on a dangerous partial suggestion.'},
+  ]}
+  telecom={[
+    {title: 'Adding a semantic cache to a customer-facing outage-status assistant', problem: 'During a regional outage, thousands of customers ask functionally the same status question in slightly different words, and each rephrasing triggers a fresh model call.', solution: 'Add a semantic cache so a new question within a similarity threshold of one already answered is served from the cache instead.', risk: 'Without semantic caching, each rephrased question triggers a fresh model call at the exact moment the app is under the heaviest load, precisely when the added cost and latency hurt the most.'},
+    {title: 'Adding an LLM gateway with fallback to an incident-response assistant', problem: 'An incident-response assistant depends on a single model provider, with no configured path to another one if that vendor is unavailable.', solution: 'Route calls through a gateway configured to fall back automatically to a secondary provider during an outage.', risk: 'Losing the primary vendor with no fallback path configured means the incident-response assistant stops responding exactly when the large-scale event it exists to help triage is unfolding, the worst possible moment for it to disappear.'},
+    {title: 'Adding tracing to a multi-step ticket-routing pipeline', problem: 'A ticket-routing pipeline chains classification, prioritization, and assignment steps, and a misrouted ticket cannot easily be traced back to which step made the wrong call.', solution: 'Instrument the pipeline with tracing that records each step\'s decision, not just the final routing outcome.', risk: 'Debugging a multi-step routing failure without tracing turns into guesswork across several independent logs that were never designed to reconstruct a single request\'s actual path through the pipeline.'},
+    {title: 'Streaming a troubleshooting response without adapting the guardrail', problem: 'A troubleshooting assistant streams its response token by token, while its safety check runs only after the full response is generated.', solution: 'Redesign the check to run incrementally against the stream, or hold the displayed text a short distance behind generation.', risk: 'If a guardrail only runs after the full response completes, a customer streaming a troubleshooting answer in real time could already be halfway through executing a risky step before that check ever runs.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'According to Bornstein and Radovanovic\'s a16z reference architecture, what does an orchestration framework abstract away, and which two frameworks did they cite as examples?', answer: 'An orchestration framework abstracts away the details of prompt chaining, interfacing with external APIs, retrieving contextual data from vector databases, and maintaining memory across multiple LLM calls. Their cited examples were LangChain and LlamaIndex.'},
+    {question: 'Why must a calling application resend the full conversation history on every request to a chat completion API, and what did Anthropic\'s documentation say about this directly?', answer: 'Chat completion APIs are stateless per request; the API itself does not remember prior turns. Anthropic states this directly: "The Messages API is stateless, which means that you always send the full conversational history to the API."'},
+    {question: 'What benefit does streaming a response provide, and what cost did OpenAI\'s own documentation identify as a direct consequence of that benefit?', answer: 'Streaming lets a user start seeing output while the model continues generating the rest, reducing perceived latency. OpenAI\'s documentation names the cost directly: "streaming the model\'s output in a production application makes it more difficult to moderate the content of the completions, as partial completions may be more difficult to evaluate."'},
+    {question: 'What is the difference between per-request exponential backoff and an LLM gateway, and what problem does each actually solve?', answer: 'Exponential backoff handles a transient failure, such as a rate-limit error, against the single provider a request was already sent to, spacing out retries rather than resending immediately. An LLM gateway solves a different problem: routing across multiple providers so that an outage at one provider does not take the whole application down, something backoff against that same failed provider cannot fix on its own.'},
+    {question: 'How does a semantic cache differ from an ordinary exact-match cache, and what mechanism does GPTCache use to implement this?', answer: 'An exact-match cache only serves a stored response when a new query is identical to a previous one, which rarely happens with natural language. A semantic cache instead embeds each incoming query, stores it in a vector index, and serves a cached response whenever a new query falls within a similarity threshold of one already answered, the same embedding-and-similarity-search mechanism used for retrieval, applied to queries instead of documents.'},
+  ]}
+/>
