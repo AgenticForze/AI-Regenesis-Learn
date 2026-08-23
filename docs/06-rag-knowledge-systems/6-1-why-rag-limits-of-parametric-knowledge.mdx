@@ -1,0 +1,234 @@
+---
+title: "Why RAG? The Limits of Parametric Knowledge"
+sidebar_label: "6.1 Why RAG?"
+sidebar_position: 1
+phase: 6
+chapter: "6.1"
+lms_presentation: "6.1-Why-RAG-Limits-of-Parametric-Knowledge-Slides.pptx"
+prerequisites: ["5.8"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A pretrained language model genuinely does store knowledge in its weights, and it stores more of it
+than most people expect: Petroni et al. (2019) documented "the surprisingly strong ability of these
+models to recall factual knowledge without any fine-tuning," and Roberts et al. (2020) showed that
+this ability "scales with model size" enough to perform "competitively with open-domain systems that
+explicitly retrieve answers from an external knowledge source." That parametric knowledge is real, but
+it is also bounded in four specific ways this chapter names directly: it is frozen at whatever moment
+training stopped, it carries no source a reader can check, it is learned unevenly (Petroni again:
+"certain types of factual knowledge are learned much more readily than others"), and updating it is
+neither cheap nor safe, since naive retraining risks catastrophic forgetting and even surgical editing
+techniques operate on knowledge that Meng et al. (2022) found localized in specific "middle-layer
+feed-forward modules," not stored as a simple lookup table. Retrieval-augmented generation exists
+because of exactly this gap. Lewis et al.'s foundational 2020 paper is blunt about it: a pretrained
+model's "ability to access and precisely manipulate knowledge is still limited," and "providing
+provenance for their decisions and updating their world knowledge remain open research problems." RAG
+answers all four limits at once by pairing the model's parametric memory with a non-parametric,
+swappable, citable knowledge store queried fresh at every request. This chapter establishes why that
+pairing matters before Phase 6's later chapters build the retrieval pipeline itself.
+
+## High-Level Explanation
+
+Picture a person who read an enormous library once, years ago, and then walked away from it for good.
+Ask them almost anything and they will answer fluently, often correctly, because they really did read
+that much. But they cannot walk back into the library to check a fact, they have no idea which shelf
+a particular claim came from, they read some sections of that library far more carefully than others,
+and if you want them to learn something new, the only option is another multi-year reading project
+that risks scrambling what they already knew. A pretrained language model's parametric knowledge works
+the same way: real, broad, genuinely useful, and shaped by exactly those same four limits. Retrieval-
+augmented generation does not try to fix the person's memory. It hands them a live phone line to the
+library itself, so they can look something up, read the actual page, and tell you exactly where they
+found it, every time you ask.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-1-parametric-vs-nonparametric-memory.svg').default}
+    alt="A diagram contrasting parametric memory, knowledge baked into a model's weights during training, frozen and unable to cite a source, with non-parametric memory, an external corpus or index that is queried fresh at inference time, can be updated independently of the model, and can point back to the exact document a fact came from."
+  />
+  <figcaption>Two different kinds of memory, one baked into the model during training, one queried fresh at inference time.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Parametric knowledge is real, and it is not evenly distributed.** Petroni et al.'s "Language Models
+as Knowledge Bases?" (2019) tested this directly by querying BERT with fill-in-the-blank factual
+statements instead of a structured knowledge base, and found that "BERT contains relational knowledge
+competitive with traditional NLP methods that have some access to oracle knowledge," with the added
+advantage that language models "require no schema engineering, allow practitioners to query about an
+open class of relations, are easy to extend to more data, and require no human supervision to train."
+Roberts et al. (2020) pushed the same question further and found the effect scales: a large enough
+pretrained model, fine-tuned only to answer questions from what it already knows, "performs
+competitively with open-domain systems that explicitly retrieve answers from an external knowledge
+source." Neither paper found this coverage to be uniform, though. Petroni's own results showed that
+"certain types of factual knowledge are learned much more readily than others by standard language
+model pretraining approaches," a direct consequence of how pretraining data is distributed: a fact
+repeated across thousands of web pages gets learned solidly, and a fact that appeared once, in one
+obscure document, gets learned poorly or not at all.
+
+**That knowledge is frozen the moment training data collection stops.** Every model ships with a
+training cutoff, the last date its pretraining corpus reflects, and nothing about the model's
+architecture lets it look past that date on its own. A model asked about an event, a price, a
+regulation, or a policy that changed after its cutoff will answer anyway, drawing on whatever it
+learned about the state of the world before that point, with no internal signal that the world has
+since moved on. This is the most visible of the four limits, and it is also the one most directly
+responsible for confident, plausible-sounding wrong answers.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-1-four-limits-of-parametric-knowledge.svg').default}
+    alt="A four-quadrant diagram naming the four limits of parametric knowledge: staleness, knowledge is frozen at the training cutoff; no provenance, a fact baked into weights carries no pointer back to a source document; uneven coverage, some facts are learned far more readily than others depending on how often they appeared in training data; and costly, risky updates, retraining or fine-tuning to add new knowledge risks catastrophic forgetting of what the model already knew."
+  />
+  <figcaption>The four limits this chapter names, all of them a direct consequence of how parametric knowledge gets learned and stored.</figcaption>
+</figure>
+
+**A fact stored in weights carries no pointer back to where it came from.** This is the limit Lewis et
+al.'s "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks" (2020) names most precisely,
+and it is the paper that gave RAG its name. Its motivating claim: large pretrained models' "ability to
+access and precisely manipulate knowledge is still limited, and hence on knowledge-intensive tasks,
+their performance lags behind task-specific architectures," and more fundamentally, "providing
+provenance for their decisions and updating their world knowledge remain open research problems." Ask
+a fine-tuned model why it believes a specific figure or claim, and there is no document it can point
+to, because none was ever attached to that fact in the first place; the number and the sentence it
+appeared in were both compressed into the same undifferentiated set of weights. Lewis et al.'s proposed
+fix combines "a pre-trained seq2seq model" as parametric memory with "a dense vector index of
+Wikipedia, accessed with a pre-trained neural retriever" as non-parametric memory, so that every
+generated answer can be traced back to the specific passage that informed it. Google Cloud's framing
+of the same idea is more direct still: RAG produces "grounded generation," and doing so is "more
+accurate, up-to-date, and relevant" precisely because "LLMs are limited to their pre-trained data,"
+which "leads to outdated and potentially inaccurate responses."
+
+**Updating what a model knows is neither cheap nor safe.** The obvious fix for stale or missing
+knowledge, retrain the model on new data, runs into a problem with a specific name: catastrophic
+forgetting. Kirkpatrick et al. (2017) describe the phenomenon plainly, noting that "it has been widely
+thought that catastrophic forgetting is an inevitable feature of connectionist models" learning new
+information in sequence, meaning a network can lose what it already knew while being trained on
+something new, unless the training procedure is specifically designed to protect the old knowledge. A
+more surgical alternative, editing a specific fact directly in the model's weights, sounds simpler but
+is not: Meng et al.'s "Locating and Editing Factual Associations in GPT" (2022) found that factual
+associations "correspond to localized, directly-editable computations" concentrated in "a distinct set
+of steps in middle-layer feed-forward modules," meaning a single fact lives in a specific, identifiable
+place rather than a table you can look up and overwrite. Editing it well enough that the new fact
+sticks, without corrupting nearby facts or breaking the model's general behavior, is itself an active
+research problem; Meng et al.'s own method (ROME) is notable specifically because it "simultaneously
+maintains both specificity and generalization, whereas other methods sacrifice one or another," which
+would not be a notable result if the underlying problem were easy.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-1-knowledge-storage-in-weights.svg').default}
+    alt="A diagram showing that factual associations in a transformer are not stored as a simple lookup table, but are localized in specific middle-layer feed-forward modules, per Meng et al.'s findings, making direct editing of a single fact a surgical operation rather than a simple update statement."
+  />
+  <figcaption>A fact lives in a specific, identifiable place inside the model, not a table you can look up and overwrite.</figcaption>
+</figure>
+
+**RAG addresses all four limits by adding a second, non-parametric memory.** Anthropic's own glossary
+definition captures the mechanism concisely: RAG "combines information retrieval with language model
+generation to improve the accuracy and relevance of the generated text, and to better ground the
+model's response in evidence," where "the data is retrieved at runtime when a query is sent to the
+model" and "relevant information first must be retrieved from the knowledge base based on the input
+prompt, and then passed to the model along with the original query." Because that knowledge base lives
+outside the model's weights, it can be updated the moment a source document changes, answering the
+staleness problem; because retrieval returns actual passages, an answer can cite exactly which passage
+it drew on, answering the provenance problem; because the knowledge base can be built and curated
+directly, coverage no longer depends on how often a fact happened to appear on the open web, answering
+the uneven-coverage problem; and because updating the knowledge base means adding or replacing a
+document rather than retraining or surgically editing weights, updates carry none of fine-tuning's
+forgetting risk. AWS's framing puts the payoff simply: RAG "provides the model with the context it
+needs to produce accurate and useful output for your specific use case," which AWS calls "a pragmatic
+and effective approach to using LLMs in an enterprise." None of this makes RAG free. It introduces a
+retrieval pipeline, an index that must be built and maintained, and new failure modes of its own,
+covered in Phase 6's later chapters; this chapter's claim is narrower and more specific, that the four
+limits above are real, well-documented, and worth solving.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-1-rag-closes-all-four-gaps.svg').default}
+    alt="A diagram mapping each of the four limits of parametric knowledge, staleness, no provenance, uneven coverage, and costly updates, to how retrieval-augmented generation addresses it: staleness is answered by updating the knowledge store directly, provenance is answered by citing the retrieved passage, uneven coverage is answered by curating the knowledge store's contents directly, and update cost and risk are answered by adding or replacing a document instead of retraining or editing the model."
+  />
+  <figcaption>The same four limits from earlier in this chapter, each one answered by adding a non-parametric memory.</figcaption>
+</figure>
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Parametric memory alone', 'Non-parametric memory (RAG)', 'Retraining or knowledge editing']}
+  rows={[
+    {aspect: 'Where the knowledge lives', values: ['Compressed into the model\'s own weights', 'An external, queryable corpus or index', 'Still the model\'s weights, changed after the fact'], decisive: true},
+    {aspect: 'How current it can be', values: ['Frozen at the training cutoff', 'As current as the underlying document store', 'As current as the last retrain or edit, and no fresher'], decisive: true},
+    {aspect: 'Can it cite a source', values: ['No, a fact baked into weights has no pointer', 'Yes, this is retrieval\'s defining advantage', 'No, an edited fact still carries no provenance'] },
+    {aspect: 'Coverage of rare or narrow facts', values: ['Uneven, shaped by how often a fact appeared in training data', 'As complete as what was indexed, including long-tail facts', 'Limited to whatever was specifically targeted for editing'] },
+    {aspect: 'Cost and risk of an update', values: ['N/A, nothing updates on its own', 'Add or replace a document; no model training involved', 'Real risk of catastrophic forgetting or unintended side effects'] },
+  ]}
+  caption="Three different relationships to the same underlying problem, what a model knows and how that knowledge can change."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Deciding whether a question needs retrieval at all"
+  mermaid={`
+flowchart TD
+  Q[A user asks a question] --> CHECK{Does answering it well require knowledge that is current, needs a citable source, or is too narrow and specific to have been learned well during pretraining?}
+  CHECK -->|No| PARA[Answer from parametric memory alone]
+  CHECK -->|Yes| RET[Retrieve relevant passages from an external, updatable knowledge store]
+  RET --> AUGMENT[Pass the retrieved passages into the prompt alongside the question]
+  AUGMENT --> GEN[Generate an answer grounded in, and citing, the retrieved passages]
+  PARA --> RISK[Risk: the answer may be stale, uncited, or a fluent guess at a fact the model never learned well]
+  GEN --> GROUNDED[A current, citable, domain-specific answer]
+`}
+  components={[
+    {name: 'Parametric memory', responsibility: 'The model\'s own pretrained weights; fast, broad, but frozen, uncited, and uneven in coverage.'},
+    {name: 'Retriever', responsibility: 'Searches an external, independently updatable knowledge store for passages relevant to the question.'},
+    {name: 'Non-parametric knowledge store', responsibility: 'The corpus or index retrieval draws from; update it directly, with no model retraining involved.'},
+    {name: 'Generator', responsibility: 'Produces the final answer, grounded in and citing the specific passages retrieval returned.'},
+  ]}
+/>
+
+This chapter deliberately stops at the motivating question. Phase 6's later chapters build the actual
+retrieval pipeline this diagram gestures at: embeddings and vector search (6.2), how to choose a vector
+database (6.3), and the full ingestion-to-generation architecture, chunking, retrieval, reranking, and
+generation (6.4).
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Citing a regulatory threshold from parametric memory after it has already changed', problem: 'When a general-purpose model answers a question about the current capital-reserve requirement using parametric memory alone, it answers with whatever threshold was true as of its training cutoff, not necessarily the one in force today.', solution: 'Ground compliance and regulatory questions in retrieval over the current, actively maintained version of the regulation, so an answer reflects whatever the source document says right now.', risk: 'A stale threshold gets stated with exactly the same fluent confidence as a current one, because nothing in the model\'s own output distinguishes a fact that is still true from one that quietly expired.'},
+    {title: 'An investment-risk explanation an auditor cannot trace back to any filing', problem: 'An audit finding gets raised when a model\'s explanation of a specific investment risk cannot be traced back to any particular filing, disclosure, or internal memo.', solution: 'Require that risk explanations be generated from retrieved source documents, so every claim in the answer can be checked against the specific passage it came from.', risk: 'An explanation with no traceable source is unusable in a regulated audit trail no matter how accurate it happens to be, because accuracy alone is not what an auditor is able to verify.'},
+    {title: 'A wealth-management assistant asked about one client\'s specific portfolio', problem: 'If a wealth-management assistant is asked about a client\'s specific holdings or allocation, nothing in its pretraining ever contained that client\'s account, because that information was never public.', solution: 'Connect the assistant to retrieval over the firm\'s own account and holdings records, so it can answer from data that actually exists rather than guessing.', risk: 'A model with no access to a client\'s real account data will still produce a fluent-sounding answer about it, and a fluent guess about someone\'s finances is a serious problem, not a minor one.'},
+    {title: 'Recalling the exact covenant terms buried in one specific loan agreement', problem: 'Asking about the precise covenant terms in one specific loan agreement is asking a model to recall a fact that, at best, appeared once in one obscure filing among millions of similar documents.', solution: 'Index the firm\'s own loan agreements directly and retrieve the specific document and clause a question refers to, rather than relying on whatever the model happened to absorb from public filings.', risk: 'A rare, narrowly specific fact like a single covenant term is exactly the kind of long-tail detail pretraining coverage is weakest on, so an unsupported answer here is more likely to be wrong than an answer about a common, widely repeated fact.'},
+  ]}
+  healthcare={[
+    {title: 'A dosing guideline recommended after the protocol behind it has been revised', problem: 'A dosing guideline that changed last month is still recommended by a model whose training predates the revision, with no indication to the clinician reading the answer that anything has changed.', solution: 'Ground dosing and treatment guidance in retrieval over the current, actively maintained protocol documents, so a revision is reflected the moment the source updates.', risk: 'A clinician has no way to distinguish current guidance from guidance that quietly went stale the day the protocol changed, since the model states both with identical confidence.'},
+    {title: 'A clinical-decision-support answer with no document behind it', problem: 'Even when a clinical-decision-support answer happens to be correct, a physician reviewing it has no specific document to check it against, because the answer was never attached to one.', solution: 'Require clinical-support answers to be generated from retrieved guideline passages, with the specific passage surfaced alongside the answer for the clinician to verify.', risk: 'A correct-but-unverifiable answer still forces a physician to either trust it blindly or independently re-research the same question, defeating much of the point of using the assistant at all.'},
+    {title: 'A hospital-specific infection-control protocol absent from a general model entirely', problem: 'A hospital\'s own infection-control protocol, never having appeared in any public training corpus, is simply absent from a general-purpose model\'s parametric knowledge, not merely underrepresented in it.', solution: 'Index the hospital\'s own internal protocols and policies directly, so the assistant can retrieve and cite institution-specific guidance that was never going to be part of any public model\'s training data.', risk: 'Asked about institution-specific policy, a model with no access to that document will still answer, drawing on generic clinical knowledge that may not match this hospital\'s actual protocol at all.'},
+    {title: 'A single patient\'s medication history treated as a fact the model should already know', problem: 'A single patient\'s medication history is exactly the kind of long-tail, individually specific fact that web-scale pretraining was never going to memorize, because records at that level of granularity appear nowhere in public training data.', solution: 'Retrieve the specific patient\'s record from the hospital\'s own systems at query time, rather than expecting a general-purpose model to already know or correctly infer it.', risk: 'A model asked about a specific patient\'s history with no retrieval step behind it will produce a plausible-sounding answer regardless, and a plausible but wrong medication history is a direct patient-safety risk.'},
+  ]}
+  telecom={[
+    {title: 'Quoting a customer last month\'s data-rollover policy as though it still applies', problem: 'Quoting a customer the previous month\'s data-rollover policy happens whenever a support assistant answers from parametric memory after that policy has already been revised.', solution: 'Ground plan-policy answers in retrieval over the current, actively maintained policy documents, so a revision reaches the customer the moment it takes effect.', risk: 'If the outdated policy gets quoted with full confidence, resolving the resulting customer dispute costs far more support time than answering the original question correctly ever would have.'},
+    {title: 'A network-outage explanation with no incident report behind it', problem: 'Whether a network-outage explanation is even attributable to a real incident report is not something the model\'s own answer can tell an engineer reviewing it after the fact.', solution: 'Generate outage explanations from retrieved incident-report passages, so an engineer can trace the explanation back to the specific report it was built from.', risk: 'Post-incident reviewers cannot rely on an explanation with no traceable incident record behind it, regardless of how closely that explanation happens to match what actually occurred.'},
+    {title: 'Internal network-topology documentation a public model never saw', problem: 'Before anyone deployed it, a general-purpose model had never seen this carrier\'s internal network-topology documentation, because that documentation was never made public in the first place.', solution: 'Index the carrier\'s own internal topology and configuration documentation, so a troubleshooting assistant can retrieve and cite the actual network layout instead of a generic one.', risk: 'Whether this model has ever actually seen the network\'s real topology is not something its confident answer will reveal, and a wrong assumption about network layout can send a technician to the wrong physical location entirely.'},
+    {title: 'A specific customer\'s outage history treated as recallable rather than retrievable', problem: 'A specific customer\'s service-outage history gets guessed at, not recalled, because no pretraining corpus at web scale ever contained records that granular about one individual account.', solution: 'Retrieve the customer\'s actual outage and service history from the carrier\'s own systems at query time, rather than relying on the model to already know or correctly infer it.', risk: 'If a fabricated outage history gets handed to a customer as fact, trust erodes immediately the moment that customer checks their own records and finds no match.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What did Petroni et al. (2019) find about how much factual knowledge a pretrained language model like BERT actually stores, and what limitation did they find alongside it?', answer: 'Petroni et al. found that "BERT contains relational knowledge competitive with traditional NLP methods that have some access to oracle knowledge," describing "the surprisingly strong ability of these models to recall factual knowledge without any fine-tuning." Alongside that finding, they also found the coverage was uneven: "certain types of factual knowledge are learned much more readily than others by standard language model pretraining approaches."'},
+    {question: 'According to Lewis et al.\'s original RAG paper (2020), what two things do pretrained models struggle with regarding the knowledge in their weights?', answer: 'Lewis et al. state that a pretrained model\'s "ability to access and precisely manipulate knowledge is still limited," and more fundamentally, "providing provenance for their decisions and updating their world knowledge remain open research problems." RAG is designed to address both by pairing parametric memory with a retrievable, non-parametric knowledge source.'},
+    {question: 'What is catastrophic forgetting, and why does it make "just retrain the model on new data" a risky answer to stale knowledge?', answer: 'Kirkpatrick et al. (2017) describe catastrophic forgetting as the widely observed tendency of a neural network to lose what it already learned while being trained on new information in sequence, noting "it has been widely thought that catastrophic forgetting is an inevitable feature of connectionist models" absent specific countermeasures. This means naive retraining to add new knowledge risks corrupting knowledge the model already had correct.'},
+    {question: 'What did Meng et al. (2022) find about where a specific fact lives inside a transformer\'s weights, and why does that make direct knowledge editing harder than it sounds?', answer: 'Meng et al. found that factual associations "correspond to localized, directly-editable computations" concentrated in "a distinct set of steps in middle-layer feed-forward modules." Because a fact lives in a specific, identifiable location rather than a simple lookup table, editing it correctly, without corrupting nearby facts or the model\'s general behavior, is a genuinely hard research problem, which is why their own method (ROME) is notable for maintaining "both specificity and generalization, whereas other methods sacrifice one or another."'},
+    {question: 'Name the four limits of parametric knowledge this chapter identifies, and explain in one sentence how retrieval-augmented generation addresses each one.', answer: 'The four limits are: staleness (knowledge frozen at the training cutoff), no provenance (a fact in weights carries no source pointer), uneven coverage (some facts learned far better than others), and costly, risky updates (retraining risks catastrophic forgetting; editing is a delicate, localized operation). RAG addresses staleness by retrieving from a store that can be updated the moment a source changes, provenance by citing the exact retrieved passage an answer drew on, uneven coverage by letting the knowledge store be built and curated directly rather than depending on training-data frequency, and update cost and risk by making an update mean adding or replacing a document rather than retraining or editing the model itself.'},
+  ]}
+/>
