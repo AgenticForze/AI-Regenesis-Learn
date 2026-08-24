@@ -1,0 +1,277 @@
+---
+title: "Embeddings & Vector Search Foundations"
+sidebar_label: "6.2 Embeddings & Vector Search"
+sidebar_position: 2
+phase: 6
+chapter: "6.2"
+lms_presentation: "6.2-Embeddings-Vector-Search-Foundations-Slides.pptx"
+prerequisites: ["6.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Retrieval, the process Chapter 6.1 established RAG depends on, only works if a system can tell which
+pieces of a knowledge store are actually relevant to a question, and matching on keywords alone misses
+paraphrases, synonyms, and anything phrased differently from the source text. Embeddings solve this by
+turning text into a fixed-size vector of numbers positioned so that texts with similar meaning land near
+each other in that vector space, an idea that traces back to Mikolov et al.'s word2vec (2013), which
+showed it "takes less than a day to learn high quality word vectors from a 1.6 billion words data set"
+and reaches "state-of-the-art performance on our test set for measuring syntactic and semantic word
+similarities." Reimers and Gurevych's Sentence-BERT (2019) carried the same idea from single words to
+full sentences and made it fast enough to use at retrieval scale, cutting the cost of finding the most
+similar pair among 10,000 sentences "from 65 hours with BERT / RoBERTa to about 5 seconds," a speedup
+of roughly four to five orders of magnitude achieved by fine-tuning a siamese network to produce comparable,
+directly-comparable vectors instead of running every pair through the full model. But a vector space
+alone does not make retrieval fast: once a knowledge store holds millions or billions of vectors,
+finding the nearest ones by brute force runs into the curse of dimensionality, and Indyk and Motwani's
+1998 analysis of exactly this problem found that standard indexing structures "provide little
+improvement over the brute-force algorithm" as dimensionality grows. Approximate nearest neighbor (ANN) algorithms, HNSW's navigable
+graphs, IVF's space-partitioning clusters, and product quantization's compressed codes, exist to trade a
+small amount of exactness for search that stays fast and memory-efficient at scale. This chapter covers
+both halves of the pipeline 6.1 gestured at: how text becomes a vector, and how the right vector gets
+found quickly once there are too many of them to check one by one.
+
+## High-Level Explanation
+
+Picture a library where, instead of shelving books alphabetically, someone has placed every book at a
+specific spot in a vast room based purely on what the book is about, so that books on similar topics
+end up physically near each other no matter what their titles say. A book on tax law sits close to
+other books on tax law even if one is called "Corporate Tax Strategy" and another "A Practitioner's
+Guide to Levies," because the placement was never based on the words in the title at all. Embeddings
+build exactly this kind of room for text. A piece of text, a word, a sentence, a whole passage, goes
+into a trained model and comes out as a list of numbers, a point in a high-dimensional space, and the
+model is trained specifically so that texts with similar meaning land near each other in that space
+regardless of the specific words each one uses. Finding relevant information then stops being a search
+for matching words and becomes a search for nearby points, which is exactly the kind of question a
+paraphrase, a synonym, or a differently-worded version of the same idea can still answer correctly.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-2-text-to-vector-space.svg').default}
+    alt="A diagram showing text passing through an embedding model and coming out as a point in a high-dimensional vector space, with texts of similar meaning landing near each other regardless of the specific words used, and texts of different meaning landing far apart."
+  />
+  <figcaption>Text becomes a point in space, positioned by meaning rather than by the specific words used to express it.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**A word's meaning becomes a set of coordinates.** Mikolov et al.'s word2vec (2013) introduced two
+neural network architectures for computing continuous vector representations of words directly from
+large amounts of raw text, with no manual labeling required. The result was notable for two reasons at
+once: it was efficient, "it takes less than a day to learn high quality word vectors from a 1.6 billion
+words data set," and it was accurate, reaching "state-of-the-art performance on our test set for
+measuring syntactic and semantic word similarities." Words that tend to appear in similar contexts end
+up with similar vectors, which is why this class of model can place "corporate" and "levies" near "tax"
+even though none of those words look alike as strings of characters. This was the foundational insight
+that made everything downstream in this chapter possible: meaning can be represented as coordinates,
+and coordinates can be compared mathematically.
+
+**Single words are not enough for retrieval, whole sentences and passages need vectors too.** A
+document a retrieval system needs to find is rarely a single word, it is a sentence, a paragraph, or a
+whole passage, and averaging word vectors together to represent a sentence loses too much of what the
+sentence actually means. Reimers and Gurevych's Sentence-BERT (2019) closed this gap by fine-tuning
+BERT with a pooling operation and a siamese or triplet network architecture, so the model learns to
+produce a single fixed-size vector per sentence, one where cosine similarity between two such vectors
+reflects how similar the two sentences actually are. The payoff was almost entirely about speed at
+scale: comparing every pair among a collection of 10,000 sentences with plain BERT "requires about 50
+million inference computations (~65 hours)," but with Sentence-BERT the same task takes "about 5
+seconds," because the model needs to encode each sentence only once and compare the resulting vectors
+directly rather than feeding every pair through the network jointly. Accuracy held up alongside that
+speedup: on semantic textual similarity benchmarks, Sentence-BERT scored 11.7 points above InferSent and
+5.5 points above the Universal Sentence Encoder, two of the strongest prior sentence-embedding methods.
+This is the model family that made embedding an entire knowledge store, then searching it, a practical
+idea rather than a theoretical one.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-2-word-to-sentence-embeddings.svg').default}
+    alt="A diagram showing the progression from word2vec's individual word vectors, to naively averaging word vectors to represent a sentence, to Sentence-BERT's siamese network fine-tuning of BERT producing a single fixed-size sentence vector, with a callout that this cut the time to find the most similar pair among 10,000 sentences from 65 hours to about 5 seconds."
+  />
+  <figcaption>From individual word vectors to a single vector per sentence, the change that made comparing meaning at retrieval scale practical.</figcaption>
+</figure>
+
+**No embedding model wins everywhere, which is why the field benchmarks them collectively rather than
+one task at a time.** Muennighoff et al.'s Massive Text Embedding Benchmark, MTEB (2022), was built
+specifically because embeddings were typically evaluated on a narrow slice of tasks, semantic textual
+similarity most often, leaving it unclear whether a model that excelled there would do equally well at
+clustering, classification, or retrieval. MTEB evaluates across "8 embedding tasks," "58 datasets," and
+"112 languages," and its central finding is the reason the benchmark exists at all: "no particular text
+embedding method dominates across all tasks." Two of the most widely used commercial models illustrate
+the churn this drives. OpenAI's text-embedding-3-large lifted the MIRACL multilingual retrieval
+benchmark from 31.4% to 54.9% and MTEB from 61.0% to 64.6% compared to its predecessor, and both new
+OpenAI models support Matryoshka Representation Learning, letting a developer shorten an embedding by
+passing a `dimensions` parameter without destroying its meaning; OpenAI reports that a shortened
+text-embedding-3-large at 256 dimensions still outperforms the older, unshortened ada-002 model at 1,536
+dimensions on MTEB. Google's Gemini Embedding model, which "has consistently held a top spot on the
+Massive Text Embedding Benchmark (MTEB) Multilingual leaderboard," takes a similar approach, defaulting
+to 3,072 dimensions with the same Matryoshka technique available to scale down to 1,536 or 768
+dimensions, and Google specifically calls out performance across "science, legal, finance, and coding"
+domains and over 100 languages. Neither leaderboard position is permanent. Choosing an embedding model
+is a benchmarking decision made against the specific mix of tasks a system actually needs, not a
+one-time choice of whichever model currently sits at the top of a general-purpose leaderboard.
+
+**Two vectors are compared with a distance or similarity metric, and which one gets used changes what
+"closest" means.** Cosine similarity measures the angle between two vectors and ignores their length
+entirely, dot product multiplies the vectors together directly and grows with vector length as well as
+angle, and Euclidean distance measures the straight-line distance between the vectors' endpoints. The
+choice matters because vector length can itself carry a signal: as Google's own guidance on measuring
+embedding similarity puts it, "examples that appear very frequently in the training set (for example,
+popular YouTube videos) tend to have embedding vectors with large lengths," so a dot-product search can
+end up favoring popular or frequently-referenced content over content that is simply the closest match
+in meaning. When every vector in a system is normalized to unit length first, this distinction mostly
+disappears: at that point, "all three similarity measures are equivalent because they are proportional
+to" the cosine of the angle between them. Most modern text
+embedding models are trained and typically used with normalized vectors and cosine similarity for
+exactly this reason, though dot product remains a deliberate choice in systems where a document's
+inherent "weight" is meant to influence ranking.
+
+**Finding the nearest vector by checking every single one breaks down as a collection grows into the
+millions, a problem with a name older than vector search itself.** Richard Bellman coined the phrase
+"curse of dimensionality" in 1957, decades before anyone was embedding text, to describe how quickly a
+search space grows as dimensions are added to it. Indyk and Motwani's foundational 1998 analysis of
+nearest-neighbor search showed exactly how that curse plays out for classic indexing structures, the
+kind that work well in two or three dimensions: they stop helping once dimensionality gets large, "for
+large d, in theory or in practice, they provide little improvement over the brute-force algorithm" of
+comparing a query against every stored vector directly.
+Exact nearest-neighbor structures were shown to face a genuine dilemma, forced to choose between "low
+preprocessing cost but query time linear in n and d" or a structure with "query time sublinear in n" but
+"severely exponential preprocessing" to build. Their proposed way out was to stop insisting on the
+exact nearest neighbor and accept an approximate one instead, formally a point whose distance to the
+query is within a factor of `(1 + epsilon)` of the true nearest neighbor's distance, on the reasoning
+that "determining an epsilon-approximate nearest neighbor for a reasonable value of epsilon...should
+suffice for most practical purposes." This is the shift, exact to approximate, that every algorithm
+covered in the rest of this chapter depends on.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-2-exact-vs-approximate-search.svg').default}
+    alt="A diagram contrasting exact nearest-neighbor search, which must compare a query against every stored vector and becomes impractical as a collection scales into the millions, with approximate nearest-neighbor search, which accepts a small, controllable amount of imprecision in exchange for search that stays fast and memory-efficient at scale."
+  />
+  <figcaption>Exact search checks everything; approximate search trades a small, controllable amount of precision for speed that survives scale.</figcaption>
+</figure>
+
+**Three different families of shortcuts trade a little accuracy for a lot of speed, and each one takes
+a different approach to avoiding a full scan.** Graph-based methods, of which Malkov and Yashunin's
+Hierarchical Navigable Small World (HNSW) is the dominant example, build a multi-layer graph connecting
+each vector to a handful of its neighbors, with sparser layers on top for long jumps across the space
+and denser layers below for fine-grained refinement; the authors report this construction "allows a
+logarithmic complexity scaling" for search, and note the algorithm's structural "similarity...to the
+skip list structure allows straightforward balanced distributed implementation." Cluster-based methods,
+of which the inverted file index (IVF) is the standard example, partition the vector space into cells
+around a set of centroids using a Voronoi-style assignment, so a query only needs to search the cell it
+falls into plus a configurable number of neighboring cells, controlled by a parameter typically called
+`nprobe`, "the number of cells to search"; raising `nprobe` trades speed for recall, and on a standard
+one-million-vector benchmark, IVF was measured delivering roughly 1 to 9 millisecond query times at
+0.7 to 0.95 recall against roughly 18 milliseconds for a flat, exhaustive scan of the same data.
+Quantization-based methods, of which Jegou, Douze, and Schmid's product quantization (PQ, 2011) is the
+foundational technique, compress each vector into a short code by splitting it into `m` subvectors and
+quantizing each one independently against a small set of centroids. A companion paper the same year,
+Jegou, Tavenard, Douze, and Amsaleg's "Searching in One Billion Vectors," built directly on that
+technique and demonstrated it at genuine billion-vector scale: distances get refined "based on short
+quantization codes, to avoid reading the full vectors from disk," tested against "a new public dataset
+of one billion 128-dimensional vectors," and reported "outperforming FLANN, which was previously shown
+to outperform" locality-sensitive hashing, the earlier approximate technique Indyk and Motwani had
+introduced. None of these three
+families is strictly better than the others: graph-based search tends to win on recall at a given
+latency, cluster-based search is simple to reason about and tune, and quantization is what makes
+holding billions of vectors in memory affordable in the first place.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-2-ann-algorithm-families.svg').default}
+    alt="A three-panel diagram comparing the three families of approximate nearest-neighbor algorithms: graph-based methods like HNSW, which navigate a multi-layer proximity graph from sparse long-range connections down to dense local ones; cluster-based methods like IVF, which partition the vector space into Voronoi cells searched selectively via an nprobe parameter; and quantization-based methods like product quantization, which compress each vector into a short code built from independently quantized subvectors."
+  />
+  <figcaption>Three different shortcuts, a graph to navigate, cells to partition, and codes to compress, each avoiding a full scan a different way.</figcaption>
+</figure>
+
+**In production these techniques are usually combined, not chosen in isolation, and the choice is
+tracked empirically rather than assumed.** A system might partition vectors with IVF and then compress
+each cell's contents with product quantization to save memory, or build an HNSW graph over quantized
+codes to get graph-based recall at a fraction of the memory cost of storing full vectors. Benchmarking
+projects such as ANN-Benchmarks exist precisely because the right combination depends on the specific
+recall target, latency budget, and memory ceiling of a given system, not on which algorithm sounds most
+sophisticated on paper. That combination, along with the question of which underlying database or
+library actually implements it, is exactly what Chapter 6.3 picks up next.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Exact (brute-force) kNN', 'HNSW (graph-based)', 'IVF (cluster-based)', 'Product quantization']}
+  rows={[
+    {aspect: 'Core mechanism', values: ['Compare the query against every stored vector directly', 'Navigate a multi-layer proximity graph from sparse to dense', 'Search only the nearest cell(s) of a partitioned, clustered space', 'Compress each vector into a short code from quantized subvectors'], decisive: true},
+    {aspect: 'Query time behavior', values: ['Linear in the number of vectors, exact but slow at scale', 'Roughly logarithmic, per Malkov and Yashunin\'s own analysis', 'Tunable via nprobe, trading speed against recall directly', 'Very fast distance estimates via precomputed lookup tables'], decisive: true},
+    {aspect: 'Memory footprint', values: ['Full vectors stored in full, no compression', 'Full vectors plus graph edges, can be memory-heavy', 'Full or compressed vectors, moderate overhead from centroids', 'Short codes only, the most memory-efficient of the four'] },
+    {aspect: 'Recall behavior', values: ['Always 100%, by definition it finds the true nearest neighbor', 'High recall achievable, especially on clustered data', 'Depends heavily on nprobe and the edge problem at cell borders', 'Lower recall alone, usually paired with a re-ranking refinement step'] },
+    {aspect: 'Best suited for', values: ['Small collections, or ground-truth evaluation of ANN accuracy', 'Recall-sensitive workloads with memory to spare', 'Simple, tunable setups where cell count is easy to reason about', 'Billion-scale collections where memory is the binding constraint'] },
+  ]}
+  caption="Four different ways to find the closest vector, from checking everything to navigating a graph, searching selected clusters, or comparing compressed codes."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From raw text to a ranked set of nearby vectors"
+  mermaid={`
+flowchart TD
+  DOC[Document or query text] --> EMB[Embedding model, e.g. Sentence-BERT-style encoder]
+  EMB --> VEC[Fixed-size dense vector]
+  VEC --> NORM[Normalize the vector and pick a similarity metric, cosine, dot product, or Euclidean]
+  NORM --> IDX[ANN index built over the vector collection: HNSW graph, IVF clusters, product-quantized codes, or a combination]
+  IDX --> SEARCH[Search the index for the approximate nearest vectors to the query vector]
+  SEARCH --> CANDIDATES[Ranked candidate vectors, each mapped back to its source document]
+  CANDIDATES --> NEXT[Passed on to reranking and generation, covered starting in Chapter 6.4]
+`}
+  components={[
+    {name: 'Embedding model', responsibility: 'Turns text into a fixed-size dense vector positioned by meaning; encodes documents at ingestion time and queries at search time.'},
+    {name: 'Similarity metric', responsibility: 'Defines what "closest" means between two vectors: cosine similarity, dot product, or Euclidean distance, chosen alongside whether vectors are normalized.'},
+    {name: 'ANN index', responsibility: 'A graph-based, cluster-based, quantization-based, or hybrid structure built over the stored vectors to avoid a full scan at query time.'},
+    {name: 'Candidate mapping', responsibility: 'Maps each returned vector back to the source document or passage it represents, handing off a ranked candidate set to the next pipeline stage.'},
+  ]}
+/>
+
+This chapter stops at a ranked set of candidate vectors. Chapter 6.3 compares the vector databases that
+implement this indexing layer in practice, and Chapter 6.4 covers what happens to those candidates next:
+chunking strategy, reranking, and generation grounded in the retrieved passages.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A covenant search that keyword-matching quietly fails', problem: 'If a compliance analyst searches a loan-agreement archive for a specific covenant using the exact phrase a template happens to use, a keyword search misses every agreement that expresses the same obligation in different wording, even though the underlying obligation is identical.', solution: 'Index the archive with sentence-level embeddings so retrieval matches on meaning, surfacing an agreement that phrases the same covenant differently from the query.', risk: 'A missed covenant during due diligence is not a search inconvenience, it is a real financial exposure that goes unnoticed until the covenant is triggered.'},
+    {title: 'Dot-product ranking that quietly favors boilerplate over the specific clause that matters', problem: 'Choosing dot product as the similarity metric for a contract-search system means a longer, more frequently-referenced boilerplate clause can outrank a shorter, more specific clause that is the actual answer to the analyst\'s question.', solution: 'Normalize embedding vectors and use cosine similarity for contract retrieval specifically, so ranking reflects relevance to the query rather than a clause\'s length or how often it recurs across the archive.', risk: 'Whichever clause happens to be the most repeated one in the archive, not the most relevant one, is what an analyst sees ranked first, and a rushed reviewer may never notice the difference.'},
+    {title: 'Fraud-pattern retrieval tuned too aggressively for speed', problem: 'When an ANN index\'s recall is tuned low to keep transaction-narrative search fast during peak load, some genuinely similar past fraud cases fall outside the approximate search\'s candidate set entirely.', solution: 'Tune the ANN index\'s recall and latency tradeoff, nprobe for IVF or the equivalent parameter for HNSW, against a measured recall target for fraud-pattern retrieval specifically, rather than defaulting to whatever setting is fastest.', risk: 'A fraud pattern that was actually present in historical data but fell outside the approximate search\'s candidate set looks, from the analyst\'s side, exactly like a fraud pattern that never happened before.'},
+    {title: 'Aggressive dimension truncation eroding the distinctions a compliance review depends on', problem: 'Truncating embedding vectors too far with Matryoshka-style dimension reduction, chosen purely to save storage, can compress away the fine-grained distinctions between two similarly-worded portfolio disclosures that a compliance review needs to tell apart.', solution: 'Validate any dimension-reduction setting against retrieval accuracy on the specific document types compliance review depends on, before applying it archive-wide purely for storage savings.', risk: 'Two disclosures that should read as meaningfully different can end up embedded close enough together that a reviewer treats them as interchangeable, when they are not.'},
+  ]}
+  healthcare={[
+    {title: 'Clinical guidance that a synonym mismatch keeps out of reach', problem: 'A clinician searching guideline literature for a drug by its generic name gets nothing back from a keyword-only system indexed under the brand name, or the reverse, even though the two searches should return the same guidance.', solution: 'Embed clinical literature with a model trained on medical text, so retrieval matches on the underlying clinical concept rather than the specific term a query happens to use.', risk: 'A clinician who gets an empty result set may reasonably conclude no guidance exists at all, rather than realizing the guidance exists under a different name their search never reached.'},
+    {title: 'Document length silently outranking clinical relevance', problem: 'Because dot-product similarity grows with vector length, a lengthy but only loosely relevant clinical review article can outrank a short, precisely on-point case report in a similarity search built without normalization.', solution: 'Normalize clinical document embeddings and rank with cosine similarity, so a short but precisely relevant passage is not systematically outranked by a longer, more loosely related one.', risk: 'The short, specific passage that would have been the better answer can sit outside a short results list simply because it lost the length contest, not the relevance one, and nothing in the interface signals that it is still there.'},
+    {title: 'Bedside case-similarity search caught in a latency-versus-recall tradeoff', problem: 'Even when a hospital deploys ANN-based search to find clinically similar past cases at the bedside, the same index configuration that keeps the tool fast enough for urgent use can also be the configuration that misses a genuinely similar past case.', solution: 'Set the ANN index\'s recall target deliberately for time-sensitive clinical lookup, informed by how much latency the workflow can actually tolerate, rather than accepting a default tuned for throughput alone.', risk: 'Even when a similar case genuinely exists somewhere in the system, a missed match at the point of care means the treatment decision gets made without it, on whatever timeline urgent care actually runs on.'},
+    {title: 'Rare adverse events thinned out by over-aggressive vector compression', problem: 'Compressing an adverse-event report archive with product quantization to fit billions of reports in memory can blur the fine distinctions between a common, well-represented reaction and a rare one that appears in only a handful of reports.', solution: 'Evaluate any quantization scheme\'s recall specifically on rare, long-tail adverse-event categories, not only on aggregate recall across the whole archive, before deploying it in a pharmacovigilance system.', risk: 'Precisely because a rare adverse event is rare, it is the category most likely to be quietly lost inside compression tuned to perform well on average, not on the tail.'},
+  ]}
+  telecom={[
+    {title: 'A support-ticket search stumped by paraphrased complaints', problem: 'Two customers describing the same underlying network problem in different words produce two support tickets that a keyword-only search treats as unrelated, splitting the same known issue across disconnected records.', solution: 'Embed incoming support tickets and match them against a semantically indexed archive of known issues, so paraphrased complaints about the same underlying problem get linked together automatically.', risk: 'Treating the same issue as several unrelated ones spreads its case volume thin enough that no single record ever crosses the threshold that would flag it as a systemic problem.'},
+    {title: 'Before anyone notices, routine incidents start crowding out the rare critical one', problem: 'Before anyone notices the pattern, a dot-product-ranked incident-report search can start consistently surfacing frequently-logged routine incidents ahead of a rare but critical one, purely because the routine reports are more numerous and more embedded near each other.', solution: 'Switch incident-report retrieval to normalized, cosine-based similarity so ranking reflects how closely an incident matches the query, not how often that type of incident happens to recur in the archive.', risk: 'An engineer triaging by what the search surfaces first can spend the most urgent minutes of an outage reading about a routine, unrelated incident instead.'},
+    {title: 'Outage-history lookup missing its match during exactly the moment speed is tuned for', problem: 'An ANN index tuned for the fastest possible response during an active outage can be the same tuning that fails to surface a genuinely matching prior incident, because the two goals, speed and recall, are traded off against each other by the same configuration.', solution: 'Maintain separate, explicitly tuned recall targets for outage-triage search versus routine lookup, so the urgency of an active incident does not silently degrade the odds of finding the matching precedent.', risk: 'A technician told by the tool that "no similar prior incident was found" cannot easily tell whether that is true or whether the search simply missed it under time pressure.'},
+    {title: 'Billion-record compression thinning out the anomaly a security team most needs to see', problem: 'Compressing billions of call and session logs with product quantization to keep them searchable in memory necessarily blurs some fine-grained distinctions, and a rare anomalous session pattern is exactly the kind of detail that blurring is most likely to erase.', solution: 'Pair aggressive vector compression with a re-ranking step over full-precision vectors for the top candidates, so the initial fast search can be compressed while the final ranking still reflects full detail.', risk: 'A security anomaly compressed into indistinguishability from routine traffic does not raise an alert, it simply disappears into the background the search was built to summarize away.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What did Mikolov et al. (2013) demonstrate about word2vec\'s training efficiency and its accuracy on word-similarity tasks, and why did that combination matter for everything built on top of it?', answer: 'Mikolov et al. showed word2vec "takes less than a day to learn high quality word vectors from a 1.6 billion words data set" while reaching "state-of-the-art performance on our test set for measuring syntactic and semantic word similarities." That combination of efficiency and accuracy established that meaning could be represented as trainable coordinates, the foundational insight every later embedding model, and this whole chapter, builds on.'},
+    {question: 'What speedup did Sentence-BERT achieve over plain BERT for finding the most similar pair among 10,000 sentences, and what architectural change produced it?', answer: 'Reimers and Gurevych report the task dropped "from 65 hours with BERT / RoBERTa to about 5 seconds with SBERT." The change was fine-tuning BERT with a pooling operation inside a siamese or triplet network architecture, so each sentence is encoded once into a fixed-size vector that can be compared with cosine similarity, instead of feeding every pair jointly through the full model.'},
+    {question: 'What did Muennighoff et al.\'s MTEB paper find about how embedding models perform across different tasks, and what practical conclusion follows from that finding?', answer: 'MTEB, evaluated across "8 embedding tasks," "58 datasets," and "112 languages," found that "no particular text embedding method dominates across all tasks." The practical conclusion is that choosing an embedding model should be a benchmarking decision made against a system\'s specific mix of tasks, not a default choice of whichever model currently tops a general-purpose leaderboard.'},
+    {question: 'What is the curse of dimensionality as Indyk and Motwani describe it, and what dilemma does it create for exact nearest-neighbor search structures?', answer: 'Indyk and Motwani found that classic indexing structures "provide little improvement over the brute-force algorithm" once dimensionality is large. Exact structures then face a genuine dilemma: either "low preprocessing cost but query time linear in n and d," or "query time sublinear in n" bought at the cost of "severely exponential preprocessing," neither of which scales cleanly to large, high-dimensional collections.'},
+    {question: 'Name the three families of approximate nearest-neighbor algorithms this chapter covers, and describe in one sentence each the mechanism each one uses to avoid a full scan.', answer: 'Graph-based methods, like HNSW, navigate a multi-layer proximity graph from sparse long-range connections down to dense local ones to reach a result in roughly logarithmic time. Cluster-based methods, like IVF, partition the vector space into Voronoi-style cells and search only the query\'s cell plus a tunable number of neighbors, controlled by a parameter like nprobe. Quantization-based methods, like product quantization, compress each vector into a short code built from independently quantized subvectors, trading some precision for the memory efficiency needed at billion-vector scale.'},
+  ]}
+/>

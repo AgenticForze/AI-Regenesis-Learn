@@ -12,10 +12,10 @@ Google Cloud's Open Knowledge Format.
 ## Chapters
 
 - [6.1 Why RAG? The Limits of Parametric Knowledge](./6-1-why-rag-limits-of-parametric-knowledge.mdx)
+- [6.2 Embeddings & Vector Search Foundations](./6-2-embeddings-vector-search-foundations.mdx)
 
 ## Coming soon
 
-- 6.2 Embeddings & Vector Search Foundations
 - 6.3 Vector Databases Compared
 - 6.4 RAG Architecture Deep Dive: Ingestion, Chunking, Retrieval, Reranking, Generation
 - 6.5 Advanced RAG Patterns: Hybrid Search, Reranking, HyDE, GraphRAG, Agentic RAG
