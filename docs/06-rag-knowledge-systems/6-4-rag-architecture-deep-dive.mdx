@@ -1,0 +1,247 @@
+---
+title: "RAG Architecture Deep Dive"
+sidebar_label: "6.4 RAG Architecture Deep Dive"
+sidebar_position: 4
+phase: 6
+chapter: "6.4"
+lms_presentation: "6.4-RAG-Architecture-Deep-Dive-Slides.pptx"
+prerequisites: ["6.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 6.3 covered the vector database: a system that stores embeddings and answers similarity queries
+at scale. That database only earns its keep because of everything that happens before a document ever
+reaches it and everything that happens after a query leaves it. Before storage, ingestion turns a raw
+file, a PDF, a scanned form, an HTML page, into structured content a chunker can actually work with,
+tools built for this stage describe their job as "extraction of structured content from raw, unstructured
+documents," followed by cleaning and a chunking pass built on "deep understanding of document formats"
+rather than blind character counting. Chunking itself is not one technique but several, each trading
+accuracy against complexity differently. Recursive character splitting tries a list of separators in
+order, by default `["\n\n", "\n", " ", ""]`, falling back to a smaller unit only when a larger one does
+not fit. Semantic chunking instead compares the embedding similarity of consecutive sentences and places
+a boundary wherever that similarity drops past a configurable percentile threshold. Parent-document
+retrieval, sometimes called small-to-big, resolves a real tension directly: "you may want to have small
+documents, so that their embeddings can most accurately reflect their meaning," but "you want to have
+long enough documents that the context of each chunk is retained," so it indexes small chunks for
+accurate matching and returns their larger parent documents once one is found. After retrieval narrows
+millions of vectors to a shortlist, most production systems add a second, slower pass: a cross-encoder
+reranker feeds the query and each candidate through the same network together and outputs "a single score
+between 0 and 1 indicating how relevant the document is," a step too expensive to run over an entire
+collection but cheap over the roughly 100 candidates retrieval already produced. Where that reranked
+evidence lands in the final prompt matters too: a 2023 study by researchers at Stanford, UC Berkeley, and
+Samaya AI found that "performance is often
+highest when relevant information occurs at the beginning or end of the input context," and
+"significantly degrades when models must access relevant information in the middle of long contexts, even
+for explicitly long-context models." Generation is the last stage and the one users actually see:
+assembling retrieved chunks into a prompt, instructing the model to answer only from what it was given,
+and grounding every claim in a specific passage so a user can verify it rather than take it on faith, the
+way citation features return "the exact passages that support each claim." This chapter walks the whole
+pipeline in order: ingestion, chunking, retrieval, reranking, and generation.
+
+## High-Level Explanation
+
+Chapters 6.2 and 6.3 built the library: a system that files books by meaning and finds the nearest
+shelf-neighbors to a query almost instantly. This chapter is about everything that happens before a book
+reaches that shelf and everything that happens after a patron finds one. A book has to be broken into
+readable, catalogable pieces before it can be shelved at all, that is ingestion and chunking. Once a
+patron's question turns up a stack of promising pages, a good librarian does not hand over the whole
+stack; they skim it more carefully, keep the pages that actually answer the question, and put the most
+important ones on top, that is reranking. And a librarian who actually answers the question does not just
+point at a shelf, they write an answer and note, passage by passage, exactly which page supports which
+sentence, that is generation. Ingestion and chunking decide what gets filed and how finely; retrieval and
+reranking decide what gets read and in what order; generation decides what the patron actually walks away
+with.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-4-rag-pipeline-overview.svg').default}
+    alt="A two-row diagram: the top row shows the write path, a raw document moving through ingestion, chunking, and embedding into the vector database from Chapters 6.2 and 6.3; the bottom row shows the query path, a query moving through retrieval, reranking, and generation into a grounded answer, with a dashed arrow showing that retrieval searches what the write path indexed."
+  />
+  <figcaption>Two halves of the same pipeline: one indexes documents, the other answers questions against what got indexed.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Ingestion turns a raw file into something a chunker can work with.** A PDF, a scanned form, an HTML
+export, and a Word document do not share a format, and none of them arrive as clean text. Tools built for
+this stage, such as Unstructured, describe their job as "extraction of structured content from raw,
+unstructured documents": parsing PDFs and scanned images, including OCR for pages with no text layer at
+all, pulling tables out as tables rather than scrambled text, and cleaning the result by "removing
+unwanted content" that would otherwise pollute an embedding. The output is not raw text either; it is
+broken into what these tools call document elements, using "deep understanding of document formats to
+partition documents into semantic units" rather than counting characters. Get this stage wrong, a table
+flattened into unreadable text, a scanned page skipped entirely, and every later stage inherits the
+damage: an embedding model can only encode what ingestion managed to extract in the first place.
+
+**Chunking decides how finely a document gets sliced, and different strategies solve different
+problems.** The simplest approach, recursive character splitting, tries a list of separators in order and
+falls back to a smaller one only when a larger one does not produce a chunk that fits: the default list is
+`["\n\n", "\n", " ", ""]`, so a splitter tries to break on paragraph boundaries first, then lines, then
+words, and only cuts mid-word as a last resort. It is fast, predictable, and knows nothing about meaning,
+a paragraph boundary is not always a topic boundary. Semantic chunking works differently, comparing the
+embedding similarity between consecutive sentences and placing a boundary wherever that similarity drops
+past a "breakpoint percentile threshold," so a chunk boundary tracks an actual shift in subject rather
+than a fixed character count, at the cost of an embedding call per sentence and an output size that is
+no longer predictable ahead of time. Parent-document retrieval, sometimes called small-to-big, sidesteps
+the tradeoff between chunk size and embedding accuracy directly: "you may want to have small documents,
+so that their embeddings can most accurately reflect their meaning. If too long, then the embeddings can
+lose meaning," but "you want to have long enough documents that the context of each chunk is retained."
+The fix is to index small chunks and store a pointer back to something larger: retrieval "first fetches
+the small chunks but then looks up the parent IDs for those chunks and returns those larger documents,"
+so a search matches on a precise, focused embedding while generation still receives the surrounding
+paragraph or section that gives that match its context. A fourth approach, structure-aware chunking,
+builds directly on what ingestion already identified: rather than cutting purely on length or meaning, it
+respects the element boundaries ingestion produced, never splitting a table row, a code block, or a list
+item across two chunks even when a length-based splitter would.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-4-chunking-strategies-compared.svg').default}
+    alt="A four-panel diagram comparing four chunking strategies: fixed-size and recursive splitting, which breaks on a list of separators such as paragraph, line, and word boundaries; semantic chunking, which places boundaries where embedding similarity between sentences drops; parent-document (small-to-big) retrieval, which indexes small chunks but returns larger parent context; and structure-aware chunking, which respects table, code, and list element boundaries identified during ingestion."
+  />
+  <figcaption>Four chunking strategies, each trading predictability, cost, and context differently, not four ways of doing the same thing.</figcaption>
+</figure>
+
+**Retrieval narrows millions of chunks to a shortlist, and diversity matters as much as raw similarity.**
+Chapters 6.2 and 6.3 covered the mechanics: an ANN index turns a query embedding into a fast, approximate
+search over everything the vector database holds, typically returning the top few dozen or few hundred
+candidates ranked by similarity alone. Pure similarity ranking has a blind spot, though: the top ten
+results for a broad query can all be near-duplicates of each other, each individually relevant but none
+adding anything the others did not already say. Maximal Marginal Relevance addresses this directly by
+scoring each candidate not just against the query but against what has already been selected: "a document
+has high marginal relevance if it is both relevant to the query and contains minimal similarity to
+previously selected documents." The method's original paper illustrates the problem with a search for
+airline-disaster coverage that returns dozens of near-identical articles about the same crash, arguing
+that "perfect precision, therefore, may prove insufficient in meeting user needs" when every result says
+the same thing. A tunable parameter controls the balance directly, weighting pure relevance against
+redundancy avoidance, so a system can decide how much variety a shortlist actually needs before it moves
+on to reranking.
+
+**Reranking is retrieval's second, more careful pass, and it changes both which results survive and where
+they land.** Retrieval is built for speed: comparing a query embedding against millions of stored vectors
+has to be fast, which is exactly why it uses a bi-encoder that embeds the query and every document
+independently, ahead of time. A cross-encoder reranker gives up that independence on purpose: the query
+and a single candidate document are "passed simultaneously to [a] transformer network, which then outputs a
+single score between 0 and 1 indicating how relevant the document is for the given query." That joint
+pass is far more accurate, since the model can directly compare query and document, and far too slow to
+run against a whole collection, "scoring thousands or millions of (query, document)-pairs would be rather
+slow," so it only ever runs against the shortlist retrieval already narrowed things down to, often around
+100 candidates. Cohere's Rerank product packages exactly this step: given a query and a list of documents,
+it "indexes the documents from most to least semantically relevant to the query," returning a
+`relevance_score` for each and a `top_n` parameter to cap how many survive. Where those survivors land in
+the final prompt is its own problem: language models show a measured, consistent pattern where
+"performance is often highest when relevant information occurs at the beginning or end of the input
+context" and "significantly degrades" for information placed in the middle, "even for explicitly
+long-context models," so a reranker's job is not just picking the best evidence but placing it where a
+model is most likely to actually use it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-4-retrieve-rerank-funnel.svg').default}
+    alt="A funnel diagram: a query against the vector database returns roughly 100 candidates from a fast bi-encoder retrieval step, a cross-encoder reranker scores each candidate jointly with the query and narrows and reorders them to a small top-k set, and that reordered set, with the strongest evidence placed at the start and end rather than the middle, is passed to generation."
+  />
+  <figcaption>Retrieval is built for speed over millions of candidates; reranking trades that speed for accuracy over the hundred or so retrieval already found.</figcaption>
+</figure>
+
+**Generation is the stage a user actually sees, and grounding turns a fluent answer into a verifiable
+one.** Everything upstream exists to hand the model a small, well-ordered set of passages instead of an
+entire knowledge base, and generation is where those passages get assembled into a prompt alongside the
+user's question and instructions to answer only from what was provided. A fluent answer is not
+automatically a correct one: the model can still blend, misattribute, or invent a detail that sounds
+consistent with the retrieved text without actually being supported by it. Grounding features close that
+gap by tying each claim back to a specific source location instead of trusting the model's word for it.
+Citations-style features, for example, are built to "ground [a model's] responses in your source
+documents," returning "the exact passages that support each claim" alongside precise location data, a
+character range for plain text, a page range for a PDF, so a user can check any claim against its source
+directly rather than trusting the response wholesale. Parsing citations this way at the API level, rather
+than through prompting alone, is "significantly more likely to cite the most relevant quotes from
+documents than purely prompt-based approaches," which makes grounding a property of the pipeline itself
+rather than a hope about how carefully the model happened to follow instructions.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Fixed-size / recursive splitting', 'Semantic chunking', 'Parent-document (small-to-big)', 'Structure-aware chunking']}
+  rows={[
+    {aspect: 'How it decides where to split', values: ['A fixed character or token count, falling back through separators like paragraph, line, then word breaks', 'Embedding similarity between consecutive sentences, splitting where that similarity drops past a threshold', 'Small chunks for indexing, each linked to a larger parent chunk stored separately', 'Document element boundaries such as table rows, code blocks, and list items, never split mid-element'], decisive: true},
+    {aspect: 'Chunk size predictability', values: ['High, sizes are bounded and consistent', 'Low, chunk size follows topic shifts rather than a target length', 'Small chunks are predictable; parent context size depends on document structure', 'Follows the natural size of the underlying element, which can vary widely']},
+    {aspect: 'Cost to compute', values: ['Very low, no embedding calls needed to chunk', 'An embedding call per sentence during ingestion', 'Same as the base strategy it wraps, plus a parent lookup at query time', 'Requires the richer ingestion pass that identifies elements in the first place']},
+    {aspect: 'Best suited for', values: ['Uniform, mostly plain-text documents where speed matters most', 'Long documents that shift topic within a single section', 'Precise matching on a small chunk while still generating from full context', 'Documents where structure, tables, code, forms, carries meaning plain text loses'], decisive: true},
+  ]}
+  caption="Four chunking strategies, each trading predictability, cost, and context differently, not four ways of doing the same thing."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From a raw document to a grounded answer"
+  mermaid={`
+flowchart TD
+  DOC[Raw document: PDF, HTML, scanned form, and similar] --> INGEST[Ingestion: parse, clean, extract elements]
+  INGEST --> CHUNK[Chunking: fixed, semantic, parent-document, or structure-aware]
+  CHUNK --> EMBED[Embedding model, from Chapter 6.2]
+  EMBED --> VDB[Vector database, from Chapter 6.3]
+  QUERY[User query] --> QEMBED[Query embedding]
+  QEMBED --> RETRIEVE[Retrieval: ANN search over the vector database]
+  VDB --> RETRIEVE
+  RETRIEVE --> RERANK[Reranking: cross-encoder narrows and reorders the shortlist]
+  RERANK --> ASSEMBLE[Prompt assembly: reordered passages plus the user's question]
+  ASSEMBLE --> GEN[Generation: the model answers, grounded in the assembled passages]
+  GEN --> ANSWER[Answer, with citations back to the source passages]
+`}
+  components={[
+    {name: 'Ingestion and chunking', responsibility: 'Turns a raw document into structured elements and then into embeddable chunks, using a strategy suited to the document type.'},
+    {name: 'Embedding and vector database', responsibility: 'The mechanisms Chapters 6.2 and 6.3 covered: turning a chunk into a vector and storing it for fast approximate similarity search.'},
+    {name: 'Retrieval and reranking', responsibility: 'A fast bi-encoder search narrows millions of chunks to a shortlist; a slower cross-encoder reranks and reorders that shortlist for accuracy and placement.'},
+    {name: 'Generation and grounding', responsibility: 'Assembles the reordered passages into a prompt and produces an answer with claims traceable back to specific source locations.'},
+  ]}
+/>
+
+This chapter completes the mechanical pipeline from a raw document to a grounded answer. Chapter 6.5
+picks up more advanced patterns built on top of it: hybrid search variations, HyDE, GraphRAG, and agentic
+RAG, where retrieval itself becomes something a model can reason about and repeat rather than a single
+fixed step.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A trading-desk risk memo cut into chunks that split a warning from its number', problem: 'A risk memo splits at a fixed character count, and a specific figure such as a VaR breach ends up in a different chunk than the paragraph explaining what that figure means, so a search embeds only half the warning.', solution: 'Use semantic chunking, which places a boundary where the embedding similarity between sentences actually drops, to keep a warning and the number it is attached to inside the same chunk far more reliably than a fixed character count does.', risk: 'A retrieval system built on fixed-size chunks can quietly separate a critical figure from the sentence that gives it meaning, and nobody notices until the two are needed together.'},
+    {title: "Reranking a mortgage-underwriting search so the strongest evidence isn't buried mid-context", problem: 'Underwriting search over policy documents returns fifty relevant passages, but the one clause that actually resolves the exception sits in the middle of a long prompt, exactly where a model is measurably least likely to weigh it.', solution: 'Add a cross-encoder reranking pass that reorders the shortlist so the passages most directly relevant to the specific exception sit at the start of the prompt rather than buried among fifty near-equal candidates.', risk: 'Handing a model fifty passages in raw retrieval order, instead of a reranked handful placed where attention is strongest, leaves the decisive clause exactly where a model is least likely to use it.'},
+    {title: 'Grounding a compliance answer in the exact regulation clause it relies on', problem: 'A compliance officer needs to know not just that a policy exists but which specific clause supports a generated answer, since an ungrounded summary is not something an auditor can independently verify.', solution: 'Generate the answer with a citation feature that returns the exact source passage and location behind each claim, rather than a fluent paragraph with no traceable source.', risk: 'Whoever has to defend a compliance answer later inherits the full burden of verification, when the answer sounds authoritative but points to no specific clause.'},
+    {title: 'A single OCR failure during ingestion that silently drops a page of disclosures', problem: 'A scanned prospectus runs through ingestion, and one page with a low-contrast scan fails OCR silently, so the disclosures on that page never reach the chunker, the embedding model, or the index at all.', solution: 'Validate ingestion output against the source document\'s page count and flag any page that produced unusually little extracted text for manual review before it reaches indexing.', risk: 'Ingestion is the one stage nothing downstream can fix: no reranker or generation prompt can retrieve a page that never made it into the index, and a missing disclosure stays invisible until someone specifically goes looking for it.'},
+  ]}
+  healthcare={[
+    {title: 'Keeping a lab result and its reference range in the same chunk', problem: "A fixed-size splitter cuts a lab report between a patient's result value and the reference range that says whether it is normal, so a search retrieves the number without the context needed to interpret it.", solution: 'Chunk clinical documents around their actual structure, keeping a result, its units, and its reference range inside one chunk rather than splitting on a raw character count.', risk: 'A retrieved lab value with no attached reference range reads as neutral text to a model, when in context it may be the single most urgent detail on the page.'},
+    {title: "A parent-document lookup that returns the whole encounter note, not just the matching sentence", problem: 'A search for "patient reports chest pain" matches a single sentence buried in a long encounter note, but that sentence alone strips away the surrounding history and vitals a clinician actually needs to interpret it safely.', solution: 'Index small, precisely-matchable sentence-level chunks, but retrieve their parent encounter note in full, so the sentence that triggered the match arrives with the context that makes it usable.', risk: 'A single sentence pulled out of a clinical note, with nothing around it, invites exactly the kind of misreading that full context would have prevented.'},
+    {title: 'Citing the specific study a clinical-guidance answer actually rests on', problem: 'An answer summarizing treatment guidance across several source documents gives a clinician no way to check which specific study or guideline paragraph the recommendation actually traces back to.', solution: 'Use a grounding feature that attaches the exact cited passage and its location to each claim in the generated answer, turning an unverifiable summary into one a clinician can check against the source in seconds.', risk: 'When nobody can trace a treatment recommendation back to its source, a clinician is left choosing between taking it on faith and re-deriving it from scratch, and neither is acceptable in this domain.'},
+    {title: 'A reranker that has never seen medical language scoring symptoms like ordinary prose', problem: 'A general-purpose cross-encoder reranker, trained mostly on web and news text, may not weigh a rare but clinically urgent symptom mention as highly as its actual significance warrants, simply because that phrasing rarely appears in its training data.', solution: 'Evaluate, and where needed fine-tune, the reranker on clinical text specifically, rather than assuming a reranker that performs well on general benchmarks transfers directly to medical relevance judgments.', risk: 'Nothing about a general-purpose reranker guarantees it weighs a rare, clinically urgent symptom the way its actual significance warrants, and that quiet miscalibration can bury the passage a clinician most needed to see near the top of the ranked list.'},
+  ]}
+  telecom={[
+    {title: 'Structure-aware chunking that keeps a network-topology table intact', problem: 'A generic chunker flattens a network-topology table into a wall of unstructured text, scrambling which value belonged to which router, so neither embedding nor a human reading the chunk later can reconstruct the original table.', solution: 'Use an ingestion pipeline that identifies tables as elements and chunks around them intact, so a query about a specific router keeps its row, and that row\'s columns, together at retrieval time.', risk: "Losing a table's row and column structure during ingestion silently corrupts every downstream query about the data it held, long before reranking or generation ever gets a chance to compensate."},
+    {title: 'Diversity in a search for possible root causes during an active outage', problem: 'During an active incident, a search for "service degradation root cause" surfaces the same well-documented failure mode ten times over, crowding out a rarer but equally plausible cause a technician needs to at least consider.', solution: 'Apply Maximal Marginal Relevance when selecting the shortlist, penalizing candidates too similar to ones already chosen, so results cover more of the plausible cause space instead of repeating the same answer ten times.', risk: 'Ten near-duplicate results covering one cause look thorough at a glance but leave a technician no better informed about the causes retrieval never surfaced at all.'},
+    {title: 'A reranker narrowing a support-ticket search before it ever reaches the model', problem: 'Far more historical tickets match a customer-support query loosely than a generation prompt can hold, and picking among them by similarity score alone tends to favor generic tickets over the specific match.', solution: 'Rerank the candidate set with a cross-encoder before generation, so the tickets that most precisely match the current issue, not just the ones with the highest raw embedding similarity, make it into the final prompt.', risk: "Similarity score alone, with no reranking pass, is a poor filter for which ticket resolution actually applies, and a generation prompt built on it can answer with the wrong one."},
+    {title: 'An unlogged assumption in a generated network-status answer', problem: 'A generated summary of current network status blends details from several retrieved status reports into one fluent paragraph, and nothing in that paragraph indicates which specific report each claim actually came from.', solution: 'Require the generation step to cite the specific source passage behind each status claim, so an on-call engineer can trace any individual claim back to the report it came from before acting on it.', risk: 'If an engineer cannot see which report a status claim actually came from, the fluent summary asks them to trust a blend of sources at exactly the moment they most need to verify one specific claim.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does ingestion do to a raw document before it can be chunked, and why does the quality of this stage limit everything downstream?', answer: 'Ingestion parses a raw file, a PDF, a scanned image, an HTML page, into structured content through "extraction of structured content from raw, unstructured documents," including OCR for images with no text layer and pulling tables out as tables rather than scrambled text. Because chunking, embedding, and retrieval can only work with what ingestion managed to extract, content lost or corrupted at this stage, a flattened table, a skipped page, is never recoverable downstream, no matter how good the chunking, retrieval, or reranking is.'},
+    {question: 'Compare fixed-size/recursive chunking with semantic chunking. What does each optimize for, and what does each give up?', answer: 'Recursive character splitting tries a fixed list of separators in order, paragraph, then line, then word, to produce predictable, bounded chunk sizes cheaply, but it knows nothing about meaning, so a paragraph break is not always a topic break. Semantic chunking instead compares embedding similarity between consecutive sentences and places a boundary where that similarity drops past a threshold, producing chunks that track actual topic shifts at the cost of an embedding call per sentence and an unpredictable chunk size.'},
+    {question: 'What problem does parent-document (small-to-big) retrieval solve, and how does it solve it?', answer: 'It resolves the tension between wanting small chunks for accurate embeddings, since "if too long, then the embeddings can lose meaning," and wanting enough surrounding text for the context to be usable. It indexes small chunks for precise matching but, once a chunk matches, looks up and returns its larger parent document, so retrieval gets a focused match and generation still gets full context.'},
+    {question: "Why does reranking use a cross-encoder instead of the same bi-encoder used for retrieval, and why isn't a cross-encoder used for the initial retrieval step directly?", answer: 'A cross-encoder passes the query and a single document through the same network together, letting the model directly compare the two, which produces a far more accurate relevance score than comparing two independently-encoded embeddings. That accuracy comes at a cost: it is far too slow to run against millions of documents, so it only runs against the shortlist a fast bi-encoder retrieval step already narrowed down, typically around 100 candidates.'},
+    {question: 'What does "lost in the middle" mean, and how should it change how reranked results get placed in a generation prompt?', answer: 'It refers to a measured pattern where model performance is "often highest when relevant information occurs at the beginning or end of the input context" and "significantly degrades" for information placed in the middle, even for models built for long context. This means reranking should not just pick the best evidence but also order it so the most important passages sit near the start or end of the prompt, rather than being buried in the middle where a model is least likely to make full use of them.'},
+  ]}
+/>
