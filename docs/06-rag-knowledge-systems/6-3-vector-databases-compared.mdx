@@ -1,0 +1,252 @@
+---
+title: "Vector Databases Compared"
+sidebar_label: "6.3 Vector Databases Compared"
+sidebar_position: 3
+phase: 6
+chapter: "6.3"
+lms_presentation: "6.3-Vector-Databases-Compared-Slides.pptx"
+prerequisites: ["6.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 6.2 covered how an embedding gets compared to another and how algorithms like HNSW, IVF, and
+product quantization avoid scanning every vector to find the closest ones. None of that is a product on
+its own. A vector database is what wraps an ANN index with everything a production system actually
+needs around it: inserting and deleting vectors without rebuilding the whole structure, filtering by
+metadata alongside similarity, isolating one tenant's data from another's, and surviving a restart. Four
+deployment archetypes cover most of what teams actually reach for. Fully managed, serverless systems
+like Pinecone separate storage from compute entirely, storing vectors in "immutable files called slabs"
+in "distributed object storage that provides virtually unlimited scalability." Self-hosted, distributed
+systems like Milvus take a similar disaggregation and put it on infrastructure a team runs itself,
+splitting "stream processing into Streaming Node and batch processing into Query Node and Data Node."
+Systems like pgvector add vector search directly to a database many teams already run, trading some
+raw performance for the ability to keep vectors and relational data in the same ACID-compliant store.
+And embedded systems like Chroma run in-process or as a lightweight local server, built on the
+observation that "object storage is an order of magnitude cheaper than a replicated set of SSDs," a
+tradeoff worth making in exchange for higher per-request latency. Metadata filtering, the kind Qdrant
+builds around a "rich set of conditions" combined with `should`, `must`, and `must_not` clauses, and
+hybrid search, which fuses dense vector results with sparse keyword results, often matter as much as
+which ANN algorithm sits underneath. Benchmarking projects like VectorDBBench measure queries per
+second, P99 latency, recall, and cost together for exactly this reason: a system that wins on one axis
+routinely loses on another. This chapter builds a selection framework around those axes rather than
+naming one winner.
+
+## High-Level Explanation
+
+Chapter 6.2 explained how to file a book by the ideas inside it rather than its title, and how to find
+the nearest shelf-neighbors quickly once a library holds millions of books. This chapter is about the
+library building itself. Does it let patrons check a book out, replace it with a revised edition, or
+remove it entirely, without re-shelving the whole collection? Can a librarian restrict which patrons see
+which books, the way a hospital restricts one department's records from another's? Can a patron search
+by the exact words in a title as well as by which shelf-neighborhood a topic lives in? And critically,
+does the building come pre-built, staffed, and maintained by someone else, or does a team have to
+construct and run it themselves? A vector database is the answer to all of those questions bundled
+together, and different products answer them differently enough that the choice is rarely close to
+arbitrary.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-3-index-vs-database.svg').default}
+    alt="A diagram contrasting a bare ANN index, which only answers nearest-neighbor queries over a fixed set of vectors, with a full vector database, which wraps that index with insert and delete support, metadata filtering, multi-tenant isolation, persistence, and an operational deployment model."
+  />
+  <figcaption>An ANN index answers one question well; a vector database is everything production wraps around it.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**A vector database is the ANN index from Chapter 6.2, plus everything a production system needs around
+it.** HNSW, IVF, and product quantization are algorithms for finding nearby vectors quickly. None of them
+say anything about what happens when a document gets updated, when a query needs to exclude everything
+that is not owned by the current tenant, when the index needs to survive a process restart, or when two
+different clients need to query the same collection at once without stepping on each other. A vector
+database is the software layer that answers those questions, and the answers it gives, more than the ANN
+algorithm it happens to use internally, are usually what decide which product a team reaches for.
+
+**Fully managed, serverless systems separate storage from compute entirely.** Pinecone's architecture
+organizes data into "immutable files called slabs" held in "distributed object storage that provides
+virtually unlimited scalability and high availability," with write and read paths that "scale
+independently based on demand" so that heavy writes never slow down concurrent queries. New writes land
+in an in-memory structure first, then get organized into slabs using "fast indexing techniques" while
+small, which later get merged "into larger slabs that use more sophisticated methods" as they grow,
+"amortiz[ing] the cost of more expensive indexing" over time. A query checks that in-memory structure for
+anything not yet durable, then fans out to query executors that search their assigned slabs, typically
+cached in memory or on local SSD, with the underlying object storage as a slower fallback. The appeal of
+this model is that a team writes essentially no infrastructure code; the cost is that the infrastructure
+is somebody else's, running wherever that vendor's regions happen to be.
+
+**Self-hosted, distributed systems bring similar disaggregation to infrastructure a team runs itself.**
+Milvus takes a comparable approach, "fully disaggregated storage and compute layers" that "enable
+horizontal scaling of compute nodes," but deploys it on a team's own Kubernetes cluster rather than a
+vendor's managed service. It separates workloads by kind rather than treating them as one monolithic
+job: "by separating stream processing into Streaming Node and batch processing into Query Node and Data
+Node, Milvus achieves high performance while meeting real-time processing requirements simultaneously."
+Worker nodes stay "stateless thanks to separation of storage and computation," which is what makes
+horizontal scale-out and disaster recovery straightforward to automate. Under the hood, Milvus builds on
+the same algorithmic building blocks Chapter 6.2 covered directly, "Faiss, HNSW, DiskANN, and SCANN,"
+rather than reinventing them. The appeal here is control: a team decides where the data lives, how it
+scales, and what it costs at the infrastructure level, at the price of actually operating that
+infrastructure.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-3-deployment-archetypes.svg').default}
+    alt="A four-panel diagram comparing four vector database deployment archetypes: fully managed serverless systems like Pinecone that separate storage and compute in a vendor's cloud; self-hosted distributed systems like Milvus that bring similar disaggregation to a team's own infrastructure; systems like pgvector that add vector search directly to a relational database a team already runs; and embedded, lightweight systems like Chroma that run in-process or as a local server."
+  />
+  <figcaption>Four different answers to who operates the system and where the data lives, not four different search algorithms.</figcaption>
+</figure>
+
+**A third path adds vector search directly to a database many teams already run.** pgvector is a
+PostgreSQL extension, not a separate system, which means vectors can live in the same tables as the
+relational data they describe, queried with ordinary SQL joins and covered by the same ACID guarantees
+and point-in-time recovery Postgres already provides. It supports the two index families Chapter 6.2
+introduced: HNSW, which "has better query performance than IVFFlat, in terms of speed-recall tradeoff,
+but has slower build times and uses more memory," and IVFFlat, which trades some recall for faster
+construction and a smaller memory footprint. The tradeoff is bluntly practical: a team keeps its existing
+operational tooling, backup strategy, and access controls, and gives up the specialized performance and
+horizontal scale a purpose-built vector database is designed for. For a system already running Postgres
+with vector search as one feature among many rather than the whole point, that tradeoff is often an easy
+one to accept.
+
+**A fourth path skips server infrastructure entirely.** Chroma is built to run embedded, in-process
+inside an application, or as a lightweight local server, positioning it for prototyping, local-first
+applications, and small-scale deployments where standing up a distributed system would be overkill. Its
+design leans on the same object-storage economics that shape Pinecone's architecture: "object storage is
+an order of magnitude cheaper than a replicated set of SSDs, and has incredibly high parallel
+throughput," at the cost of higher per-request latency than an in-memory or SSD-backed system, so a
+system built around object storage from the start can serve much larger collections per dollar than one
+that assumes everything stays resident in memory. A team can start
+with Chroma running embedded during development and, if the workload outgrows that, move to a managed or
+self-hosted deployment without changing how the application queries it.
+
+**Metadata filtering is not a footnote to vector search, it is often the deciding factor in whether a
+result is even usable.** A search for "the nearest similar support ticket" is close to meaningless if it
+can return a ticket from a different customer's account. Qdrant builds its whole design around this,
+attaching "any JSON payload to your vectors" and filtering on it "using a rich set of conditions, keyword
+matching, full-text, numeric ranges, geo-locations, and more, combined with `should`, `must`, and
+`must_not` clauses." That filtering happens alongside the vector search itself, not as a separate pass
+over the results, which is what keeps a heavily filtered query from silently returning fewer results
+than expected. Qdrant also applies quantization, the same family of techniques Chapter 6.2 covered as
+product quantization, to cut memory use "by up to 97%" while letting a team "tune the trade-off between
+search speed and precision" directly. A vector database without expressive, efficient filtering is
+unusable the moment a real deployment needs multi-tenancy, access control, or any constraint tighter
+than "anywhere in the whole collection."
+
+**Combining vector search with keyword search often beats either one running alone.** Dense vectors are
+good at matching meaning even when the wording differs, but weak at forcing an exact match on a specific
+term; sparse, keyword-based search, typically scored with an algorithm like BM25, is the reverse. Hybrid
+search runs both "in parallel" and hands the two result sets "to a fusion algorithm, such as Reciprocal
+Rank Fusion," which scores each document by summing `1 / (k + rank)` across the lists it appeared in, a
+formula that "penalizes the documents that are ranked lower in the list" without needing the two search
+methods' raw scores to be on comparable scales in the first place. Weaviate's own example makes the case
+concretely: searching for "how to catch an Alaskan Pollock," dense vectors correctly disambiguate "catch"
+as the fishing sense of the word, while sparse search anchors the exact phrase "Alaskan Pollock" that a
+purely semantic match might drift away from. Hybrid search "significantly improves the user experience
+by reducing the need for perfectly phrased queries" while still rewarding a query that does use the
+exact right term.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-3-hybrid-search-fusion.svg').default}
+    alt="A diagram showing hybrid search: a single query runs as both a dense vector search and a sparse keyword search in parallel, and the two ranked result lists are combined by a fusion algorithm such as reciprocal rank fusion into one final ranked list."
+  />
+  <figcaption>One query, two searches run in parallel, and a fusion algorithm that rewards a document ranked highly by either one.</figcaption>
+</figure>
+
+**Comparing vector databases means weighing several axes at once, not chasing a single speed number.**
+VectorDBBench, an open benchmark maintained by Zilliz, measures queries per second, P99 latency, recall,
+serial search latency, and behavior under continuous data ingestion, and reports comparisons at matched
+cost points rather than in isolation, because raw throughput on its own says little about whether a
+system is actually a good fit. A database tuned for the highest possible recall is rarely the one with
+the lowest latency at the same cost, and a system that performs well on a static, pre-loaded dataset can
+behave very differently once vectors are being written continuously in production. The honest answer to
+"which vector database is fastest" is that it depends on which axis, and at what cost, a specific
+workload actually cares about most.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Managed serverless (Pinecone)', 'Self-hosted distributed (Milvus)', 'Added to an existing DB (pgvector)', 'Embedded / lightweight (Chroma)']}
+  rows={[
+    {aspect: 'Who operates it', values: ['The vendor; storage and compute scale independently in their cloud', 'The team, typically on its own Kubernetes cluster', 'Whoever already runs the underlying Postgres database', 'No one, runs in-process, or a lightweight local server'], decisive: true},
+    {aspect: 'Scaling approach', values: ['Object storage plus independently-scaling read/write paths', 'Disaggregated storage and stateless, horizontally-scalable compute', 'Whatever the host Postgres instance scales to', 'Built around cheap object storage, scales up before it scales out'], decisive: true},
+    {aspect: 'Best suited for', values: ['Teams that want zero infrastructure to operate', 'Teams needing full control over data location and cost at scale', 'Vector search as one feature inside an existing relational system', 'Prototyping, local-first apps, and small-scale deployments'] },
+    {aspect: 'Filtering and hybrid search', values: ['Metadata filtering supported natively', 'Supported, configuration depends on the deployment', 'Full SQL alongside vector similarity in the same query', 'Metadata filtering supported; hybrid search more limited'] },
+    {aspect: 'Cost profile', values: ['Usage-based, no idle infrastructure to pay for', 'Infrastructure cost plus the team\'s own operational time', 'Marginal cost on top of an already-running database', 'Near zero at small scale, migrate as the workload grows'] },
+  ]}
+  caption="Four deployment archetypes, distinguished by who operates the system and where the data lives, not by which ANN algorithm runs underneath."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="What a vector database wraps around an ANN index"
+  mermaid={`
+flowchart TD
+  WRITE[Insert, update, or delete a vector plus its metadata] --> INGEST[Ingestion layer]
+  INGEST --> IDX[ANN index: HNSW, IVF, product quantization, or a combination, from Chapter 6.2]
+  INGEST --> META[Metadata store, filterable alongside similarity]
+  QUERY[Incoming query: vector, optional keyword text, optional filters] --> VSEARCH[Vector search against the ANN index]
+  QUERY --> KSEARCH[Optional sparse keyword search]
+  QUERY --> FILT[Metadata filter, applied alongside search]
+  VSEARCH --> FUSION[Fusion and ranking, e.g. reciprocal rank fusion for hybrid search]
+  KSEARCH --> FUSION
+  FILT --> FUSION
+  META --> FILT
+  IDX --> VSEARCH
+  FUSION --> RESULT[Ranked results returned to the caller]
+`}
+  components={[
+    {name: 'ANN index', responsibility: 'The nearest-neighbor structure from Chapter 6.2, HNSW, IVF, product quantization, or a combination, tuned for the deployment\'s recall and latency targets.'},
+    {name: 'Metadata store', responsibility: 'Holds structured attributes attached to each vector, filterable alongside similarity so results can be scoped to a tenant, permission level, or category.'},
+    {name: 'Query and fusion layer', responsibility: 'Runs vector search, optional sparse keyword search, and metadata filtering together, combining results with a fusion algorithm when hybrid search is used.'},
+    {name: 'Storage and deployment layer', responsibility: 'Where data actually lives and who operates it: a vendor\'s managed cloud, a team\'s own distributed cluster, an existing relational database, or an embedded local process.'},
+  ]}
+/>
+
+This chapter stops at how a vector database itself is built and chosen. Chapter 6.4 picks up the rest of
+the retrieval pipeline this architecture feeds into: chunking a document before it is embedded, and what
+happens to a query's results after they leave this diagram, reranking and generation.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'One shared index, several clients who must never see each other\'s data', problem: 'A wealth-management platform serving many client accounts from a single vector collection risks a similarity search for one client surfacing a document that actually belongs to another, if nothing in the query itself excludes it.', solution: 'Attach a client or account identifier to every vector as metadata and require every query to filter on it with a must clause, so a result can never cross a tenant boundary regardless of how similar it scores.', risk: 'A shared index forgives nothing: the very first query that skips the filter already counts as a client-confidentiality breach.'},
+    {title: 'A data-residency requirement that a managed cloud service cannot satisfy', problem: 'When a regulator requires that certain account records never leave a specific jurisdiction\'s infrastructure, a fully managed vector database running in a vendor\'s general-purpose cloud regions may not be able to guarantee that constraint at all.', solution: 'Choose a self-hosted, distributed deployment the firm operates on infrastructure it controls directly, accepting the added operational burden in exchange for provable data location.', risk: 'A data-residency violation that only surfaces in an audit, well after deployment, has already turned an infrastructure choice into a regulatory finding.'},
+    {title: 'Bolting semantic search onto a case-management system without a second system to run', problem: 'A compliance team with a Postgres-based case-management system, and no appetite for standing up a whole new distributed service, still needs semantic search over case notes.', solution: 'Add pgvector to the existing Postgres instance, so semantic search runs as one more query type against data that already lives there, with the same backups and access controls already in place.', risk: 'The operational simplicity this system was chosen for erodes a little more with every additional, unfamiliar service bolted on beside it, vector search included.'},
+    {title: 'A search that must catch both a paraphrase and an exact account number', problem: 'An analyst searching transaction narratives for a specific account number needs an exact match, while a search for "unusual overseas wire activity" needs a semantic match, and neither vector search nor keyword search alone reliably covers both.', solution: 'Run hybrid search, combining dense vector similarity with sparse keyword matching through a fusion algorithm, so an exact identifier and a loosely-phrased concept both surface reliably.', risk: 'An exact account number is precisely the kind of query dense embeddings handle worst, since a numeric identifier carries little of the semantic signal an embedding model was trained to capture.'},
+  ]}
+  healthcare={[
+    {title: 'Even one shared index across hospital departments risks crossing a records boundary', problem: 'Even when a single vector index serves several hospital departments for efficiency, a similarity search run by one department can return a record that belongs to a different department\'s patients if nothing in the query enforces that boundary.', solution: 'Tag every embedded record with the department or care team it belongs to and enforce that tag as a required filter on every query, not as an optional parameter.', risk: 'A cross-department record surfacing in a routine search is a patient-privacy incident regardless of whether anyone acted on what they saw.'},
+    {title: 'An air-gapped clinical environment that rules out a managed cloud service entirely', problem: 'A hospital system operating under strict data-isolation requirements may be unable to use a fully managed vector database at all, since a vendor-operated service, by definition, involves infrastructure the hospital does not control.', solution: 'Deploy a self-hosted, distributed vector database on infrastructure the hospital directly operates, inside its own network boundary.', risk: 'Even when speed is the only goal, a managed vector database chosen under these constraints has already made a compliance decision the project cannot take back.'},
+    {title: 'Prototyping clinical search before committing to any infrastructure at all', problem: 'A research team validating whether semantic search over clinical literature is even useful does not want to provision a distributed database before knowing if the idea works.', solution: 'Prototype with an embedded vector database running locally inside a notebook or small application, and only move to a managed or self-hosted deployment once the approach is validated.', risk: 'Before anyone confirms the approach even works, infrastructure spent on a distributed deployment is budget an early, embedded prototype could have avoided entirely.'},
+    {title: 'Drug-code precision that a purely semantic search cannot guarantee', problem: 'A clinician searching for a specific drug code needs an exact match, but the same search system also needs to catch a clinically-relevant synonym or brand-name variant a purely keyword-based search would miss.', solution: 'Use hybrid search so an exact drug code and a semantically related but differently-worded query both return reliably, rather than forcing a choice between the two.', risk: 'Nothing about a purely semantic match guarantees the drug code it returns is the one actually prescribed, and medication is the one domain where that gap cannot be waved off.'},
+  ]}
+  telecom={[
+    {title: 'A managed service provider isolating each carrier customer within one index', problem: 'A managed service provider running network-support search across several carrier clients from a single vector collection needs an ironclad guarantee that one carrier\'s incident data never surfaces in another\'s results.', solution: 'Require a tenant identifier as a mandatory filter on every query against the shared index, enforced at the query layer rather than left to each client integration to remember.', risk: 'Whichever client integration forgets to apply that filter is the one that leaks another carrier\'s incident data, and the leak looks identical to a normal search result until someone notices.'},
+    {title: 'National data-sovereignty rules that a vendor\'s cloud regions cannot satisfy', problem: 'A carrier operating under national data-sovereignty requirements may find that no combination of a managed vector database\'s available regions actually satisfies where its subscriber data is legally required to stay.', solution: 'Run a self-hosted, distributed deployment on infrastructure located within the required jurisdiction, where region availability is not constrained by a vendor\'s existing footprint.', risk: 'That a vendor\'s regions look sufficient on paper is not the same as verifying they satisfy the actual sovereignty rule, and the gap between the two surfaces only after data has already moved.'},
+    {title: 'Vector search sharing a database with the transactional workload beside it', problem: 'A network-operations team already runs Postgres for inventory and provisioning near its performance ceiling, and adding pgvector\'s index build and query traffic onto that same instance risks slowing the transactional queries the NOC depends on.', solution: 'Add pgvector, but size and monitor the shared instance deliberately, or route heavy vector workloads to a read replica, so semantic search never competes with the transactional queries an active incident depends on.', risk: 'A slow similarity query sharing the database with the transactional workload it sits beside can compete for the exact same resources an outage-response query needs at the worst possible moment.'},
+    {title: 'Support search needing an exact error code and a paraphrased complaint at once', problem: 'A technician troubleshooting an outage needs to search by an exact diagnostic error code in one moment and by a loosely-described customer complaint in the next, and neither search mode alone covers both reliably.', solution: 'Run hybrid search combining dense and sparse retrieval, so an exact error code and a paraphrased description of the same underlying issue both surface in the same search.', risk: 'Mid-incident, a technician does not get to choose which kind of query they need, an exact code one moment and a vague description the next, and a system missing either half fails right when it matters most.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does a vector database add on top of the bare ANN index Chapter 6.2 covered, and why is the ANN algorithm alone not a usable product?', answer: 'A vector database wraps the ANN index with insert and delete support without a full rebuild, metadata filtering alongside similarity, multi-tenant isolation, and persistence across restarts. An ANN algorithm alone only answers "which vectors are nearest," with nothing about updating the collection, restricting who sees what, or surviving a restart, all of which a real deployment requires.'},
+    {question: 'How does Pinecone\'s serverless architecture separate storage from compute, and what specific benefit does that separation provide?', answer: 'Pinecone stores vectors in "immutable files called slabs" in "distributed object storage," with write and read paths that "scale independently based on demand." This means heavy write activity does not slow down concurrent queries, and vice versa, and the underlying object storage provides "virtually unlimited scalability" without a team provisioning capacity in advance.'},
+    {question: 'What deployment model does pgvector represent, and what does a team trade away by choosing it over a purpose-built vector database?', answer: 'pgvector adds vector search directly to PostgreSQL as an extension, so vectors live alongside relational data with full SQL joins, ACID guarantees, and the team\'s existing operational tooling. In exchange, it gives up the specialized performance and horizontal scale a purpose-built, disaggregated system like Pinecone or Milvus is designed for.'},
+    {question: 'What is hybrid search, and how does reciprocal rank fusion combine the results of a dense vector search and a sparse keyword search?', answer: 'Hybrid search runs a dense vector search and a sparse, keyword-based search "in parallel" over the same query, then combines the two ranked result lists with a fusion algorithm. Reciprocal rank fusion scores each document by summing 1 divided by (a constant plus its rank) across every list it appears in, which "penalizes the documents that are ranked lower in the list" without requiring the two methods\' raw similarity scores to be directly comparable.'},
+    {question: 'Name the axes VectorDBBench measures when comparing vector databases, and explain why comparing vector databases needs more than one axis.', answer: 'VectorDBBench measures queries per second, P99 latency, recall, serial search latency, and behavior under continuous ingestion, typically compared at matched cost points. More than one axis is needed because these tend to trade off against each other: a system tuned for the highest recall is rarely also the lowest-latency option at the same cost, so a single throughput number does not tell a team whether a database actually fits its workload.'},
+  ]}
+/>
