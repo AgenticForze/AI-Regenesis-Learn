@@ -1,0 +1,252 @@
+---
+title: "Knowledge Graphs + LLMs"
+sidebar_label: "6.6 Knowledge Graphs + LLMs"
+sidebar_position: 6
+phase: 6
+chapter: "6.6"
+lms_presentation: "6.6-Knowledge-Graphs-and-LLMs-Slides.pptx"
+prerequisites: ["6.5"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 6.5 used a knowledge graph as one ingredient in GraphRAG: an LLM read a corpus, built a graph,
+clustered it into communities, and reasoned over community summaries. This chapter goes underneath that
+pattern to the graph itself. A knowledge graph, at its core, is "an organized representation of real-world
+entities and their relationships," where relationships are "stored directly in the database rather than
+re-generating them using joins in queries" the way a relational database does. Two structural conventions
+dominate how that representation gets built: RDF triple stores decompose every fact into a
+subject-predicate-object triple and are queried with SPARQL, while labeled property graphs attach
+properties directly to nodes and relationships and are queried with Cypher, and "because of the atomic
+decomposition of the data and RDF, you typically have longer patterns when you perform queries" against a
+triple store than against a property graph. Building a graph from raw text now typically means instructing
+an LLM with a schema, "you can specify a schema with allowed nodes and relationships, as well as properties
+and additional extraction instructions," and the model returns the result as "structured JSON" a graph
+database can store directly. That extraction creates a problem the mechanical pipeline from Chapter 6.4
+never had to face: the same person can appear as different name variants across different documents, and
+entity resolution exists specifically because "we ideally want a single real-world entity to be represented
+with a single node." Once a graph exists, two very different techniques let a model use it beyond reading
+it: knowledge graph embeddings, vector representations of entities and relationships, "used to predict
+missing links," and Text2Cypher, which translates a plain-language question directly into a graph query so
+an agent can "ground its insights in actual domain knowledge" rather than retrieving a pre-written summary.
+This chapter walks all four: a knowledge graph's structure, how one gets built, why entity resolution is a
+genuine engineering problem, and the two distinct ways a model interacts with a graph once it exists.
+
+## High-Level Explanation
+
+Chapters 6.2 and 6.3 filed facts by meaning: a query finds whatever sits nearest to it in embedding space,
+with no explicit notion of how any two facts relate to each other. A knowledge graph files facts by
+relationship instead: not just that a fact exists, but exactly which other facts it connects to, and how. A
+relational database captures relationships too, but computes them on the fly by joining tables together at
+query time; a knowledge graph draws the connections once, when the data goes in, and stores them as
+first-class parts of the graph itself, so following a chain of relationships several hops deep is a
+traversal rather than a cascade of joins. Building a graph from a pile of documents means teaching a model
+to read text the way an analyst reads a case file: pull out who and what is mentioned, decide how they
+relate, and, critically, notice when two mentions in different documents are actually the same person or
+thing. Once that graph exists, it can be used two different ways: a model can query it directly, the way an
+analyst pulls a specific record, or a separate model can learn the graph's own patterns well enough to
+guess at connections nobody ever wrote down.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-6-kg-vs-relational-vs-vector.svg').default}
+    alt="A diagram comparing three ways of representing the same small set of facts: a relational database with separate tables joined at query time, a vector index where facts are embedded and found by similarity with no explicit relationships, and a knowledge graph where entities are nodes and relationships are stored directly as edges between them."
+  />
+  <figcaption>The same facts, three representations: joined at query time, embedded with no explicit relationships, or stored as first-class connections.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**A knowledge graph stores relationships as data, not as something computed at query time.** The core
+definition is simple: "a knowledge graph is an organized representation of real-world entities and their
+relationships," where "nodes denote and store details about entities, such as people, places, objects, or
+institutions," and "relationships link two nodes together: they show how the entities are related." A
+relational database can represent the same facts, but "since the relationships reside in the code rather
+than with the dataset, each application and data use must have its own implementation." A native graph database instead keeps
+relationships "stored directly in the database rather than re-generating them using joins in queries," so a
+query that needs to follow several relationships in sequence, who reports to whom, who approved what, which
+regulation cites which prior ruling, traverses stored edges instead of recomputing a chain of joins each
+time. A schema, described as "a framework...that organizes nodes and relationships according to fundamental
+concepts essential to the use cases at hand," gives that structure consistent meaning across the whole
+graph rather than letting every document invent its own vocabulary for the same kind of relationship.
+
+**Two structural conventions dominate how a knowledge graph actually gets built and queried.** RDF triple
+stores decompose every fact into its smallest possible unit: "the subject will be a resource, or a node in
+the graph. The predicate will represent an edge, a relationship, and the object will be another node or a
+literal value." This is, in a real sense, "a complete atomic decomposition of our data": nothing is
+attached directly to a node, everything is its own triple, queried with SPARQL. Labeled property graphs
+take a different approach, where "both the nodes and relationships have an internal structure," meaning
+properties can attach directly to a node or an edge rather than becoming separate triples of their own,
+queried with Cypher. The practical consequence of that structural choice shows up at query time: "because
+of the atomic decomposition of the data and RDF, you typically have longer patterns when you perform
+queries" against a triple store than the equivalent property-graph query. Neither convention is strictly
+better; RDF's atomic structure suits data that needs to interoperate across many independently-built graphs
+using shared vocabularies, while a property graph's more compact structure suits a single system optimized
+for fast, deeply-chained traversal.
+
+**Building a graph from unstructured text now typically means instructing an LLM with a schema rather than
+hand-coding extraction rules.** Modern extraction pipelines can be "instructed with detailed prompts
+(instructions, examples, schema, existing entities, output formatting) to extract, and de-duplicate entities
+and relationships from unstructured text," returning "structured information...in a structured JSON format"
+that "can be stored in a graph database like Neo4j and linked back to the source documents." Rather than
+letting the model invent whatever entity and relationship types it feels like on a given page, "you can
+specify a schema with allowed nodes and relationships, as well as properties and additional extraction
+instructions," constraining the model's output to a fixed, known vocabulary the rest of the graph already
+uses. A full construction pipeline is more than one extraction call: it typically chains together a data
+loader, a text splitter, a chunk embedder, a schema builder, a lexical graph builder, an entity and relation
+extractor, a knowledge graph writer, and an entity resolver, each stage doing one part of the job of turning
+a folder of documents into a single connected structure.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-6-kg-construction-pipeline.svg').default}
+    alt="A pipeline diagram showing raw documents moving through text splitting, schema-guided LLM extraction of entities and relationships, structured JSON output, entity resolution, and finally being written into a graph database."
+  />
+  <figcaption>Schema-guided extraction turns raw text into structured entities and relationships an LLM was constrained to produce, not whatever vocabulary it happened to invent.</figcaption>
+</figure>
+
+**Entity resolution exists because the same real-world thing rarely appears under the same name twice.** A
+document might refer to one person as a full name, a title and surname, and a first name alone across three
+different paragraphs, and a plain entity-recognition pass treats all three as separate mentions with no
+inherent link between them. The problem this creates is direct: "we ideally want a single real-world entity
+to be represented with a single node. We really don't want to have three different nodes representing the
+same entity." The fix moves from recognition to linking: "to go from name entity recognition to name entity
+linking means that we aggregate the name entity recognition to first recognize all the entities, and then
+map those entities to a target knowledge base." A common version of this maps every mention to an external
+reference like Wikipedia, aiming for a result where "even though we have three different titles of texts
+for [a given person], they would all link to the same entity on Wikipedia," and that shared identifier becomes the one node every
+mention actually resolves to. Skip this step, and a graph ends up with duplicate, disconnected nodes for
+the same entity, each holding only a fraction of what the source documents actually said about it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-6-entity-resolution.svg').default}
+    alt="A before-and-after diagram: three separate mention nodes for the same person, extracted from three different documents under three different name variants, resolving into a single linked node once entity resolution maps each mention to the same reference identifier."
+  />
+  <figcaption>Without entity resolution, one real-world entity fragments into several disconnected nodes, each holding only part of what the source documents said about it.</figcaption>
+</figure>
+
+**Knowledge graph embeddings turn a graph's structure into something a model can use to predict connections
+nobody entered.** Once a graph exists, "knowledge graph embeddings are vector representations of entities
+and relationships in a knowledge graph, used to predict missing links and facilitate machine learning
+tasks." The motivation is practical: "machine learning algorithms work better with numerical data. When we
+turn entities and relations into embeddings, we can feed this data into machine learning models to perform
+tasks like link prediction." This is a different job from the embeddings covered in Chapter 6.2: those
+embeddings represent the meaning of a chunk of text for similarity search, while a knowledge graph embedding
+represents an entity's position within the graph's own structure of relationships, trained so that patterns
+the graph already contains generalize to relationships it does not. A graph that knows a country is located
+in a continent, and knows enough other countries and continents to have learned that pattern generally, can
+predict a plausible location for a country whose containment relationship was simply never entered, a
+prediction, not a retrieval, and one that needs verification before it is treated as fact.
+
+**Text2Cypher lets an LLM query a knowledge graph directly instead of only ever reading a pre-written
+summary of it.** Rather than retrieving a document that describes a fact, an agent can generate the graph
+query that looks the fact up directly: "Text2Query includes any query generation by an LLM from natural
+language, such as Text2SQL and Text2Cypher," and "Cypher is the primary query language used with graph
+databases," so an agent can "generate a database query that addresses user input." The appeal is direct
+grounding: "allowing an AI agent to generate and execute database queries enables it to ground its insights
+in actual domain knowledge," which "reduces the risk of hallucination" in a way that reading a possibly
+outdated summary cannot guarantee. This comes with its own failure modes, though: "query generation...
+specifically requires agents to also have a clear understanding of the database schema," and "large schema
+sizes may also impact the agent's ability to accurately generate database queries as it can overload the
+context and confuse the LLM." An agent also has to handle "domain-specific jargon," abbreviations and names
+with a particular meaning inside one organization's graph, and "as the complexity of the question or task
+increases, so does the chance that the generated query will fail or not return the desired information."
+Text2Cypher trades the risk of an outdated retrieved summary for the risk of a malformed or subtly wrong
+query, not a free upgrade over retrieval, a different set of failure modes to design around.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-6-text2cypher-flow.svg').default}
+    alt="A flow diagram showing a natural-language question passed, along with the graph's schema, to an LLM that generates a Cypher query, which runs against the graph database, returning results that the LLM assembles into a grounded, cited answer."
+  />
+  <figcaption>Text2Cypher grounds an answer in a live query result rather than a retrieved summary, at the cost of depending on the schema being clear enough for the model to query correctly.</figcaption>
+</figure>
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Relational database', 'Vector index (Ch. 6.2 / 6.3)', 'Property graph (Cypher)', 'RDF triple store (SPARQL)']}
+  rows={[
+    {aspect: 'How relationships are represented', values: ['Computed at query time by joining separate tables', 'Not represented explicitly; only similarity between embeddings', 'Stored directly as edges between nodes, with properties on both', 'Decomposed into atomic subject-predicate-object triples'], decisive: true},
+    {aspect: 'How you query it', values: ['SQL, joining tables as needed for each query', 'Approximate nearest-neighbor similarity search', 'Cypher, traversing stored edges directly', 'SPARQL, matching patterns of triples'], decisive: true},
+    {aspect: 'What it is best at', values: ['Structured, tabular data with well-known relationships', 'Finding semantically similar content with no fixed schema', 'Fast, deeply-chained traversal within one system', 'Interoperating across independently-built graphs sharing a vocabulary'], decisive: true},
+    {aspect: 'Cost and complexity', values: ['Well-understood, mature tooling', 'One embedding call per item, approximate at scale', 'A construction and entity-resolution pipeline to build and maintain', 'Longer query patterns from atomic decomposition, plus the same construction cost']},
+  ]}
+  caption="Four ways to store the same facts, each optimized for a different question: filtering structured records, finding similar meaning, traversing known relationships fast, or interoperating across systems."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="From raw documents to a queryable, predictive knowledge graph"
+  mermaid={`
+flowchart TD
+  DOC[Raw documents] --> SPLIT[Text splitting]
+  SPLIT --> EXTRACT[Schema-guided LLM extraction: entities + relationships]
+  EXTRACT --> RESOLVE[Entity resolution: link mentions to one node per entity]
+  RESOLVE --> GRAPH[Knowledge graph: property graph or RDF triple store]
+  GRAPH --> EMBED[Knowledge graph embeddings for link prediction]
+  QUERY[User question] --> T2C[Text2Cypher: LLM generates a graph query from the question and schema]
+  GRAPH --> T2C
+  T2C --> RESULT[Direct query result]
+  GRAPH --> GRAG[GraphRAG-style community search, Ch. 6.5]
+  RESULT --> ANSWER[Grounded answer]
+  GRAG --> ANSWER
+`}
+  components={[
+    {name: 'Construction', responsibility: 'Schema-guided LLM extraction turns raw documents into entities and relationships in a fixed, known vocabulary.'},
+    {name: 'Resolution', responsibility: 'Links every mention of the same real-world entity to a single node, the step a mechanical chunking pipeline never has to perform.'},
+    {name: 'The graph itself', responsibility: 'Stores relationships as first-class data, either as a property graph or an RDF triple store, and can be queried, summarized, or embedded.'},
+    {name: 'Two ways to use it', responsibility: 'Text2Cypher queries the graph directly for a grounded, specific answer; GraphRAG (Ch. 6.5) instead reasons over pre-built community summaries for holistic questions.'},
+  ]}
+/>
+
+Knowledge graph embeddings and Text2Cypher are not competing techniques, they answer different questions.
+Embeddings predict a relationship nobody entered; Text2Cypher retrieves a relationship that is already
+there. A production system might use the graph from Chapter 6.5's GraphRAG pipeline for holistic
+questions, Text2Cypher for a specific, well-scoped lookup, and embeddings only where an actual prediction,
+clearly labeled as such, is the point.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: "A single counterparty scattered across a dozen differently-spelled filings", problem: 'The same holding company appears as its full legal name, an abbreviated ticker-style reference, and a colloquial short name across a dozen different filings, and a naive extraction pass creates a separate, disconnected node for each variant.', solution: 'Add an entity resolution stage that links every mention to a single reference identifier, so a search for exposure to that counterparty follows one node instead of missing two-thirds of the mentions scattered across differently-named duplicates.', risk: 'A knowledge graph is only as connected as its entity resolution is thorough, and an unresolved counterparty splintered across three nodes understates real exposure by whatever fraction of mentions happen to land on the wrong node.'},
+    {title: 'Predicting an undisclosed ownership link before it becomes a filing', problem: "Two entities share enough indirect connections, shared directors, shared registered addresses, overlapping transaction patterns, that a relationship almost certainly exists between them, but no single filing states it outright.", solution: 'Train knowledge graph embeddings on the existing ownership and directorship graph, letting the model surface a predicted link between the two entities for an analyst to investigate and verify, rather than waiting for a filing to confirm it after the fact.', risk: 'Treating a predicted link as a confirmed fact, instead of a lead for an analyst to check, risks acting on a plausible but ultimately incorrect relationship the model inferred from a coincidental pattern.'},
+    {title: 'Letting a compliance analyst query the ownership graph in plain language', problem: 'A compliance analyst needs to check whether a proposed counterparty connects to a sanctioned entity within three hops, a question that requires precisely traversing the ownership graph rather than reading a summary of it.', solution: 'Use Text2Cypher so the analyst can ask the question in plain language and get back a query that traverses the actual graph, grounding the answer in a live result rather than in whatever a retrieved document happened to say last quarter.', risk: 'A schema too large or too loosely documented for the model to understand fully can produce a query that silently misses a hop in the ownership chain, returning a clean answer that is quietly incomplete.'},
+    {title: 'A property graph traversal that answers a multi-hop question a document search never could', problem: 'Whether a transaction pattern connects, through three intermediary entities, back to a previously flagged account is a question about a specific chain of relationships, not about which document is most similar to the query.', solution: 'Store the ownership and transaction network as a property graph so a Cypher query can traverse exactly the chain in question, following stored edges directly rather than approximating an answer from document similarity.', risk: 'A vector search over transaction narratives can return documents that mention the right entities without ever confirming they connect through the specific three-hop chain that actually matters.'},
+  ]}
+  healthcare={[
+    {title: "A patient's own record split by three different name-and-ID variants across systems", problem: 'One patient is registered under a maiden name in one system, a married name in another, and a shortened first name in a third; without resolution, that patient becomes three disconnected nodes rather than one connected history.', solution: 'Resolve every mention to a single patient identifier before writing to the graph, so a clinician querying that patient sees one connected history rather than three fragments, each missing what the other two contain.', risk: "A fragmented patient record understates real risk in exactly the cases where it matters most, a medication interaction or allergy recorded under one name variant simply does not appear when a clinician looks up another."},
+    {title: 'Surfacing a plausible but unconfirmed drug interaction from graph structure alone', problem: 'No study has directly tested this specific pair of medications, yet their structural and mechanistic similarity to other, already-studied pairs is close enough that an undocumented interaction is a real possibility.', solution: 'Apply knowledge graph embeddings trained on known drug-interaction and mechanism data to surface the pair as a candidate worth investigating, clearly flagged as a model-predicted link rather than an established finding.', risk: 'Presenting a predicted interaction with the same visual weight as a clinically confirmed one invites a clinician to treat a statistical pattern as established fact.'},
+    {title: 'Querying a care-coordination graph directly instead of searching case notes', problem: 'A care coordinator needs to know every provider a patient has seen in the last six months across every connected facility, a precise, structured question a document search over case notes answers only approximately.', solution: 'Use Text2Cypher against a property graph of patients, providers, and visits, so the coordinator gets a complete, structured list, back from a query that actually traverses every visit edge rather than whatever case notes happened to be indexed.', risk: 'A clean, well-formatted list gives a coordinator no visual cue that it is incomplete, and an overly complex schema is exactly what makes a generated query drop a visit type or facility without anyone noticing.'},
+    {title: "A structure-aware graph model of drug interactions that a chunked document index cannot represent", problem: 'Two medications can interact through a shared metabolic pathway three relationships removed, a mechanism whose shape no single research abstract spells out in one sentence.', solution: 'Represent known drugs, pathways, and mechanisms as a knowledge graph rather than a chunked document index, so a query can traverse the actual pathway structure instead of hoping a single passage happens to spell out the full chain.', risk: 'A chunked document index has no native representation of a three-hop mechanistic pathway, so a question that depends on that structure can go unanswered even when every individual fact it needs is present somewhere in the corpus.'},
+  ]}
+  telecom={[
+    {title: 'One network asset appearing under a serial number, a friendly name, and a legacy ID', problem: 'Inventory records reference a piece of network equipment by its serial number, ticketing systems by a friendly name, and older documentation by a legacy identifier, three references an unresolved graph has no way of knowing point to the same asset.', solution: 'Resolve every reference to a single asset node during graph construction, so a query about that equipment\'s maintenance and outage history returns one complete record instead of three fragments spread across three identifiers.', risk: 'An unresolved asset graph can show a piece of equipment as newly installed and simultaneously flagged for a years-old outage, an inconsistency caused entirely by three unmerged identifiers rather than by anything wrong with the equipment.'},
+    {title: 'A predicted dependency between two systems nobody documented directly', problem: "No runbook or architecture diagram documents a dependency between these two systems, but their overlapping configuration patterns and shared upstream components closely match other pairs where a dependency is already confirmed.", solution: 'Use knowledge graph embeddings trained on documented dependencies to surface the undocumented pair as a candidate relationship for an engineer to confirm before it gets treated as an operational fact.', risk: 'A predicted dependency treated as confirmed cuts both ways: scheduling around it wastes a maintenance window if the model was wrong, and ignoring it risks an unplanned outage if the model was right.'},
+    {title: 'An on-call engineer querying the topology graph directly during an incident', problem: 'During an active incident, an engineer needs to know exactly which downstream services depend on a failing component right now, a precise structural question that a document search over runbooks can only approximate.', solution: 'Use Text2Cypher against the network topology graph so the engineer gets a query that traverses the actual dependency edges live, rather than a runbook passage that may already be out of date.', risk: 'An incomplete blast radius looks exactly like a complete one on screen, and a schema the model does not fully understand is enough to produce that gap at exactly the moment an engineer most needs the full picture.'},
+    {title: 'A capacity-planning question that depends on the topology graph, not on any single design document', problem: 'Whether a planned regional traffic increase can be absorbed depends on tracing capacity through several interconnected network layers, a structural question no single capacity-planning document fully answers on its own.', solution: 'Model the network as a knowledge graph connecting backhaul, routing, and edge capacity, so a Cypher query can traverse the actual dependency chain across all three layers in one pass.', risk: 'A document search over separate per-layer planning documents has no native way to combine three layers\' worth of constraints into one answer, leaving that combination for an engineer to assemble by hand.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'How does a knowledge graph represent relationships differently from a relational database, and why does that difference matter for a multi-hop query?', answer: 'A relational database computes relationships at query time by joining separate tables, since relationships "reside in the code rather than with the dataset." A knowledge graph stores relationships directly as edges, so a query that needs to follow several relationships in sequence traverses stored edges instead of recomputing a cascade of joins each time, which matters most for exactly the deep, multi-hop questions a relational join gets expensive for.'},
+    {question: 'What is the structural difference between an RDF triple store and a labeled property graph, and what query language goes with each?', answer: 'An RDF triple store decomposes every fact into an atomic subject-predicate-object triple with no properties attached directly to a node, queried with SPARQL. A labeled property graph instead lets properties attach directly to nodes and relationships, queried with Cypher, which generally produces shorter query patterns than the equivalent triple-store query because of RDF\'s atomic decomposition.'},
+    {question: 'What problem does entity resolution solve, and what happens to a knowledge graph if it is skipped?', answer: 'Entity resolution solves the problem of the same real-world entity appearing under different name variants across different documents, since a plain extraction pass would otherwise create a separate node for each variant. Skipping it leaves a graph with duplicate, disconnected nodes for what should be a single entity, each holding only a fraction of what the source documents actually said about it.'},
+    {question: 'What is a knowledge graph embedding used for, and how is it different from the embeddings covered in Chapter 6.2?', answer: 'A knowledge graph embedding is a vector representation of an entity or relationship trained on the graph\'s own structure, used to predict missing links the graph does not already contain. This differs from Chapter 6.2\'s embeddings, which represent the meaning of a chunk of text for similarity search; a knowledge graph embedding instead represents an entity\'s position within a network of relationships, and its output is a prediction that needs verification, not a retrieved fact.'},
+    {question: 'What does Text2Cypher let an agent do that GraphRAG-style community search does not, and what new failure mode does it introduce?', answer: 'Text2Cypher lets an agent translate a natural-language question directly into a graph query and get back a live, specific result, grounding the answer in actual current data rather than a pre-written community summary. The new failure mode is query generation itself: an agent needs a clear understanding of the schema, and a schema that is too large or uses unfamiliar domain jargon can cause the model to generate a query that fails or silently omits part of what it should have matched.'},
+  ]}
+/>

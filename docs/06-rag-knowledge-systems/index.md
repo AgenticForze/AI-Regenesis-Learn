@@ -16,10 +16,10 @@ Google Cloud's Open Knowledge Format.
 - [6.3 Vector Databases Compared](./6-3-vector-databases-compared.mdx)
 - [6.4 RAG Architecture Deep Dive](./6-4-rag-architecture-deep-dive.mdx)
 - [6.5 Advanced RAG Patterns](./6-5-advanced-rag-patterns.mdx)
+- [6.6 Knowledge Graphs + LLMs](./6-6-knowledge-graphs-and-llms.mdx)
 
 ## Coming soon
 
-- 6.6 Knowledge Graphs + LLMs
 - 6.7 Caching Infrastructure for GenAI & Agents
 - 6.8 Evaluating RAG Systems: Retrieval Metrics, Faithfulness, RAGAS
 - 6.9 RAG Reference Architecture Blueprint
