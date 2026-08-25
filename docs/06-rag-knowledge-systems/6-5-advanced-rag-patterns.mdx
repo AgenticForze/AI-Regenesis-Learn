@@ -1,0 +1,238 @@
+---
+title: "Advanced RAG Patterns"
+sidebar_label: "6.5 Advanced RAG Patterns"
+sidebar_position: 5
+phase: 6
+chapter: "6.5"
+lms_presentation: "6.5-Advanced-RAG-Patterns-Slides.pptx"
+prerequisites: ["6.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 6.3 introduced hybrid search, fusing dense vector results with sparse keyword results, and
+Chapter 6.4 walked the full mechanical pipeline from ingestion through chunking, retrieval, reranking, and
+grounded generation. Both chapters still treat the query and the index as fixed: whatever a user types is
+what gets embedded and searched, once, against whatever got chunked and stored. This chapter covers three
+patterns that change those assumptions, each aimed at a failure mode the mechanical pipeline cannot fix on
+its own. Hypothetical Document Embeddings (HyDE) addresses a query that is too short or too differently
+worded from the documents that would answer it: rather than embedding the query directly, an
+"instruction-following language model (e.g. InstructGPT)" first generates "a hypothetical document" that
+captures what a good answer would look like, and an "unsupervised contrastively learned encoder (e.g.
+Contriever)" embeds that hypothetical document instead, so the search runs against something shaped like an
+answer rather than a terse question, with this second step grounding "the generated document to the actual
+corpus, with the encoder's dense bottleneck filtering out the incorrect details." GraphRAG addresses
+questions no single chunk can answer at all: instead of indexing only chunks, it builds an "LLM-generated
+knowledge graph" from the entities and relationships in a source dataset, applies "hierarchical clustering
+of the graph using the Leiden technique" to detect communities, and summarizes each one, enabling a global
+search "for reasoning about holistic questions about the corpus by leveraging the community summaries"
+alongside a local search "for reasoning about specific entities by fanning-out to their neighbors and
+associated concepts."
+Agentic RAG addresses questions a single retrieval pass, however well reranked, cannot resolve on its own:
+an LLM can decompose a complex query into sub-questions and retrieve for each one separately, interleave
+reasoning and retrieval the way ReAct does, generating "verbal reasoning traces and text actions in an
+interleaved manner," or learn, as Self-RAG does, to retrieve "on-demand" and critique its own output using
+"special tokens, called reflection tokens." None of these patterns replace the pipeline Chapter 6.4
+covered; each one wraps around it, changing what gets searched, what gets indexed, or how many times
+retrieval runs before an answer gets generated.
+
+## High-Level Explanation
+
+The librarian from Chapters 6.1 through 6.4 is fast, thorough, and diligent, but takes a question
+completely literally and searches exactly once. Advanced RAG patterns give that librarian more judgment.
+Sometimes a patron cannot phrase their question well, they know roughly what they want but not the words a
+source document would actually use, so an experienced librarian imagines what a good answer would sound
+like and goes looking for something that resembles that imagined passage instead of the patron's exact
+words, that is HyDE. Sometimes a question is not about any single page at all but about how the whole
+collection connects, who is related to whom, which events cluster together, so the librarian keeps a
+separate map of those connections and reasons over the map rather than skimming shelf by shelf, that is
+GraphRAG. And sometimes one trip to the stacks is not enough: the librarian might split a big question
+into a few smaller ones and search for each in turn, narrate their reasoning out loud while alternating
+between thinking and searching, or bring back a first stack of pages, glance at it critically, and decide
+whether it actually supports an answer before deciding to go find more, that is agentic RAG.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-5-advanced-patterns-overview.svg').default}
+    alt="A diagram showing the base retrieval pipeline from Chapter 6.4 in the center, with three enhancement patterns attached: HyDE rewrites the query before retrieval, GraphRAG adds a knowledge-graph index alongside the vector database, and agentic RAG wraps a loop around retrieval and generation that can repeat before producing a final answer."
+  />
+  <figcaption>Three patterns, three different points where they attach to the pipeline from Chapter 6.4: before the query, beside the index, and around the whole loop.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**HyDE rewrites the query into something that looks like an answer before it ever gets embedded.** A short
+or ambiguous query embeds poorly because its vector sits far from the vectors of the longer, more
+detailed passages that would actually answer it, a mismatch retrieval alone cannot fix. HyDE addresses this
+by generating a stand-in first: "given a query, HyDE first zero-shot instructs an instruction-following
+language model (e.g. InstructGPT) to generate a hypothetical document." That document is not meant to be
+factually reliable on its own, the source paper is explicit that it "captures relevance patterns but is
+unreal and may contain false details." What makes the method work is the second step: rather than
+searching with the hypothetical document's text, an "unsupervised contrastively learned encoder (e.g.
+Contriever) encodes the document into an embedding vector," and that vector "identifies a neighborhood in
+the corpus embedding space, where similar real documents are retrieved based on vector similarity." The
+paper frames this step as grounding: "this second step ground the generated document to the actual corpus,
+with the encoder's dense bottleneck filtering out the incorrect details." A hallucinated fact in the
+hypothetical document rarely survives into retrieval, because the encoder was never trained to preserve
+fine factual detail, only the broad relevance pattern a real matching passage would share.
+
+**GraphRAG builds a second index, a knowledge graph, for questions no single chunk was ever going to
+answer.** Chunk-based retrieval, however it is chunked or reranked, answers questions about what a specific
+passage says. It struggles with questions about how many passages relate to each other across an entire
+collection. GraphRAG's construction phase has an LLM read the source data and build structure from it: "the
+LLM processes the entire private dataset, creating references to all entities and relationships within the
+source data, which are then used to create an LLM-generated knowledge graph." That graph then gets
+organized, not searched flat: the system will "perform a hierarchical clustering of the graph using the
+Leiden technique" and then "generate summaries of each community and its constituents from the bottom-up,"
+producing pre-written summaries of what each cluster of related entities is actually about. Retrieval
+against this structure comes in two forms suited to two different question shapes: global search is built
+"for reasoning about holistic questions about the corpus by leveraging the community summaries," while
+local search is built "for reasoning about specific entities by fanning-out to their neighbors and
+associated concepts." A flat chunk index has no equivalent of either: it can return passages that mention
+an entity, but it has no summarized notion of the community that entity belongs to, and no way to answer a
+question about the shape of the whole dataset rather than a specific passage within it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-5-graphrag-structure.svg').default}
+    alt="A diagram showing GraphRAG construction and query time: source documents feed entity and relationship extraction into a knowledge graph, which is hierarchically clustered into communities with LLM-generated summaries, and at query time a holistic question routes to global search over community summaries while a question about a specific entity routes to local search that fans out to that entity's neighbors."
+  />
+  <figcaption>GraphRAG builds a second, structural index; global search reasons over community summaries, local search fans out from a specific entity.</figcaption>
+</figure>
+
+**Query decomposition breaks a multi-hop question into pieces a single retrieval pass could never resolve
+together.** A question that depends on connecting two or more separate facts, what changed between two
+filings, which of several vendors triggered a specific clause, embeds as one vector that is a blend of
+several different information needs, and a single retrieval pass over that blended vector tends to surface
+passages related to only the most dominant part of the question. Decomposition addresses this at the
+question level rather than the index level: "an LLM decomposes the original query into sub-questions," and
+then "passages are retrieved for each sub-question" independently, so each retrieval pass targets one clear
+information need instead of a blend of several. The results are not simply concatenated; "the merged
+candidate pool is reranked to improve the coverage and precision of the retrieved evidence," using the
+reranking mechanics Chapter 6.4 already covered, but now applied across candidates pulled from several
+different searches rather than one. The overall effect, as the authors put it, is that "question
+decomposition effectively assembles complementary documents, while reranking reduces noise and promotes
+the most relevant passages before answer generation," pairing a technique that improves coverage with one
+that improves precision rather than relying on either alone.
+
+**ReAct interleaves reasoning and retrieval instead of running them as two separate, one-shot stages.**
+Standard RAG reasons once, retrieves once, and generates once, in that fixed order. ReAct instead "enables
+language models to generate both verbal reasoning traces and text actions in an interleaved manner," so a
+model can think, search, read what came back, think again, and search differently, repeating that cycle as
+many times as the question actually requires. The two halves reinforce each other in different directions:
+reasoning helps the model decide what to search for next, described as "the synergy between reasoning and
+acting" that lets the model "perform dynamic reasoning to create, maintain, and adjust high-level plans for
+acting," while what comes back from a search feeds back into that reasoning, "interacting with the external
+environments...to incorporate additional information into reasoning." A single fixed retrieval pass has no
+way to notice that its first search returned the wrong thing and try again with a better query; a ReAct
+loop can, because reasoning and retrieval keep taking turns until the model's own reasoning trace decides
+it has enough.
+
+**Self-RAG goes a step further and trains the model to decide when to retrieve and to critique what it
+retrieves and generates.** Rather than retrieving a fixed number of passages on every query regardless of
+whether the query needs them, Self-RAG uses "special tokens, called reflection tokens" so the model
+"adaptively retrieves passages on-demand," skipping retrieval for a question it can already answer and
+retrieving, sometimes repeatedly, for one that needs external evidence. The same reflection mechanism
+extends past the retrieval decision into self-critique: the model "generates and reflects on retrieved
+passages and its own generations," scoring whether a retrieved passage is actually relevant and whether its
+own draft answer is actually supported by what it retrieved, rather than assuming both are fine by default.
+Because these judgments are expressed as tokens the model itself produces, "generating reflection tokens
+makes the LM controllable during the inference phase, enabling it to tailor its behavior to diverse task
+requirements," which means the retrieve-then-critique behavior is something the model learned rather than a
+fixed rule bolted onto the pipeline from the outside.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-5-agentic-rag-loop.svg').default}
+    alt="A diagram showing an agentic RAG loop: a query is optionally decomposed into sub-questions, each retrieval step feeds a reasoning step that decides whether to retrieve again with a refined query or move on, and a critique step checks whether the retrieved evidence actually supports a draft answer before the loop either repeats or produces a final generated answer."
+  />
+  <figcaption>Decomposition, interleaved reasoning and retrieval, and self-critique are three different ways of giving retrieval more than one attempt at getting it right.</figcaption>
+</figure>
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['HyDE', 'GraphRAG', 'Query decomposition', 'Agentic loop (ReAct / Self-RAG)']}
+  rows={[
+    {aspect: 'What it changes about the base pipeline', values: ['Rewrites the query into a hypothetical answer before embedding it, retrieval itself is unchanged', 'Adds a second, structural index built from entities, relationships, and community summaries', 'Splits one query into several before retrieval, each sub-query runs the normal pipeline', 'Wraps the whole retrieve-then-generate cycle in a loop that can repeat and self-check'], decisive: true},
+    {aspect: 'Mechanism', values: ['An LLM generates a hypothetical document; a contrastive encoder embeds it and searches for similar real documents', 'Hierarchical clustering of an LLM-built knowledge graph, with global search over community summaries and local search fanning out from an entity', 'An LLM splits the query into sub-questions, retrieves for each, then reranks the merged candidate pool', 'Interleaved reasoning and retrieval steps (ReAct), or trained reflection tokens that decide when to retrieve and critique the result (Self-RAG)']},
+    {aspect: 'Cost and complexity', values: ['One extra LLM call per query to generate the hypothetical document', 'Expensive to build, an LLM reads the entire corpus to extract entities and relationships up front', 'One retrieval pass per sub-question instead of one, plus a merge-and-rerank step', 'Multiple LLM calls per query, and for Self-RAG, a model trained specifically to produce reflection tokens'], decisive: true},
+    {aspect: 'Best suited for', values: ['Short, vaguely-worded, or jargon-light queries that embed poorly against detailed source text', 'Questions about how the collection relates as a whole, not questions answerable from one passage', 'Multi-hop questions that depend on connecting two or more separate facts', 'Open-ended or high-stakes questions where a single retrieval pass may simply be wrong or incomplete']},
+  ]}
+  caption="Four patterns, four different points of leverage: rewriting the query, restructuring the index, splitting the question, or looping the whole cycle."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where advanced patterns attach to the Chapter 6.4 pipeline"
+  mermaid={`
+flowchart TD
+  QUERY[User query] --> COMPLEX{Complex or multi-hop?}
+  COMPLEX -->|yes| DECOMPOSE[Query decomposition: split into sub-questions]
+  COMPLEX -->|no| HYDE[HyDE: generate a hypothetical document, embed it instead of the raw query]
+  DECOMPOSE --> HYDE
+  HYDE --> RETRIEVE[Retrieval: vector database from Ch. 6.3]
+  GRAPH[GraphRAG index: communities and summaries] --> RETRIEVE
+  RETRIEVE --> RERANK[Reranking: cross-encoder, from Ch. 6.4]
+  RERANK --> CRITIQUE{Self-RAG style critique: does evidence support an answer?}
+  CRITIQUE -->|no, retrieve again| RETRIEVE
+  CRITIQUE -->|yes| GEN[Generation: grounded answer, from Ch. 6.4]
+  GEN --> ANSWER[Answer, with citations back to source passages]
+`}
+  components={[
+    {name: 'Query-side patterns', responsibility: 'HyDE and query decomposition act before retrieval ever runs, changing what gets searched rather than how the search itself works.'},
+    {name: 'Index-side pattern', responsibility: 'GraphRAG builds and maintains a second, structural index alongside the vector database, for questions a flat chunk index cannot answer.'},
+    {name: 'Loop-side patterns', responsibility: 'ReAct and Self-RAG wrap the retrieve-rerank-generate cycle from Chapter 6.4 in a loop that can repeat, using reasoning or trained reflection tokens to decide when one pass is not enough.'},
+    {name: 'Base pipeline', responsibility: 'Retrieval, reranking, and grounded generation are unchanged from Chapter 6.4; every pattern in this chapter feeds that pipeline rather than replacing it.'},
+  ]}
+/>
+
+Every pattern in this chapter is additive: none of them requires abandoning the ingestion, chunking,
+retrieval, reranking, or grounding mechanics Chapter 6.4 established. A production system might use none of
+these patterns, one, or several together, HyDE rewriting a vague query, a GraphRAG index sitting beside the
+vector database for holistic questions, and a Self-RAG-style critique step deciding whether either one's
+output actually supports an answer before it reaches the user.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A relationship-manager query too vague to embed against dense filing language', problem: 'A relationship manager asks a research assistant "anything concerning about this borrower lately," a query that shares almost no vocabulary with the dense, formal language of the credit memos and filings that would actually answer it.', solution: 'Generate a hypothetical answer document with HyDE and embed that instead of the raw query, since a passage-shaped hypothetical document sits much closer, in embedding space, to the real credit memos than five loosely-worded words ever would.', risk: 'When retrieval embeds the vague query as written, the search returns whatever loosely matches those few words rather than the specific, differently-worded passages that actually describe the borrower\'s deteriorating position.'},
+    {title: 'Untangling a web of related-party transactions across hundreds of filings', problem: 'Determining whether a pattern of related-party transactions across dozens of subsidiaries and hundreds of filings adds up to a disclosure concern is a question about how many entities connect to each other, not a question any single filing answers on its own.', solution: 'Build a GraphRAG index over the filings so entities and their relationships are captured explicitly, letting a global search reason over community summaries that already group related entities together.', risk: 'A flat chunk index has no representation of the relationships between entities at all, so a pattern that only becomes visible once dozens of individually unremarkable transactions are connected stays invisible to chunk-level retrieval no matter how well any single chunk is reranked.'},
+    {title: 'A cross-jurisdiction compliance question that spans several separate regulatory regimes', problem: 'A single query asking whether a proposed transaction structure is compliant across three jurisdictions actually bundles three separate, only loosely related questions, each answered by a different regulator\'s documents.', solution: 'Decompose the query into one sub-question per jurisdiction, retrieve separately against each regulatory corpus, and rerank the merged candidates before generation, so each jurisdiction\'s requirements get their own dedicated search.', risk: 'Treating a three-jurisdiction question as one query lets retrieval concentrate on whichever jurisdiction\'s language dominates the embedding, leaving the other two under-represented in whatever gets retrieved.'},
+    {title: 'An agentic check that catches a compliance answer built on insufficient evidence', problem: 'A single retrieval pass returns three passages that look topically related to a compliance question but, read closely, do not actually establish whether the specific transaction in question is permitted.', solution: 'Add a Self-RAG-style critique step that evaluates whether retrieved evidence actually supports a draft answer before returning it, triggering an additional retrieval pass when it does not.', risk: 'An unchecked retrieval pass leaves a fluent, confident-sounding compliance answer standing even when the passages behind it never actually established what the answer claims.'},
+  ]}
+  healthcare={[
+    {title: "A patient's own words matched against clinical terminology retrieval never expected", problem: 'A patient portal message describing "my chest feels tight when I walk upstairs" needs to surface the same clinical guidance as the term "exertional chest pain," but the two phrasings embed far enough apart that a direct query search misses the guidance entirely.', solution: 'Use HyDE to generate a clinical-style hypothetical passage from the patient\'s plain-language description, then embed and search with that instead, bridging the vocabulary gap between how a patient describes a symptom and how the literature documents it.', risk: 'A retrieval system tuned only to match clinical phrasing can silently fail exactly the patients whose plain-language descriptions never resembled clinical language to begin with.'},
+    {title: "Tracing a medication interaction across a patient's full multi-year visit history", problem: "Whether a newly prescribed medication interacts with something a patient was prescribed at a different clinic three years ago depends on connecting records scattered across many separate encounter notes, a fact no single note is ever going to surface by itself.", solution: 'Maintain a GraphRAG-style graph linking a patient\'s medications, conditions, and visits across encounters, so a local search can fan out from the new prescription to everything connected to it in that patient\'s history.', risk: 'If medication history lives only as isolated chunks with no structure connecting them, an interaction that depends on a prescription from years earlier can go unnoticed even when the record technically contains it.'},
+    {title: 'An iterative literature search during a genuinely ambiguous diagnostic workup', problem: 'A rare-presentation case does not resolve on one search; a clinician\'s first query returns partial evidence that only makes sense to search further once it has actually been read.', solution: 'Use a ReAct-style loop that interleaves reasoning and retrieval, letting the system read what an initial search returned, reason about what is still missing, and issue a refined follow-up search before presenting anything to the clinician.', risk: 'A single fixed retrieval pass has no way to notice that its first search only partially answered an ambiguous case and no mechanism for searching again with a better query.'},
+    {title: 'Catching a generated clinical summary that drifts from its cited evidence', problem: 'A draft summary blends findings from several retrieved studies into one fluent paragraph, and the sentence that ends up most consequential for a treatment decision is only weakly, if at all, supported by the specific passages retrieved.', solution: 'Apply a Self-RAG-style reflection step that checks each claim in a draft answer against the retrieved passages it is supposed to rest on, flagging or regenerating any claim the evidence does not actually support.', risk: 'A fluent clinical summary offers no visible signal, on its own, that one of its claims outran what the retrieved evidence actually supports, and that gap is exactly what a self-critique step exists to catch before a clinician relies on it.'},
+  ]}
+  telecom={[
+    {title: 'A terse outage ticket that shares no vocabulary with the runbook that resolves it', problem: 'A field technician logs a ticket as "no signal, box blinking red," language that has almost nothing in common with the formal fault-code terminology used in the runbook documentation that would actually resolve the issue.', solution: 'Generate a hypothetical runbook-style passage from the terse ticket text with HyDE, and search with that passage\'s embedding instead of the ticket\'s own sparse wording.', risk: 'Search built only around literal ticket wording returns nothing useful when technicians, understandably, describe problems in plain language the documentation never uses.'},
+    {title: 'Reconstructing a root-cause chain across dozens of related outage tickets and network elements', problem: 'A cascading outage produces dozens of tickets across different regions and network elements, and understanding the actual root cause means tracing how those elements and tickets relate to each other, not reading any single ticket in isolation.', solution: 'Build a knowledge graph connecting tickets to the network elements, regions, and prior incidents they reference, so a global search over community summaries can surface the shared root cause a single ticket search would never assemble.', risk: 'Thirty seemingly unrelated tickets that all trace back to one upstream router stay thirty separate tickets under chunk-level retrieval, and reconstructing that shared cause falls to whichever engineer happens to notice the pattern by hand.'},
+    {title: 'A capacity-planning question that spans several independent network layers at once', problem: 'A single question about whether a regional network can absorb a planned traffic increase actually bundles separate sub-questions about backhaul capacity, core routing headroom, and edge equipment limits, each documented in a different system.', solution: 'Decompose the question into one sub-question per network layer, retrieve against each system\'s documentation separately, and rerank the combined results before generating a single answer.', risk: 'A single undivided query tends to retrieve heavily from whichever layer\'s documentation dominates the embedding space, leaving the other layers\' constraints thin or missing from the final answer.'},
+    {title: 'An iterative log search during an active incident that refines itself as evidence comes in', problem: 'During a live incident, the first log search returns a plausible but incomplete lead, and whether that lead is worth pursuing only becomes clear once an engineer, or a system standing in for one, actually reads what came back.', solution: 'Run a ReAct-style loop that reasons over each search result and issues a refined follow-up query, narrowing toward the actual root cause across several iterations rather than stopping at the first plausible match.', risk: 'Stopping at a single retrieval pass during an active incident means acting on whatever the first, unrefined search happened to surface, even when that first result was only a partial or misleading lead.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What problem does HyDE solve, and why does embedding a generated hypothetical document work better than embedding the original query directly?', answer: 'HyDE addresses queries that are too short or too differently worded from the documents that would answer them, which embed far from those documents in vector space. It works by having an instruction-following model generate a hypothetical answer document, then embedding that document with a contrastive encoder whose "dense bottleneck" filters out any hallucinated details while preserving the broad relevance pattern, so the search runs against something shaped like a real answer passage rather than a terse, differently-worded question.'},
+    {question: 'What kind of question can GraphRAG answer that a flat, chunk-based vector index cannot, and what two search modes does it offer?', answer: 'GraphRAG answers holistic questions about how entities in a collection relate to each other as a whole, something no single chunk documents on its own. It builds a knowledge graph from extracted entities and relationships, clusters it hierarchically into communities with generated summaries, and offers global search, reasoning over community summaries for holistic questions, and local search, fanning out from a specific entity to its neighbors for entity-specific questions.'},
+    {question: 'How does query decomposition handle a multi-hop question, and why is reranking still needed after decomposition?', answer: 'An LLM splits the original query into separate sub-questions, and passages are retrieved for each sub-question independently rather than for one blended query. Reranking is still needed afterward because the merged candidate pool now contains results from several different searches, and reranking improves the coverage and precision of that combined pool rather than assuming every sub-question search already returned the passages in the right order.'},
+    {question: 'What does it mean for ReAct to interleave reasoning and acting, and what failure mode does that fix compared to a single fixed retrieval pass?', answer: 'ReAct has the model generate reasoning traces and retrieval actions in alternating turns rather than reasoning once, retrieving once, and generating once in a fixed order: reasoning helps the model decide what to search for next, and what comes back from a search feeds back into further reasoning. This fixes the failure mode where a single fixed retrieval pass returns something insufficient or wrong and has no mechanism for noticing that and searching again with a better query.'},
+    {question: 'How does Self-RAG decide when to retrieve, and how does it differ from a pipeline that always retrieves a fixed number of passages?', answer: 'Self-RAG is trained to produce reflection tokens that let it retrieve on-demand rather than on a fixed schedule, skipping retrieval for questions it can already answer and retrieving, sometimes repeatedly, for questions that need external evidence. The same reflection tokens also let it critique retrieved passages and its own generations for relevance and support, which a pipeline that always retrieves a fixed number of passages has no equivalent mechanism for doing.'},
+  ]}
+/>
