@@ -1,0 +1,226 @@
+---
+title: "Caching Infrastructure for GenAI & Agents"
+sidebar_label: "6.7 Caching Infrastructure"
+sidebar_position: 7
+phase: 6
+chapter: "6.7"
+lms_presentation: "6.7-Caching-Infrastructure-Slides.pptx"
+prerequisites: ["6.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every chapter so far in Phase 6 has assumed a request runs the full pipeline: embed, retrieve, rerank,
+generate, maybe a graph query or an agentic loop on top. None of that is free, and a surprising fraction of
+it is repeated work. This chapter covers three distinct layers of caching that avoid paying for that
+repetition twice, each with a different match requirement and a different risk profile. Prompt caching
+works at the token level: "prompt caching optimizes your API usage by allowing resuming from specific
+prefixes in your prompts," checking whether "a prompt prefix, up to a specified cache breakpoint, is
+already cached from a recent query" and reusing it if so, but only when "cache hits require 100% identical
+prompt segments" up to that breakpoint, an exact-match mechanism that reduces the price of a cache read to
+roughly a tenth of the base input price. Semantic caching relaxes that exact-match requirement: it
+"employs embedding algorithms to convert queries into embeddings and uses a vector store for similarity
+search," returning a cached response for a query that merely resembles a past one rather than matching it
+exactly, because "using an exact match approach for LLM caches is less effective due to the complexity and
+variability of LLM queries, resulting in a low cache hit rate." That flexibility is also where the danger
+lives: two queries can sit at a similarity score of 0.91 in embedding space while meaning opposite things,
+and "for triage it is malpractice" to treat them as interchangeable. Tool-call caching is a third,
+different problem again, less about saving tokens and more about protecting systems and correctness: an
+idempotent tool call is "necessary but not sufficient" for safe caching, because "if the underlying data
+changes, your cached answer becomes a lie" regardless of how safely repeatable the call itself is. This
+chapter walks all three: what each one caches, what it costs to get wrong, and how they compose in a real
+GenAI or agent system.
+
+## High-Level Explanation
+
+Think of three different reasons a busy help desk might not redo work it already did. If the exact same
+question comes in twice in a row, word for word, the desk doesn't research it again, it just reads back the
+answer it already wrote down, that is prompt caching: fast, cheap, and safe only because the question was
+identical. If a question comes in that sounds a lot like one from an hour ago but isn't quite the same
+wording, a helper might be tempted to reuse that earlier answer, but they had better check the two
+situations actually match before doing so, that is semantic caching, powerful precisely because it catches
+paraphrases, and risky for the same reason. And if a colleague asks the desk to look something up in a
+system that changes over time, a price, an inventory count, an account balance, remembering the last answer
+forever would eventually mean handing out information that used to be true, that is the tool-call caching
+problem: a lookup can be perfectly safe to repeat and still unsafe to remember.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-7-three-cache-layers-overview.svg').default}
+    alt="A diagram showing a request flowing through three different caching layers at three different points: prompt caching on the static prefix of a request before it reaches the model, semantic caching checking for a similar past query before running retrieval and generation, and tool-call caching checking for a safe-to-reuse prior result before an agent executes an external call."
+  />
+  <figcaption>Three caching layers, three different points in the pipeline, three different match requirements and risk profiles.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Prompt caching reuses the exact tokens a model already processed, not an approximation of them.** The
+mechanism is a prefix match: "the system checks if a prompt prefix, up to a specified cache breakpoint, is
+already cached from a recent query. If found, it uses the cached version, reducing processing time and
+costs. Otherwise, it processes the full prompt and caches the prefix once the response begins." A developer
+marks where that prefix ends: "marking a block with cache_control writes exactly one cache entry: a hash of
+the prefix ending at that block," and the guidance for placing it is specific, "place cache_control on the
+last block whose prefix is identical across the requests you want to share a cache." The requirement behind
+all of this is strict: "cache hits require 100% identical prompt segments, including all text and images up
+to and including the block marked with cache control," a single changed character anywhere in that prefix
+is a cache miss, not a partial credit. The economics reward getting this right: cache write tokens cost a
+multiple of the base input price, but "cache read tokens are 0.1 times the base input tokens price," a
+90% discount on every token that gets reused, and by default "the cache has a 5-minute lifetime," refreshed
+for free on every use, with an optional longer window "if you find that 5 minutes is too short."
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-7-prompt-caching-mechanics.svg').default}
+    alt="A diagram showing two requests that share an identical static prefix, such as a long system prompt or set of documents: the first request is a cache write at a higher token price, and the second request is a cache read at roughly a tenth of the base input price because the prefix matches exactly up to the cache breakpoint."
+  />
+  <figcaption>A single changed token anywhere before the cache breakpoint turns a cheap cache read back into a full-price cache write.</figcaption>
+</figure>
+
+**Semantic caching trades prompt caching's exact-match guarantee for a much higher hit rate, and inherits
+a correctness risk in return.** Rather than matching tokens, it matches meaning: a semantic cache "employs
+embedding algorithms to convert queries into embeddings and uses a vector store for similarity search on
+these embeddings," using a similarity evaluator that "uses various strategies to determine the similarity
+between the input request and the requests from the Vector Store." The motivation is straightforward: exact
+matching rarely fires twice on real user traffic, since "using an exact match approach for LLM caches is
+less effective due to the complexity and variability of LLM queries, resulting in a low cache hit rate,"
+while "semantic caching identifies and stores similar or related queries, thereby increasing cache hit
+probability," with projects built around the idea claiming order-of-magnitude gains, cutting API costs and
+cutting response latency dramatically when a hit fires. The risk sits in exactly what makes it powerful: two
+symptom descriptions, "my left arm hurts" and "my right arm hurts," can score a 0.91 similarity in a
+general-purpose embedding space, close enough to clear a loose threshold while describing two different
+conditions entirely, a mismatch a medical use case cannot tolerate. Time compounds the same problem: "what
+is the current interest rate?" asked yesterday and today are semantically identical and factually
+different, so a permissive cache will happily serve last month's number at a similarity score of 1.0.
+Tuning the threshold is a real risk-benefit tradeoff, not a knob with one correct setting, since the right
+value depends on what a false hit actually costs in a given domain, and teams that take this seriously run
+a new threshold against real traffic in shadow mode before ever letting it serve a live response.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-7-semantic-cache-risk.svg').default}
+    alt="A diagram showing a semantic cache lookup: an incoming query is embedded and compared against cached query embeddings, and two example pairs are shown, one where a high similarity score correctly indicates the same underlying question, and one, my left arm hurts versus my right arm hurts, where a similarity score above the threshold incorrectly triggers a cache hit despite the two queries meaning different things."
+  />
+  <figcaption>A similarity score close to the threshold cannot distinguish a true paraphrase from two different questions that merely use similar words.</figcaption>
+</figure>
+
+**Tool-call caching is a different problem from either token or semantic caching: it is about protecting
+systems and correctness, not primarily about saving tokens.** An agent that calls the same external tool
+with the same arguments repeatedly, in a long-running workflow, generates real cost beyond API pricing:
+"tool calls often dominate token usage indirectly by expanding context windows with raw data," so caching a
+call's result keeps that raw data from bloating every subsequent turn of the conversation. But whether a
+cached tool result is safe to reuse depends on more than whether the call itself is safe to repeat:
+"idempotent tool calls are necessary but not sufficient" for caching, because "a read-only database query
+might be idempotent, but if the underlying data changes, your cached answer becomes a lie." The fix has to
+account for more than the literal arguments passed to a tool: a cache key built only from arguments treats
+"what is today's exchange rate" as cacheable forever, when what actually needs to vary is not the arguments
+but the moment the call happens, since the cache key must capture not just arguments but intent, including
+whatever about the call is time-sensitive or context-dependent. Getting this wrong in either direction has a
+cost: caching too aggressively serves stale data as if it were current, and caching too conservatively
+throws away real savings on calls that genuinely never change, like a deterministic calculation with no
+external dependency at all.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-7-tool-call-cache-freshness.svg').default}
+    alt="A diagram showing an agent's tool-call cache decision: a tool call whose result is a deterministic calculation with no external dependency is safe to cache indefinitely, a tool call against a slowly-changing external system is safe to cache for a bounded time-to-live, and a tool call against a rapidly-changing external system, such as a live price or an active incident status, is unsafe to cache at all regardless of how idempotent the call itself is."
+  />
+  <figcaption>Idempotency answers whether a call is safe to repeat; it says nothing about whether its cached answer is still true.</figcaption>
+</figure>
+
+**The three layers compose rather than compete, because each one caches a different kind of repetition.**
+A single request in a RAG or agentic system can pass through all three: a long, mostly-static system prompt
+and a stable set of retrieved documents are prime candidates for prompt caching's exact-match reuse; the
+user-facing question in front of that static context is a candidate for semantic caching if the domain can
+tolerate its risk; and any tool call the pipeline makes along the way needs its own, separate decision about
+whether the world underneath that call changes fast enough to make caching it a bad idea. Designing a
+caching strategy is less about picking one of these three and more about deciding, for each piece of a
+request, which kind of repetition it actually represents, and matching the cache to that.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Prompt caching', 'Semantic caching', 'Tool-call caching', 'No caching']}
+  rows={[
+    {aspect: 'What counts as a hit', values: ['A byte-identical prefix up to the cache breakpoint', 'A query whose embedding falls within a similarity threshold of a past query', 'A tool call whose arguments and relevant context match a prior call', 'Never; every request is processed from scratch'], decisive: true},
+    {aspect: 'Primary risk', values: ['None if placed correctly; a miss just means full price, not a wrong answer', 'A false hit returns a fluent but wrong or stale answer', 'A cached answer silently goes stale if the underlying data changed', 'No risk of a wrong cached answer, but no savings either'], decisive: true},
+    {aspect: 'Typical savings', values: ['Roughly 90% off the price of every reused token', 'Order-of-magnitude cost and latency reduction on a true hit', 'Avoids a repeated external call and the context-window cost of its raw output', 'None'], decisive: true},
+    {aspect: 'Best suited for', values: ['A stable system prompt or document set reused across many requests', 'High-traffic, low-stakes queries where a near-duplicate really is a duplicate', 'A deterministic or slowly-changing external call, never a rapidly-changing one', 'Highly sensitive or highly volatile requests where any staleness is unacceptable'] },
+  ]}
+  caption="Three ways to avoid repeating work, and the one baseline of doing none of it: each trades a different kind of risk for a different kind of saving."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where each caching layer sits in a RAG or agent request"
+  mermaid={`
+flowchart TD
+  REQ[Incoming request: system prompt, documents, user question] --> PCACHE{Prompt cache: is the static prefix identical to a recent request?}
+  PCACHE -->|hit, ~10% of base price| RETRIEVE[Retrieval + reranking, Ch. 6.4]
+  PCACHE -->|miss, full price, cache the prefix| RETRIEVE
+  RETRIEVE --> SCACHE{Semantic cache: does this question resemble a recent one above threshold?}
+  SCACHE -->|hit| RESPONSE[Return cached response]
+  SCACHE -->|miss| GEN[Generation]
+  GEN --> TOOL{Agent needs a tool call?}
+  TOOL -->|yes| TCACHE{Tool-call cache: safe to reuse given data volatility?}
+  TCACHE -->|hit| RESULT[Reuse cached tool result]
+  TCACHE -->|miss or unsafe| LIVE[Execute live tool call]
+  RESULT --> ANSWER[Final answer]
+  LIVE --> ANSWER
+  TOOL -->|no| ANSWER
+`}
+  components={[
+    {name: 'Prompt cache', responsibility: 'Sits at the token level, before the model processes a request, reusing an exact-match static prefix at a fraction of its original cost.'},
+    {name: 'Semantic cache', responsibility: 'Sits before retrieval and generation, short-circuiting the entire pipeline when a question resembles a recent one closely enough, with a threshold tuned to the domain\'s tolerance for a false hit.'},
+    {name: 'Tool-call cache', responsibility: 'Sits at each individual tool call an agent makes, deciding per-call whether the underlying data is stable enough to reuse rather than re-fetch.'},
+    {name: 'The rest of the pipeline', responsibility: 'Retrieval, reranking, and generation from Chapter 6.4 run unchanged; caching decides whether they run at all for a given request, not how they work once they do.'},
+  ]}
+/>
+
+None of these layers replace the pipeline built across this phase, they decide how often that pipeline
+actually has to run. A production system tunes each layer independently: an aggressive TTL and a loose
+similarity threshold where a false hit is cheap, and no caching at all, or a very short TTL, exactly where
+one is not.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A long compliance policy document cached once, reused across thousands of queries', problem: 'A compliance assistant re-embeds and re-processes the same twenty-page policy document as part of the system prompt on every single query, even though that document changes only a few times a year.', solution: 'Place a prompt cache breakpoint after the static policy document and before the varying user question, so the document is processed once and reused at roughly a tenth of its original cost on every subsequent query within the cache window.', risk: 'Placing the cache breakpoint after, rather than before, any part of the prompt that actually varies between requests silently turns every request into a full-price cache miss with none of the intended savings.'},
+    {title: 'A semantic cache that conflates two portfolios with similar-sounding names', problem: "A query asking about \"exposure in the Meridian fund\" and a separate query about \"exposure in the Meridian Growth fund\" can land close enough in embedding space to clear a loosely-tuned similarity threshold, despite referring to two different products with different holdings.", solution: 'Tighten the similarity threshold for this domain and validate it in shadow mode against real query traffic before it ever serves a live response, treating a false hit here with the same seriousness as a wrong compliance answer.', risk: 'A fund name conflated with a similarly-named one under a loose threshold can hand an advisor exposure figures for the wrong product entirely, with nothing in a fluent, confident response signaling the mismatch.'},
+    {title: "Caching a live exchange rate lookup for exactly as long as it's actually current", problem: 'An agent tool call that fetches a current exchange rate is technically idempotent, calling it twice returns a consistent response format, but the underlying rate itself changes throughout the trading day.', solution: 'Cache the tool result with a short time-to-live matched to how often the rate actually moves, rather than treating idempotency as a green light to cache the result indefinitely.', risk: 'Idempotency alone says nothing about whether a cached tool result is still true, and a stale exchange rate served with full confidence can misstate a transaction\'s actual cost.'},
+    {title: 'A deterministic calculation cached indefinitely instead of recomputed every time', problem: 'An agent recomputes a standard amortization schedule from the same fixed inputs on every request, even though the calculation has no external dependency and always produces the same result for the same inputs.', solution: 'Cache tool calls that perform a pure, deterministic calculation indefinitely, since nothing about their underlying data can ever go stale, freeing the aggressive-TTL budget for calls that actually need it.', risk: 'Treating every tool call with the same cautious, short TTL wastes real savings on the calls that were never at risk of staleness in the first place.'},
+  ]}
+  healthcare={[
+    {title: 'A lengthy clinical-guidelines prompt paid for once per shift instead of once per question', problem: 'A clinical decision-support assistant carries the same lengthy set of clinical guidelines in its context for every question a clinician asks, and none of those guidelines change between one question and the next during a shift.', solution: 'Cache the guidelines as a static prefix so only the clinician\'s actual question varies from one request to the next, cutting the reused portion\'s cost by roughly 90% for the rest of the shift.', risk: 'If a session detail such as a timestamp ends up placed before the cache breakpoint instead of after it, the exact-match requirement breaks silently and every request quietly reverts to full price.'},
+    {title: 'Refusing a semantic cache hit between two symptom descriptions that sound alike but are not', problem: 'A symptom-triage assistant risks exactly the failure mode "my left arm hurts" and "my right arm hurts" represent, two descriptions close enough in embedding space to clear a loose similarity threshold while pointing to different, sometimes opposite, conditions.', solution: 'Set a similarity threshold tight enough for this domain that near-miss pairs like these fall below it, and validate that choice in shadow mode against real triage traffic rather than a generic default.', risk: 'For a triage use case, a false semantic-cache hit is not a minor inconvenience, it can return confidently wrong guidance for a condition that needed the opposite response.'},
+    {title: "A lab-value lookup that must never serve yesterday's result as current", problem: "A patient's most recent lab value changes the moment a new result posts, so however safely repeatable the lookup call itself is, the value it returns is only ever as fresh as the last post to the record.", solution: 'Give this tool call no cache, or a cache window short enough to guarantee freshness, treating "idempotent" and "safe to cache" as two separate questions rather than one.', risk: 'A cached lab value served past the moment a new result posted can leave a clinician acting on information that stopped being true before they ever read it.'},
+    {title: 'A drug-interaction reference table cached because it changes on a known, slow schedule', problem: 'An agent re-fetches a full drug-interaction reference table on every relevant query, even though that table is updated by its publisher only a handful of times a year on a known schedule.', solution: 'Cache the reference table with a time-to-live matched to its actual publication cadence, refreshing it proactively on that schedule rather than treating every fetch as equally urgent.', risk: 'Fetching a slowly-changing reference table fresh on every single query wastes latency and cost for a staleness risk that, at this update cadence, was never actually present.'},
+  ]}
+  telecom={[
+{title: 'Keeping a network topology reference in context without paying to reprocess it every time', problem: 'A long network topology reference sits in an on-call assistant\'s context for the whole length of an incident, unchanged from one engineer question to the next, while a naive setup pays to process it fresh on every single question anyway.', solution: 'Cache the topology reference as a static prefix so only the engineer\'s specific question varies between requests, keeping the reused portion at roughly a tenth of its original cost for the length of the incident.', risk: 'A cache breakpoint placed one block too early, ahead of some per-request detail instead of after it, quietly costs the team the full savings with no error message pointing to why.'},
+    {title: 'Two similarly-worded incident queries that describe two different network regions', problem: '"Latency issues in the East region" and "latency issues in the East Coast backup region" share enough wording that their embeddings sit close together, even though the two regions run different configurations and are prone to different failure causes.', solution: 'Tune the similarity threshold conservatively for infrastructure queries and validate it against real traffic in shadow mode, since a false hit here can point an engineer at the wrong root cause during an active incident.', risk: 'An engineer chasing a cached answer meant for a different region loses time on the wrong part of the network at exactly the moment an active incident makes that time most expensive.'},
+    {title: 'A live service-status check that must never be served stale during an outage', problem: 'A service\'s status can flip within seconds during an active incident, which makes a cached status check dangerous no matter how consistently well-behaved the underlying call is on repeat.', solution: 'Disable caching entirely, or use a very short time-to-live, for any tool call whose underlying status is this volatile, regardless of how safely repeatable the call itself is.', risk: 'Serving a cached "service healthy" result during an incident that started moments after the cache was written can delay the very escalation the check exists to trigger.'},
+    {title: 'A hardware specification lookup with nothing left to go stale', problem: 'A given equipment model\'s hardware specification sheet is fixed for the life of that model, with no external system feeding it new values, yet a naive setup re-fetches the same sheet fresh on every relevant query regardless.', solution: 'Cache this kind of deterministic, dependency-free lookup indefinitely, reserving short time-to-live budgets for the calls that genuinely need them instead.', risk: 'A blanket short-TTL policy applied even to a lookup that can never change trades away real, safe savings for a staleness risk that was never actually present.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'How does prompt caching decide whether a request gets a cache hit, and what happens if even one character changes before the cache breakpoint?', answer: 'Prompt caching requires "100% identical prompt segments...up to and including the block marked with cache control." A single changed character anywhere in that prefix, even one placed before the breakpoint by mistake, makes the request a full cache miss rather than a partial match, so the whole prefix gets reprocessed at full price.'},
+    {question: 'Why does semantic caching achieve a higher hit rate than prompt caching, and what specific risk does that introduce?', answer: 'Semantic caching matches on embedding similarity rather than exact tokens, so it catches paraphrases and near-duplicate questions that an exact-match cache would always miss, which is why "semantic caching identifies and stores similar or related queries, thereby increasing cache hit probability." The risk is a false hit: two queries can be similar in wording, like "my left arm hurts" versus "my right arm hurts," while meaning something entirely different, and a loose threshold cannot tell the difference.'},
+    {question: 'Why is idempotency "necessary but not sufficient" for safely caching a tool call?', answer: 'Idempotency means a tool call is safe to repeat, calling it twice produces a consistent result structure, but it says nothing about whether the underlying data the call reads has changed since the cache was written. "A read-only database query might be idempotent, but if the underlying data changes, your cached answer becomes a lie," so a call can be perfectly safe to repeat and still unsafe to cache without a freshness check.'},
+    {question: 'What determines whether a given tool call is safe to cache indefinitely, cache with a short time-to-live, or not cache at all?', answer: 'The deciding factor is how fast the real-world data behind the call changes, not how the call itself behaves. A deterministic calculation with no external dependency can be cached indefinitely; a slowly-changing external system, like a reference table updated a few times a year, can be cached with a time-to-live matched to that cadence; and a rapidly-changing system, like a live price or an active incident status, should not be cached at all regardless of how idempotent the call is.'},
+    {question: 'Why do prompt caching, semantic caching, and tool-call caching compose rather than compete inside a single request?', answer: 'Each layer addresses a different kind of repetition within the same request: prompt caching reuses a static, exact-match prefix like a system prompt or a stable document set; semantic caching short-circuits the whole pipeline when the user-facing question resembles a recent one closely enough for the domain\'s risk tolerance; and tool-call caching makes its own, separate freshness decision for each external call an agent makes along the way. A single request can pass through all three at once, since they cache different parts of the same pipeline rather than different versions of the same cache.'},
+  ]}
+/>
