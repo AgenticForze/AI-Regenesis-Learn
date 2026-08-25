@@ -1,0 +1,225 @@
+---
+title: "Evaluating RAG Systems: Retrieval Metrics, Faithfulness, RAGAS"
+sidebar_label: "6.8 Evaluating RAG Systems"
+sidebar_position: 8
+phase: 6
+chapter: "6.8"
+lms_presentation: "6.8-Evaluating-RAG-Systems-Slides.pptx"
+prerequisites: ["6.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every chapter so far in this phase has built a piece of a RAG or agentic pipeline: embeddings, vector
+search, chunking, reranking, graph queries, caching. None of that tells you whether the pipeline you built
+actually works, and "it feels better" is not a metric. This chapter covers the two families of metrics that
+answer that question and the framework that ties them together. Retrieval metrics score the search half of
+the system against a known-relevant set: Precision@k and Recall@k score whether the right documents came
+back at all, while ranking-aware metrics like Mean Reciprocal Rank score "the multiplicative inverse of the
+rank of the first correct answer" and Normalized Discounted Cumulative Gain rewards relevant results more
+for appearing near the top of the list. Generation metrics score the other half, whether the model's answer
+actually reflects what was retrieved. Ragas, a framework that "put[s] forward a suite of metrics which can
+be used to evaluate these different dimensions without having to rely on ground truth human annotations,"
+defines Faithfulness as the fraction of a response's claims that "can be supported by the retrieved
+context," and pairs it with Context Precision, Context Recall, and Answer Relevancy to score the retrieval
+and generation halves of a RAG system separately rather than judging the final answer as one opaque unit.
+Most of these generation metrics lean on an LLM as the judge doing the scoring, which introduces its own
+failure mode: judges have a measurable "verbosity bias" that "rewards longer answers even when shorter ones
+deliver better accuracy," and even a strong judge model "aligns with human preferences over 80% of the
+time," leaving a real error rate that a team has to catch some other way. This chapter walks through both
+metric families, the Ragas framework that operationalizes them, and where automated evaluation still needs a
+human in the loop.
+
+## High-Level Explanation
+
+Think of a newsroom fact-checking a story before it runs. Two different questions get asked, and they are
+not the same question. Did the researcher pull the right source documents for this story at all, and did
+they pull enough of them? That is a retrieval question, checkable against a list of documents that should
+have turned up. Separately: does the finished article actually say what those source documents say, or did
+the writer embellish, misquote, or draw a conclusion the sources don't support? That is a generation
+question, checkable by reading the article against the sources it cites. A newsroom that only checks one of
+these can still publish a false story, either because the researcher missed the right sources, or because
+the writer wandered away from good ones. Evaluating a RAG system means running both checks, on every answer,
+automatically, instead of trusting that a fluent-sounding response is a correct one.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-8-two-halves-of-evaluation.svg').default}
+    alt="A diagram showing RAG evaluation split into two halves: retrieval evaluation, which checks whether the right source documents were found using metrics like Precision at k, Recall at k, Mean Reciprocal Rank, and NDCG, and generation evaluation, which checks whether the generated answer is faithful to and relevant given those retrieved documents, using metrics like Faithfulness, Context Precision, Context Recall, and Answer Relevancy."
+  />
+  <figcaption>Retrieval evaluation checks whether the right documents were found; generation evaluation checks whether the answer actually reflects them. A RAG system needs both.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Retrieval metrics score the search half of the pipeline against a set of documents already known to be
+relevant.** Precision@k asks, of the k documents retrieved, how many were actually relevant, while Recall@k
+asks, of all the relevant documents that exist, how many made it into the top k. A system can score well on
+one and poorly on the other: a retriever that returns exactly one, perfectly relevant document at k=10 has
+perfect precision and terrible recall if five relevant documents exist. Neither metric cares about order
+within the top k, which is what ranking-aware metrics add. Mean Reciprocal Rank scores how early the first
+relevant result appears: it is "the multiplicative inverse of the rank of the first correct answer: 1 for
+first place, 1⁄2 for second place, 1⁄3 for third place and so on," averaged across a set of queries, so a
+system that reliably places the right answer first scores close to 1.0 even if it never looks past that
+point. Normalized Discounted Cumulative Gain generalizes this to graded relevance and to caring about the
+whole ranked list, not just the first hit: it compares actual Discounted Cumulative Gain, "the total item
+relevance in a list" discounted by a logarithm of each item's rank position, against the Ideal DCG, "the
+maximum achievable DCG with the same set of relevance scores but in the perfect ranking order," so a system
+that places its most relevant results first scores near 1.0 and one that buries them scores low even with
+identical documents in the result set.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-8-retrieval-metrics-ranking.svg').default}
+    alt="A diagram comparing two ranked result lists for the same query against the same three known-relevant documents: one ranking places all three relevant documents at the top and scores high on Mean Reciprocal Rank and NDCG, while the other ranking contains the same three relevant documents but buries them lower in the list and scores low on Mean Reciprocal Rank and NDCG despite identical precision and recall."
+  />
+  <figcaption>Precision and recall count what was retrieved; Mean Reciprocal Rank and NDCG also score where in the ranking it landed.</figcaption>
+</figure>
+
+**Ragas evaluates the generation half without requiring a human-labeled correct answer for every query.**
+The framework was introduced as "a framework for reference-free evaluation of Retrieval Augmented Generation
+(RAG) pipelines," built because evaluating a RAG system is "challenging" along several separate dimensions
+at once: "the ability of the retrieval system to identify relevant and focused context passages, the ability
+of the LLM to exploit such passages in a faithful way, or the quality of the generation itself." Rather than
+folding all of that into one pass/fail judgment, Ragas scores each dimension with its own metric. Faithfulness
+measures "how factually consistent a response is with the retrieved context," and the scoring mechanism
+decomposes the response into individual claims and checks each one against the retrieved context: a
+response with two claims where both are supported by context scores 1.0, and a response where one of two
+claims is contradicted by the context, such as getting a date wrong, scores 0.5. A response can be entirely
+faithful to its context and still be wrong, if the context itself was bad, which is exactly why faithfulness
+is paired with metrics that score the retrieval side too.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-8-faithfulness-scoring.svg').default}
+    alt="A diagram showing the faithfulness scoring process: a generated response is decomposed into individual claims, each claim is checked against the retrieved context to determine whether it is supported, and the faithfulness score is calculated as the number of supported claims divided by the total number of claims in the response."
+  />
+  <figcaption>Faithfulness decomposes a response into individual claims and scores the fraction the retrieved context actually supports.</figcaption>
+</figure>
+
+**Context Precision and Context Recall extend the retrieval-metric idea into Ragas's reference-free
+setting, and Answer Relevancy scores whether the response addresses the question at all.** Context
+Precision "evaluates the retriever's ability to rank relevant chunks higher than irrelevant ones for a given
+query," "calculated as the mean of the precision@k for each chunk in the context," so an irrelevant chunk
+sitting above a relevant one drags the score down even if every relevant chunk is present somewhere in the
+list. Context Recall works the other direction: it "measures how many of the relevant documents...were
+successfully retrieved," decomposing a reference answer into individual claims and checking whether the
+retrieved context supports each one, because "higher recall means fewer relevant documents were left out."
+Answer Relevancy scores a different failure mode entirely, a response that is faithful to its context but
+doesn't actually answer the question asked: it works by generating several artificial questions the response
+would answer, then scoring "the cosine similarity between the embedding of the user input and the embedding
+of each generated question," so a verbose, evasive, or off-topic response scores low even if every sentence
+in it happens to be true.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-8-context-precision-recall.svg').default}
+    alt="A diagram contrasting two retrieval failure modes with the same total content in the corpus: a low Context Precision case, where a relevant chunk is present but ranked below an irrelevant one, versus a low Context Recall case, where a relevant chunk needed to answer the question was never retrieved at all."
+  />
+  <figcaption>Context Precision penalizes a relevant chunk ranked too low; Context Recall penalizes a relevant chunk that never made it into the retrieved set at all.</figcaption>
+</figure>
+
+**Most of these generation-side metrics run on an LLM acting as the judge, and that judge has its own,
+well-documented failure modes that an evaluation pipeline has to account for.** A judge model exhibits
+"verbosity bias," which "rewards longer answers even when shorter ones deliver better accuracy," and
+"position bias," which "causes judges to favor responses appearing first or last in comparisons, independent
+of quality," along with "self-preference bias," which "appears when a judge scores outputs from its own
+model family and inflates scores." None of these make LLM-as-judge scoring useless, but they cap how much a
+single automated score can be trusted on its own: even a strong judge "aligns with human preferences over
+80% of the time," and the remaining gap "means thousands of misclassified outputs slipping through
+validation or triggering false alerts" at production scale. Teams that rely on these metrics for a
+regression gate, blocking a deploy if scores drop, pair the automated scores with periodic human spot-checks
+and track agreement between the two, rather than trusting the automated number in isolation forever.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Retrieval metrics (P@k, Recall@k, MRR, NDCG)', 'Faithfulness', 'Context Precision / Context Recall', 'Answer Relevancy']}
+  rows={[
+    {aspect: 'What it scores', values: ['Whether the right documents were found, and where they ranked', 'Whether the response\'s claims are supported by the retrieved context', 'Whether relevant chunks rank highly, and whether relevant chunks were found at all', 'Whether the response actually addresses the question asked'], decisive: true},
+    {aspect: 'Needs labeled ground truth?', values: ['Yes, a known-relevant document set per query', 'No, checked against the context retrieved for that query', 'Context Recall needs a reference answer; Context Precision does not', 'No, checked against the input question itself'], decisive: true},
+    {aspect: 'What it misses if used alone', values: ['Whether the generated answer used the retrieved documents correctly', 'Whether the context itself was any good in the first place', 'Whether the final generated answer is actually faithful to the context', 'Whether the response is factually correct, only whether it stays on topic'] },
+    {aspect: 'Primary risk', values: ['A regression here can go unnoticed if only the final answer is reviewed', 'A fluent hallucination can still score high if the judge is fooled', 'A high context score does not guarantee the generation step used it well', 'A relevant-sounding but unfaithful answer can still score high'] },
+  ]}
+  caption="Retrieval metrics and Ragas's generation metrics score different halves of the same pipeline; none of them alone certifies the whole answer is correct."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="An evaluation pipeline scoring both halves of a RAG system"
+  mermaid={`
+flowchart TD
+  TESTSET[Evaluation set: queries, known-relevant docs, reference answers] --> RETR[Run retrieval, Ch. 6.2-6.4]
+  RETR --> RMETRICS{Retrieval metrics: Precision@k, Recall@k, MRR, NDCG}
+  RETR --> GEN[Run generation on retrieved context]
+  GEN --> FAITH{Faithfulness: are the response's claims supported by context?}
+  GEN --> RELEV{Answer Relevancy: does the response address the question?}
+  TESTSET --> CRECALL{Context Recall: are reference-answer claims found in retrieved context?}
+  RETR --> CPREC{Context Precision: are relevant chunks ranked above irrelevant ones?}
+  RMETRICS --> REPORT[Aggregate evaluation report]
+  FAITH --> REPORT
+  RELEV --> REPORT
+  CRECALL --> REPORT
+  CPREC --> REPORT
+  REPORT --> SAMPLE[Human spot-check a sample, tracking agreement with automated scores]
+  SAMPLE --> GATE{Regression gate: scores within threshold of baseline?}
+  GATE -->|yes| SHIP[Ship the change]
+  GATE -->|no| BLOCK[Block and investigate the regression]
+`}
+  components={[
+    {name: 'Retrieval metrics', responsibility: 'Score the search half of the pipeline against a known-relevant document set: Precision@k, Recall@k, Mean Reciprocal Rank, and NDCG.'},
+    {name: 'Faithfulness and Answer Relevancy', responsibility: 'Score the generation half without requiring a reference answer, checking claim support and on-topic-ness respectively.'},
+    {name: 'Context Precision and Context Recall', responsibility: 'Reference-free and reference-based checks on whether the right chunks were retrieved and ranked well.'},
+    {name: 'Human spot-check', responsibility: 'Catches the LLM-as-judge failure modes, verbosity bias, position bias, self-preference bias, that automated scores alone can miss.'},
+    {name: 'Regression gate', responsibility: 'Blocks a deploy when aggregate scores drop below a baseline threshold, turning evaluation into a CI check rather than a one-time report.'},
+  ]}
+/>
+
+None of these metrics replace each other, and none of them alone certifies a RAG system is production-ready.
+A pipeline that retrieves perfectly but generates unfaithfully fails users just as badly as one that
+generates faithfully from the wrong documents; catching either failure mode requires scoring both halves
+separately, on every change, not just reading a handful of example outputs and deciding they look fine.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A reranker swap that quietly tanked Recall@10 before anyone noticed in the UI', problem: 'A team replaced the reranking model behind a compliance search tool, and every spot-checked answer still looked reasonable, while Recall@10 on the evaluation set had actually dropped by double digits for a specific class of regulatory queries.', solution: 'Run the full retrieval-metric suite, not just Precision@k, against every reranker or embedding-model change before it ships, since Recall@10 caught a gap that manual review of a handful of answers never surfaced.', risk: 'A regression this narrow, confined to one query class, is exactly the kind that spot-checking a few example answers is statistically unlikely to catch before it reaches production.'},
+    {title: 'A fluent answer that misquoted a filing date the source document never contained', problem: 'A financial research assistant produced an answer that read smoothly and cited the right source document, but one of its two claims, a filing deadline, was fabricated rather than pulled from the retrieved text.', solution: 'Score every generated answer for Faithfulness before it reaches a user, decomposing the response into its individual claims and checking each one against the retrieved context rather than trusting fluency as a proxy for accuracy.', risk: 'Without a per-claim faithfulness check, a response with one fabricated detail among several accurate ones passes as trustworthy on the strength of everything it got right.'},
+    {title: 'A retrieval set that never surfaced the one clause that actually answered the question', problem: 'A contract-analysis query about an indemnification clause returned five chunks, none of which was the section of the contract that actually addressed indemnification, so the generated answer confidently answered from adjacent, irrelevant text instead.', solution: 'Track Context Recall against a reference set of the clauses that should have been retrieved for known query types, catching cases where the right chunk exists in the corpus but never made it into the retrieved set.', risk: 'Context Recall failures are invisible to Faithfulness scoring, since a response can be perfectly faithful to the wrong retrieved chunks and still answer from the wrong part of the contract entirely.'},
+    {title: "An LLM judge that rewarded a longer, padded answer over a shorter, more precise one", problem: "Two candidate answers to the same portfolio-exposure question were compared by an LLM judge during a prompt change evaluation, and the judge scored the longer, more hedged answer higher even though the shorter answer stated the same figure with less noise.", solution: "Treat verbosity bias as an expected property of LLM-as-judge scoring rather than a rare edge case, and periodically pair automated comparisons with a human review pass that specifically checks whether length is driving the score.", risk: "Optimizing a prompt or model change against judge scores alone, without accounting for verbosity bias, can steer a system toward longer, less useful answers that merely score better."},
+  ]}
+  healthcare={[
+    {title: 'Catching a drop in Precision@5 after adding a new document source to the index', problem: 'Adding a new clinical-guidelines source to a triage assistant\'s index increased the total corpus size, and in doing so pulled Precision@5 down on queries where a less-relevant new document now occasionally outranked the correct, established guideline.', solution: 'Re-run the retrieval-metric suite against a fixed evaluation set every time the index composition changes, not only when the retrieval model itself changes, since adding documents can shift rankings just as much as swapping models.', risk: 'A precision drop caused by an index change rather than a model change is easy to miss if evaluation only runs on model-swap events and not on every change to what gets indexed.'},
+    {title: 'A symptom-assessment answer whose confident claim traced back to nothing in the retrieved notes', problem: 'A clinical assistant\'s response to a symptom-assessment query stated a specific risk factor as fact, and that risk factor did not appear anywhere in the patient notes the retrieval step had actually surfaced.', solution: 'Require a minimum Faithfulness score before a generated clinical response reaches a clinician, flagging any response containing claims the retrieved notes do not support for manual review instead of automatic display.', risk: 'A hallucinated risk factor stated with the same confidence as claims genuinely drawn from the notes gives a clinician no signal to distinguish the two without a faithfulness check doing that work first.'},
+    {title: 'A relevant contraindication that existed in the corpus but never reached the retrieved context', problem: 'The reference answer for a known drug-interaction test query cited a contraindication note that exists in the corpus, but the retrieval step for that query never returned the chunk containing it, so the generated answer omitted the interaction entirely.', solution: 'Score Context Recall against a curated set of known-answer queries covering high-stakes categories like drug interactions, treating any recall gap in that category as a release blocker rather than a metric to review later.', risk: 'A missed contraindication is a retrieval failure, not a generation failure, and Faithfulness scoring alone will not catch it because the generated answer can be entirely faithful to the incomplete context it was given.'},
+    {title: 'An automated evaluation score that looked stable while human reviewers disagreed with it more each week', problem: 'A clinical-assistant team tracked weekly LLM-as-judge scores for answer quality and saw them hold steady for a month, while a parallel human review sample showed agreement with those scores quietly declining over the same period.', solution: 'Track agreement between the automated judge and a human-reviewed sample as its own metric, and treat a widening gap between the two as a signal to investigate the judge\'s reliability, not just the system being judged.', risk: 'A judge whose scores stay numerically stable while its agreement with human reviewers erodes can mask a real quality regression that looks, from the dashboard alone, like nothing has changed.'},
+  ]}
+  telecom={[
+    {title: 'A vector-index migration that preserved Precision@k while quietly hurting ranking quality', problem: 'Migrating a network-troubleshooting assistant to a new vector index preserved Precision@10 exactly, since the same ten relevant documents still came back for most queries, while NDCG dropped because those documents now ranked lower within that top ten than before.', solution: 'Track NDCG and Mean Reciprocal Rank alongside Precision@k and Recall@k on every infrastructure change, since presence-based metrics alone cannot detect a ranking-quality regression that leaves the retrieved set unchanged.', risk: 'A team monitoring only Precision@k after an infrastructure migration can ship a real ranking regression that no dashboard flags, because the metric they are watching was never designed to catch it.'},
+    {title: 'When a generated fix step existed nowhere in the runbooks retrieval actually pulled', problem: "Even though the runbook sections retrieved for an incident query never described a particular remediation step, the on-call assistant's answer presented that step as a genuine, specific fix.", solution: 'Gate any incident-response answer behind a Faithfulness check before it reaches an on-call engineer, since a fabricated remediation step during an active incident carries a materially higher cost than a fabricated detail elsewhere.', risk: 'An engineer following a fabricated remediation step during an active incident can make the outage worse by taking an action no actual runbook recommended.'},
+    {title: 'A capacity-planning question answered from the wrong region because the right report was never retrieved', problem: "Before anyone caught the gap, a known-answer evaluation query about East-region capacity kept resolving without ever pulling in the specific capacity report its reference answer cited, despite that report sitting in the corpus the entire time.", solution: 'Run Context Recall against a maintained set of known-answer infrastructure queries, treating a recall gap on any of them as a signal to investigate the retriever or the index rather than the generation step.', risk: 'Chasing a Context Recall gap as if it were a generation problem wastes investigation time, since the fix belongs in retrieval or indexing, not in how the model is prompted to use whatever context it receives.'},
+    {title: 'A judge that consistently favored its own model family\'s phrasing during a vendor comparison', problem: 'While comparing two candidate models for an incident-summary feature, the LLM judge used for evaluation was from the same model family as one of the two candidates, and that candidate scored higher on stylistic grounds that had little to do with which summary was more accurate.', solution: 'Use a judge model from a different family than any candidate being evaluated whenever the evaluation is a head-to-head comparison, and cross-check any close result with a human reviewer before it drives a vendor decision.', risk: 'A vendor selection swayed by self-preference bias ends up rewarding stylistic familiarity rather than summary accuracy, and nothing in the judge\'s numeric score discloses which of the two actually drove the outcome.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why can a retriever score well on Precision@k and poorly on Recall@k for the same query, and what does that combination indicate?', answer: 'Precision@k asks what fraction of the retrieved top-k documents were relevant, while Recall@k asks what fraction of all relevant documents made it into the top k. A retriever that returns one perfectly relevant document out of ten possible relevant documents can score perfect precision at k=1 while still missing most of what actually exists, indicating the retriever is being too narrow rather than pulling in irrelevant results.'},
+    {question: 'What does Mean Reciprocal Rank measure that Precision@k and Recall@k do not, and why does that matter?', answer: 'MRR measures how early the first relevant result appears, "the multiplicative inverse of the rank of the first correct answer," which neither precision nor recall captures since both are indifferent to order within the top k. It matters because a user reading results top to bottom experiences a relevant result buried at position 9 very differently than one at position 1, even though both would count identically toward Recall@10.'},
+    {question: 'How does the Faithfulness metric compute its score, and what kind of error does a low score reveal?', answer: 'Faithfulness decomposes a generated response into its individual claims, checks each claim against the retrieved context, and scores the fraction of claims that are supported: "Faithfulness Score = (Number of claims in the response supported by the retrieved context) / (Total number of claims in the response)." A low score reveals that the generation step introduced content, a hallucination, a misremembered detail, an unsupported inference, that the retrieved context does not actually back up.'},
+    {question: 'Why can a RAG system score perfectly on Faithfulness and still give a wrong answer to the user?', answer: 'Faithfulness only checks whether the response is consistent with the context it was given; it says nothing about whether that context was the right context to retrieve in the first place. A response can be entirely faithful to a set of retrieved documents that were themselves irrelevant or incomplete for the question asked, which is why Faithfulness has to be paired with retrieval-side metrics like Context Recall rather than used alone.'},
+    {question: 'What is verbosity bias in LLM-as-judge evaluation, and what does it mean for how evaluation scores should be used?', answer: 'Verbosity bias is the tendency of an LLM judge to score longer responses more favorably "even when shorter ones deliver better accuracy," independent of actual answer quality. It means an automated judge score should not be trusted as a sole signal, especially when comparing responses of different lengths, and should be periodically checked against human review to confirm the judge is not simply rewarding length.'},
+  ]}
+/>
