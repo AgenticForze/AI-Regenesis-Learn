@@ -1,0 +1,226 @@
+---
+title: "RAG Reference Architecture Blueprint"
+sidebar_label: "6.9 RAG Reference Architecture"
+sidebar_position: 9
+phase: 6
+chapter: "6.9"
+lms_presentation: "6.9-RAG-Reference-Architecture-Slides.pptx"
+prerequisites: ["6.8"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every chapter in this phase built one piece: chunking and embeddings, vector search, reranking and advanced
+retrieval patterns, knowledge graphs, caching, evaluation. None of those pieces on their own is a system,
+and a demo that strings them together for a single happy-path query is not the same thing as a production
+architecture. This chapter is the blueprint that assembles the pieces and names the two systems most teams
+conflate: an ingestion pipeline that runs on its own cadence, "source documents are parsed, chunked,
+embedded, and stored in a vector or hybrid index with associated metadata," and a query pipeline that runs
+per request, where "the system runs semantic and keyword search to surface the most relevant chunks from
+the index." Teams that treat these as one system inherit failure modes that a demo never surfaces: "retrieval
+recall tells you whether the right chunk was in the top-k results. It does not tell you whether the LLM used
+it faithfully," multi-hop questions break single-shot retrieval because answering them correctly needs
+several distinct documents rather than one, and a fixed evaluation set that scored well once tends to follow
+one familiar pattern, where teams "build a fixed eval set, run it, get 0.82 faithfulness, ship, and never
+look at it again," while cost, latency, and observability get treated as an afterthought. There is a risk evaluation metrics do not catch at all: "context drift is
+invisible to standard RAG evaluation metrics. A system with advanced context drift can maintain high
+faithfulness scores while producing answers that are organizationally wrong." This chapter lays out the full
+blueprint: the ingestion pipeline, the query pipeline, the observability layer that watches both, and the
+governance and feedback loop that keeps the whole thing from silently drifting out of correctness.
+
+## High-Level Explanation
+
+Think of the difference between a single finished room and a building's actual blueprint. A demo RAG system
+is one finished room: someone picked a chunk size, an embedding model, and a vector store, wired them
+together, and it answers a handful of test questions correctly. A blueprint is what a contractor actually
+needs to build the whole building: where the plumbing runs separately from the electrical, which systems get
+inspected on which schedule, what happens when a pipe bursts at 2am, and who gets called. This chapter is
+that blueprint for a RAG system. It names the ingestion pipeline as its own system, built and inspected on
+its own schedule, separate from the query pipeline that runs live every time a user asks a question, and it
+adds the two things a single finished room never needs: an observability layer that watches both systems
+continuously, and a governance and feedback loop that catches problems neither system's own metrics would
+ever surface on their own.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-9-blueprint-overview.svg').default}
+    alt="A diagram showing a RAG system's full blueprint as four connected parts: an ingestion pipeline that runs on its own schedule to parse, chunk, embed, and index documents, a query pipeline that runs per request to retrieve, rerank, and generate an answer, an observability layer that watches both pipelines continuously, and a governance and feedback loop that feeds corrections and access controls back into the ingestion pipeline."
+  />
+  <figcaption>A demo wires one path from question to answer. A production blueprint separates the ingestion pipeline, the query pipeline, an observability layer watching both, and a governance loop feeding back into ingestion.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The ingestion pipeline and the query pipeline are two different systems with two different failure modes,
+and treating them as one system is where most production RAG architectures start to go wrong.** The
+ingestion pipeline runs on its own cadence, sometimes continuously, sometimes on a schedule: "source
+documents are parsed, chunked, embedded, and stored in a vector or hybrid index with associated metadata."
+Everything covered in this phase's earlier chapters about chunking strategy, embedding model choice, and
+knowledge graph construction lives here, and its correctness is judged by whether the index it produces is
+complete, current, and well-structured. The query pipeline runs per request, on a completely different
+clock: "at query time, the system runs semantic and keyword search to surface the most relevant chunks from
+the index," then reranks, generates, and possibly loops through an agentic pattern or a graph query. A bug
+in ingestion, a chunking change that silently degrades retrieval quality, does not show up as an ingestion
+error, it shows up days later as a query-pipeline symptom that looks like a retrieval or generation problem,
+which is exactly why the two need separate monitoring even though they feed one another.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-9-ingestion-vs-query-pipeline.svg').default}
+    alt="A diagram contrasting the ingestion pipeline, which runs on a scheduled or continuous cadence to parse, chunk, embed, and index documents, against the query pipeline, which runs once per user request to retrieve, rerank, and generate an answer from that index, with an arrow showing that a defect introduced during ingestion surfaces later as a query-time symptom rather than an ingestion-time error."
+  />
+  <figcaption>The ingestion pipeline and the query pipeline run on different clocks and fail in different ways; a defect in one often surfaces as a symptom in the other.</figcaption>
+</figure>
+
+**A demo hides exactly the failure modes that sink a production RAG system, because a demo never runs long
+enough or broadly enough to hit them.** A retrieval step can look correct while the generation step still
+fails, since "retrieval recall tells you whether the right chunk was in the top-k results. It does not tell
+you whether the LLM used it faithfully," a gap Chapter 6.8's Faithfulness metric exists specifically to
+catch. Chunking decisions absorb far more engineering attention than they return: "chunking occupies an outsized
+amount of engineering time relative to the ROI it delivers." A single-shot retrieval strategy has its own,
+separate limit, and it breaks the moment a question needs more than one document to answer. A multi-hop
+question needing both a policy-change document and a separate financial report is exactly the case
+single-shot retrieval was never built to handle, which is the gap Chapter 6.5's query decomposition
+addresses.
+Evaluation itself can silently go stale: a team that builds "a fixed eval set, run[s] it, get[s] 0.82
+faithfulness, ship[s], and never look[s] at it again" has evaluation infrastructure that stopped doing its
+job the moment production traffic diverged from that fixed set. And the parts that feel boring get skipped
+until they are expensive: teams can spend "months optimizing faithfulness from 0.78 to 0.86 while running a
+pipeline with 6-second P95 latency," solving the metric that gets attention while ignoring the one that
+actually determines whether anyone can use the system.
+
+**Observability is a distinct layer from evaluation, watching the system continuously rather than scoring it
+periodically, and it needs its own metrics.** The distinction matters: "conventional monitoring entails
+tracking predetermined metrics to assess system health and performance, while GenAI observability offers
+insights into the inputs and outputs of a workflow, along with every intervening step." A production
+observability layer tracks retrieval-specific signals, "Chunk Attribution indicates the chunks used for
+generating the response, facilitating debugging," and "Chunk Utilization measures the utilization of
+retrieved information in generating responses, aiding in the optimization of retrieval strategies," alongside
+generation-specific signals like Context Adherence, which "measures the extent to which the model's response
+aligns with the provided context," and system-level signals like latency and resource utilization that a
+periodic evaluation run would never catch between test cycles. None of this replaces the Ragas-style metrics
+from Chapter 6.8; it runs continuously in production where those metrics run periodically against a fixed
+set, catching the drift that happens in the gap between evaluation runs.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-9-observability-layer.svg').default}
+    alt="A diagram showing an observability layer sitting across both the ingestion and query pipelines, continuously tracking retrieval-specific metrics like chunk attribution and chunk utilization, generation-specific metrics like context adherence, and system-level metrics like latency and resource utilization, contrasted with periodic evaluation runs that only sample the system at fixed intervals."
+  />
+  <figcaption>Observability watches the system continuously; evaluation from Chapter 6.8 samples it periodically. Production needs both, because each catches what the other misses.</figcaption>
+</figure>
+
+**Governance and a feedback loop close the blueprint, catching a risk that evaluation metrics cannot see at
+all: the index itself quietly becoming wrong.** "Context drift is invisible to standard RAG evaluation
+metrics. A system with advanced context drift can maintain high faithfulness scores while producing answers
+that are organizationally wrong," because faithfulness only checks whether a response matches its retrieved
+context, not whether that context is still true. The risk shows up in layers: schema drift, where the
+structure of the underlying data changes without the index being rebuilt to match; semantic drift, where a
+term's meaning shifts within the organization even though the word itself hasn't changed; and staleness
+drift, where the source documents themselves move on while the index keeps serving the old version.
+Governance is what catches this: "governing a RAG system means applying the same access controls, data
+quality standards, lineage tracking, and ownership accountability to the retrieval layer that you apply to
+the rest of your data estate." And because "production RAG systems aren't static," every correction a user
+or reviewer makes is a signal that belongs somewhere, "every query, correction, and feedback signal is an
+opportunity to improve retrieval quality," which only happens if the query pipeline's observability layer
+actually routes that signal back into the ingestion pipeline's next update rather than letting it evaporate.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-9-context-drift-layers.svg').default}
+    alt="A diagram showing three layers of context drift that standard RAG evaluation metrics cannot detect: schema drift, where the structure of underlying data changes without the index being rebuilt to match, semantic drift, where a term's meaning shifts within the organization even though the word stays the same, and staleness drift, where source documents move on while the index keeps serving an old version, with a note that a system can maintain a high faithfulness score throughout all three."
+  />
+  <figcaption>Faithfulness measures consistency with retrieved context, not whether that context is still true. All three drift layers can push a system's answers quietly wrong while its faithfulness score stays high.</figcaption>
+</figure>
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Ingestion pipeline', 'Query pipeline', 'Evaluation & observability', 'Governance & feedback loop']}
+  rows={[
+    {aspect: 'When it runs', values: ['On a schedule, or continuously, independent of user traffic', 'Once per user request, in real time', 'Evaluation: periodically against a fixed set. Observability: continuously in production', 'Continuously, as corrections and access decisions accumulate'], decisive: true},
+    {aspect: 'What it owns', values: ['Parsing, chunking, embedding, and indexing (Ch. 6.1-6.3, 6.6)', 'Retrieval, reranking, advanced patterns, caching, generation (Ch. 6.4-6.7)', 'Faithfulness, Context Precision/Recall, chunk attribution, latency, cost (Ch. 6.8)', 'Access controls, data quality standards, lineage, routing corrections back to ingestion'], decisive: true},
+    {aspect: 'A failure here looks like', values: ['A stale, incomplete, or badly-chunked index that no query-time symptom immediately explains', 'A wrong or unfaithful answer despite a healthy index behind it', 'A metric that looked fine on its last run while production traffic quietly diverged from it', 'A system with excellent evaluation scores that is nonetheless answering from context that stopped being true'] },
+  ]}
+  caption="A production RAG blueprint is four systems on four different clocks, not one pipeline: each layer owns a different kind of correctness, and a demo that only exercises the query pipeline never proves the other three exist."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The full Phase 6 blueprint: ingestion, query, observability, and governance"
+  mermaid={`
+flowchart TD
+  DOCS[Source documents] --> INGEST[Ingestion pipeline: parse, chunk, embed, index, Ch. 6.1-6.3, 6.6]
+  INGEST --> INDEX[(Vector + graph index)]
+  QUERY[User query] --> RETRIEVE[Retrieval + reranking + advanced patterns, Ch. 6.4-6.5]
+  INDEX --> RETRIEVE
+  RETRIEVE --> CACHE{Caching layer: prompt/semantic/tool-call, Ch. 6.7}
+  CACHE -->|hit| ANSWER[Answer returned to user]
+  CACHE -->|miss| GEN[Generation]
+  GEN --> ANSWER
+  RETRIEVE --> OBS[Observability: chunk attribution, chunk utilization, latency]
+  GEN --> OBS
+  ANSWER --> EVAL[Evaluation: Faithfulness, Context Precision/Recall, Answer Relevancy, Ch. 6.8]
+  OBS --> DASH[Continuous production dashboard]
+  EVAL --> DASH
+  DASH --> GOV[Governance: access controls, lineage, context-drift review]
+  GOV -->|corrections + drift findings| INGEST
+`}
+  components={[
+    {name: 'Ingestion pipeline', responsibility: 'Runs on its own cadence, independent of user traffic, producing the index the query pipeline reads from.'},
+    {name: 'Query pipeline', responsibility: 'Runs per request: retrieval, reranking, advanced patterns, caching, and generation, all built in Chapters 6.4-6.7.'},
+    {name: 'Observability', responsibility: 'Watches both pipelines continuously in production, catching drift between the periodic evaluation runs.'},
+    {name: 'Evaluation', responsibility: 'The Chapter 6.8 metrics, run periodically against a fixed or rotating set to score both retrieval and generation quality.'},
+    {name: 'Governance and feedback loop', responsibility: 'Applies access controls and lineage tracking, reviews for context drift, and routes corrections back into the next ingestion cycle.'},
+  ]}
+/>
+
+None of the four layers is optional in a production system, even though a demo only ever exercises the
+query pipeline. The ingestion pipeline can be as simple as a nightly rebuild for a small, slow-moving corpus,
+and governance can be as light as a single person reviewing drift reports monthly, but skipping a layer
+entirely, rather than sizing it to the system's actual risk, is how a demo's failure modes make it all the
+way to production.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A chunking change that shipped clean through ingestion tests and broke retrieval three weeks later', problem: 'A change to the chunking strategy for a compliance document set passed every ingestion-pipeline test, since the index it produced was well-formed and complete, but Recall@10 on regulatory queries quietly dropped once that index started serving live query traffic weeks later.', solution: 'Monitor ingestion and query pipelines as two separate systems with two separate test suites, running the retrieval-metric suite from Chapter 6.8 against the new index before it ever becomes the one live traffic reads from.', risk: 'Passing ingestion tests proves the index is well-formed, not that it retrieves well, and conflating the two lets a real retrieval regression ship disguised as a clean ingestion run.'},
+    {title: 'A multi-document question that a single-shot retriever was never built to answer', problem: 'A query asking whether a specific trade complied with a policy that changed mid-quarter needed both the original policy document and the amendment that superseded it, and single-shot retrieval returned only the more prominent of the two, generating an answer based on the wrong version of the rule.', solution: 'Route multi-part compliance questions through the query-decomposition pattern from Chapter 6.5 rather than a single retrieval call, explicitly retrieving for each sub-question a policy question actually depends on.', risk: 'A confidently wrong compliance answer built from half the relevant policy documents is a worse outcome than a slower answer that retrieved all of them, since nothing in a fluent response signals which policy version it actually used.'},
+    {title: 'A fixed evaluation set that stopped representing what traders were actually asking', problem: 'A trading-desk assistant\'s evaluation set was built once at launch and never revisited, so it kept reporting a stable 0.84 faithfulness score for months while the actual mix of questions traders asked shifted toward a new product line the eval set never covered.', solution: 'Refresh the evaluation set on a recurring schedule using a sample of real production queries, treating the fixed-set score as a snapshot of past traffic rather than a permanent certification of current quality.', risk: 'A stable score on a stale evaluation set gives a false sense of security precisely while the system\'s real-world coverage gap is growing the widest.'},
+    {title: 'A context-drift review that caught a stale rate table before a client saw it', problem: 'An interest-rate reference table embedded in the index months earlier had not been updated after the underlying rates changed, and the retrieval and generation steps kept scoring well on every faithfulness check because the answer was faithful to the outdated table it retrieved.', solution: 'Add a periodic context-drift review to the governance layer that checks source-document freshness directly, independent of faithfulness or any other generation-side metric, catching staleness that consistency-based metrics structurally cannot see.', risk: 'A high faithfulness score can coexist with a completely stale answer, since faithfulness measures consistency with retrieved context, not whether that context is still true.'},
+  ]}
+  healthcare={[
+    {title: 'Why an embedding swap that indexed cleanly still cost the triage assistant real recall', problem: 'Swapping the embedding model behind a symptom-triage assistant left the ingestion pipeline with nothing to complain about, a fully built, structurally valid vector store, yet NDCG on a fixed clinical-guideline evaluation set slipped the moment real triage queries began reaching that new index.', solution: 'Treat an embedding-model swap as a query-pipeline event requiring the full retrieval-metric suite, not an ingestion event whose success is measured by whether the index finished building without errors.', risk: 'An ingestion pipeline that only checks its own output for structural validity has no way to detect a retrieval-quality regression, since that regression only appears once the query pipeline starts reading from the new index.'},
+    {title: 'Two documents a single retrieval call never learned to fetch together', problem: 'A single retrieval call, driven by textual similarity rather than clinical logic, pulled back only the drug\'s interaction profile; the separate note documenting the patient\'s existing condition, just as necessary to answer safely, never made it into the same result set.', solution: 'Apply query decomposition for clinical questions that inherently span more than one document type, retrieving separately for the drug interaction profile and the patient-specific note rather than relying on one combined retrieval call.', risk: 'Missing one of two necessary documents does not announce itself: a genuine contraindication can sit undetected in the corpus the whole time, absent simply because retrieval never combined both pieces into the same result set.'},
+    {title: 'A quarterly evaluation cadence that missed a season of unusually-worded triage queries', problem: 'Nobody had touched the clinical assistant\'s evaluation set since the previous quarter, so when a flu-season surge shifted the actual phrasing and mix of symptom queries, the assistant kept reporting the same healthy scores it always had, unaware anything had changed.', solution: 'Pair the quarterly fixed-set evaluation with continuous observability metrics like chunk attribution and context adherence, so a shift in real traffic is visible well before the next scheduled evaluation cycle catches up to it.', risk: 'Relying on evaluation cadence alone to represent production quality leaves a blind window, sometimes months wide, during which real usage can drift meaningfully from what was last measured.'},
+    {title: 'The clinical guideline revision that never made it past the ingestion pipeline\'s source list', problem: 'A published clinical guideline was formally revised, yet nothing routed that revision into the ingestion pipeline\'s source list, so the index went on serving the prior version indefinitely with no signal anywhere in the pipeline that anything was wrong.', solution: 'Give the governance layer explicit ownership of source-document currency, treating a missed guideline update as a lineage failure to fix at the ingestion source rather than a symptom to patch at the generation step.', risk: 'A missed clinical guideline update is invisible to every metric downstream of ingestion, since the retrieval and generation steps are both behaving correctly with respect to the index they were actually given.'},
+  ]}
+  telecom={[
+    {title: 'A metadata-schema change that silently broke filtered retrieval for a subset of tickets', problem: 'Even though every document still indexed successfully after a metadata-schema field rename, queries filtering on that field began silently excluding an entire subset of relevant incident tickets the moment that schema went live.', solution: 'Version metadata-schema changes explicitly and re-run filtered-retrieval test queries against the new schema before it goes live, rather than trusting successful indexing as proof that dependent filters still work.', risk: 'A metadata field that silently stops matching produces retrieval results that look complete, with no error and no obviously missing content, while actually excluding an entire category of relevant tickets.'},
+    {title: 'An incident query needing both a topology map and a separate change-log entry to answer correctly', problem: 'Before the on-call assistant could explain why a specific link went down, it needed both the current network topology and a recent change-log entry describing a configuration change to that link; retrieval, matching on wording alone, returned the topology and left the change-log entry behind.', solution: 'Apply query decomposition to incident-diagnosis questions that plausibly span both a static reference document and a recent change record, retrieving each type separately rather than trusting one call to surface both.', risk: 'Chasing the wrong part of the network costs real time during an active outage, and that is exactly what happens when an incident summary omits the one change-log entry that actually explains the failure.'},
+    {title: 'A latency metric nobody watched while the team chased a faithfulness score', problem: 'An on-call assistant\'s team spent a full sprint improving its faithfulness score by a few points while P95 latency crept past six seconds during that same sprint, unnoticed because no dashboard surfaced latency alongside the metric the team was actively optimizing.', solution: 'Track latency and cost on the same dashboard as faithfulness and other generation metrics from the start, so a tradeoff between them is visible in real time rather than discovered after the fact.', risk: 'Optimizing one metric in isolation can make a system measurably better on paper while making it slower or more expensive in exactly the way that determines whether on-call engineers actually use it during an incident.'},
+    {title: 'An assistant still recommending a monitoring tool nobody could actually open anymore', problem: 'Formal decommissioning of a legacy monitoring system never propagated to the knowledge base, so the index kept treating its documentation as current, generating answers that described a system engineers could no longer actually access.', solution: 'Route decommission and deprecation events through the same governance and lineage process as any other content change, treating a formally retired system as a required ingestion update rather than content that ages out on its own.', risk: 'An assistant answering confidently about a decommissioned system can send an engineer looking for a tool that no longer exists, wasting time during exactly the kind of incident where time matters most.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why are the ingestion pipeline and the query pipeline described as two separate systems rather than one pipeline, and what goes wrong when a team treats them as one?', answer: 'The ingestion pipeline runs on its own schedule, parsing, chunking, embedding, and indexing documents, while the query pipeline runs per request, retrieving and generating from whatever index ingestion last produced. A defect introduced during ingestion, such as a chunking change, does not surface as an ingestion error; it surfaces later as a query-time symptom, like a retrieval-quality regression, that looks like a completely different problem unless the two systems are monitored separately.'},
+    {question: 'Why can a RAG system\'s retrieval step look correct while the overall answer is still wrong?', answer: '"Retrieval recall tells you whether the right chunk was in the top-k results. It does not tell you whether the LLM used it faithfully." A retriever can successfully surface the right document while the generation step still misuses, ignores, or contradicts it, which is exactly the gap Chapter 6.8\'s Faithfulness metric is designed to catch separately from retrieval metrics.'},
+    {question: 'Why does a fixed evaluation set that scored well at launch stop being a reliable signal of production quality over time?', answer: 'A fixed evaluation set only measures performance against the query mix it was built from. If real production traffic shifts, new topics, new phrasing, a new product line, the fixed set can keep reporting a stable score while it silently stops representing what users are actually asking, which is why the evaluation set needs to be refreshed against real traffic and paired with continuous observability rather than trusted indefinitely.'},
+    {question: 'What is context drift, and why can a RAG system maintain a high Faithfulness score while suffering from it?', answer: 'Context drift is when the index quietly becomes wrong through schema drift, semantic drift, or staleness drift, even though nothing about the retrieval or generation code changed. Faithfulness only checks whether a response is consistent with the context it retrieved, not whether that context is still true, so "a system with advanced context drift can maintain high faithfulness scores while producing answers that are organizationally wrong."'},
+    {question: 'What role does the governance and feedback loop play that neither the query pipeline nor the evaluation layer can perform on its own?', answer: 'Governance applies access controls, data quality standards, and lineage tracking to the retrieval layer, and it is what routes a correction or a detected drift finding back into the ingestion pipeline\'s next update. Without that loop, "every query, correction, and feedback signal" that could improve retrieval quality has nowhere to go, and problems the observability layer detects, like a stale or decommissioned source, never actually get fixed at their source.'},
+  ]}
+/>
