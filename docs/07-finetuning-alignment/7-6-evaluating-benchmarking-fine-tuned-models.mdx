@@ -1,0 +1,283 @@
+---
+title: "Evaluating & Benchmarking Fine-Tuned Models"
+sidebar_label: "7.6 Evaluating & Benchmarking Fine-Tuned Models"
+sidebar_position: 6
+phase: 7
+chapter: "7.6"
+lms_presentation: "7.6-Evaluating-Benchmarking-Fine-Tuned-Models-Slides.pptx"
+prerequisites: ["7.5"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Every technique in this phase, fine-tuning, alignment, domain adaptation, compression, changes a model.
+This chapter covers how to tell whether a change was actually an improvement. Three checks matter, and
+none of them alone is sufficient. General-capability benchmarks catch regressions the fine-tuning task
+itself would never reveal: MMLU "covers 57 tasks including elementary mathematics, US history, computer
+science, law, and more," precisely so a team can check whether a model still knows things the fine-tuning
+data never touched. Open-ended quality, the kind a multiple-choice benchmark cannot score, usually needs
+an LLM-as-judge or a human rater: Zheng et al. found that "strong LLM judges like GPT-4 can match both
+controlled and crowdsourced human preferences well, achieving over 80% agreement, the same level of
+agreement between humans," though they caution that such judges carry "position, verbosity, and
+self-enhancement biases, as well as limited reasoning ability." And every benchmark number needs a
+contamination check before it is trusted at all: one study found that "in the MMLU benchmark, ChatGPT
+and GPT-4 demonstrated an exact match rate of 52% and 57%, respectively, in guessing the missing
+options," a level of accuracy consistent with the benchmark having leaked into training data rather than
+genuine reasoning. A fine-tuned model that passes its own task, scores well on a general benchmark, and
+earns good marks from a judge or a human, still has not proven any of those checks were measuring
+something real, unless contamination was ruled out first.
+
+## High-Level Explanation
+
+Evaluating a fine-tuned model well means checking three different things, because a single number from a
+single test cannot answer all three questions at once. First: did the fine-tune actually improve the
+narrow behavior it targeted? That needs a held-out set built from the same distribution as the
+fine-tuning task, examples the model never trained on, scored against the task's own success criteria.
+Second: did the fine-tune cost the model anything outside that narrow behavior? That is the catastrophic
+forgetting question from Chapter 7.4, and it needs a broad, general-capability check run before and after
+the fine-tune, not just a single post-hoc score. Third: for output that is open-ended rather than
+multiple-choice or exact-match, prose, code, a conversation turn, how good is good? Automatic metrics
+struggle here, which is why LLM-as-judge and human evaluation exist, each with its own failure modes to
+account for. A fourth concern cuts across all three: any benchmark score, task-specific or general, is
+only meaningful if the benchmark itself was not part of what the model trained on, directly or
+indirectly. Skipping that check does not just risk one bad number, it can make every other check in the
+pipeline look more convincing than it actually is.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-6-three-checks-overview.svg').default}
+    alt="Three evaluation checks for a fine-tuned model: a task-specific held-out set measuring whether the targeted behavior improved, a general-capability benchmark measuring whether anything outside that behavior regressed, and an LLM-as-judge or human evaluation measuring open-ended output quality. A contamination check cuts across all three, since a benchmark that leaked into training data invalidates the score it produces."
+  />
+  <figcaption>None of the three checks substitutes for the others, and none of them means anything if the benchmark behind it was contaminated.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**General-capability benchmarks exist to catch regressions a narrow fine-tuning task would never surface
+on its own, and MMLU is the standard reference point for that check.** Hendrycks et al. built the
+benchmark specifically to probe breadth: "we propose a new test to measure a text model's multitask
+accuracy. The test covers 57 tasks including elementary mathematics, US history, computer science, law,
+and more." Performing well requires "extensive world knowledge and problem solving ability" across
+subjects that have nothing to do with any one fine-tuning task, which is exactly what makes it useful as
+a before-and-after regression check: a fine-tuned model's MMLU score dropping relative to its base
+model's score is a direct, general signal that something outside the fine-tuning task got worse, the
+same signal Chapter 7.4 discussed in the specific context of catastrophic forgetting. The original paper
+also reported how far even strong models were from mastering the benchmark: the largest GPT-3 model
+tested "improves over random chance by almost 20 percentage points on average," yet "on every one of the
+57 tasks, the best models still need substantial improvements before they can reach expert-level
+accuracy," and models generally, GPT-3 included in the paper's per-subject results, "still have
+near-random accuracy on some socially important subjects such as morality and law." A benchmark this far
+from saturated is a genuinely useful regression signal; a benchmark models already ace tells a team much
+less about whether a specific fine-tune made things worse.
+
+**Open-ended output, the kind neither multiple-choice nor exact-match scoring can grade, usually needs a
+judge, and Zheng et al.'s study of using a strong LLM as that judge found it works surprisingly well,
+with real caveats.** The core problem they set out to solve was that "evaluating large language model
+(LLM) based chat assistants is challenging due to their broad capabilities and the inadequacy of existing
+benchmarks in measuring human preferences." Testing GPT-4 as a judge against both a controlled benchmark
+and a crowdsourced platform, they found "strong LLM judges like GPT-4 can match both controlled and
+crowdsourced human preferences well, achieving over 80% agreement, the same level of agreement between
+humans," meaning an LLM judge and a human rater disagree about as often as two human raters disagree with
+each other. That result comes with real limitations, though: the same study documented "position,
+verbosity, and self-enhancement biases, as well as limited reasoning ability" in LLM judges, meaning
+which answer is shown first, how long an answer is, and whether the judge model is scoring its own family
+of outputs can all skew a result independent of actual quality. None of that makes LLM-as-judge useless;
+it makes it a tool whose known biases need to be actively controlled for, randomizing answer order and
+tracking judge-model identity separately from the models being judged, rather than trusted at face value.
+
+**No benchmark number, general or task-specific, means anything until contamination has been ruled out,
+and modern benchmarks are demonstrably not immune.** A study built specifically to probe this found a
+striking result: "in the MMLU benchmark, ChatGPT and GPT-4 demonstrated an exact match rate of 52% and
+57%, respectively, in guessing the missing options," meaning that when the correct answer choice was
+hidden from a question and the model was asked to guess what was missing, it succeeded at a rate far
+above what genuine reasoning over an unfamiliar question would predict, evidence consistent with the
+benchmark's exact text having appeared somewhere in training data. The study's framing of why this
+matters is direct: "recent observations have underscored a disparity between the inflated benchmark
+scores and the actual performance of LLMs, raising concerns about potential contamination of evaluation
+benchmarks." For a team fine-tuning a model, this risk is not just about the base model's original
+pretraining, fine-tuning datasets themselves can accidentally include benchmark questions or
+near-duplicates scraped from the same public sources the benchmark was built from, inflating a
+post-fine-tune score in a way that has nothing to do with the fine-tune actually working.
+
+## Hands-On: Build a Regression Eval Harness
+
+The clearest way to catch a fine-tune's hidden cost is to measure general capability before and after,
+on questions that have nothing to do with what was fine-tuned. This builds a small multiple-choice
+harness in the same style MMLU-style benchmarks use, and runs it against a model before and after a
+narrow fine-tune.
+
+**Step 1: Define a small general-knowledge eval set, unrelated to the fine-tuning domain.** Each item has
+a question, four labeled choices, and a correct letter, the same shape MMLU questions use.
+
+```python
+eval_set = [
+    {"question": "The chemical symbol for water is", "choices": {"A": "H2O", "B": "CO2", "C": "NaCl", "D": "O2"}, "answer": "A"},
+    {"question": "The largest planet in the solar system is", "choices": {"A": "Earth", "B": "Jupiter", "C": "Mars", "D": "Venus"}, "answer": "B"},
+    {"question": "The author of Romeo and Juliet is", "choices": {"A": "Dickens", "B": "Shakespeare", "C": "Austen", "D": "Twain"}, "answer": "B"},
+    {"question": "The capital of Japan is", "choices": {"A": "Seoul", "B": "Beijing", "C": "Tokyo", "D": "Bangkok"}, "answer": "C"},
+    {"question": "The freezing point of water in Celsius is", "choices": {"A": "0", "B": "32", "C": "100", "D": "-10"}, "answer": "A"},
+    {"question": "The gas plants absorb for photosynthesis is", "choices": {"A": "Oxygen", "B": "Nitrogen", "C": "Carbon dioxide", "D": "Hydrogen"}, "answer": "C"},
+]
+```
+
+**Step 2: Score each answer choice by the model's log-probability of its letter, the standard
+zero-shot multiple-choice scoring method.** The model never generates free text here; it only needs to
+rank four single tokens.
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_name = "distilgpt2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+base_model = AutoModelForCausalLM.from_pretrained(model_name)
+base_model.eval()
+
+def score_choices(model, tokenizer, item):
+    prompt = item["question"] + "\n"
+    for letter, text in item["choices"].items():
+        prompt += f"{letter}. {text}\n"
+    prompt += "Answer:"
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    with torch.no_grad():
+        logits = model(input_ids).logits
+    next_token_logits = logits[0, -1, :]
+    scores = {}
+    for letter in item["choices"]:
+        token_id = tokenizer.encode(" " + letter, add_special_tokens=False)[0]
+        scores[letter] = next_token_logits[token_id].item()
+    return max(scores, key=scores.get)
+
+def accuracy(model, tokenizer, eval_set):
+    correct = sum(score_choices(model, tokenizer, item) == item["answer"] for item in eval_set)
+    return correct / len(eval_set)
+
+base_accuracy = accuracy(base_model, tokenizer, eval_set)
+print(f"base model regression-eval accuracy: {base_accuracy:.2f}")
+```
+
+**Step 3: Fine-tune a copy of the model on a narrow domain, the same no-replay setup from Chapter
+7.4, then run the identical eval set against it.** Nothing about the eval set changes; only the model
+does.
+
+```python
+import copy
+
+domain_texts = [
+    "The claimant's policy excludes coverage for pre-existing conditions disclosed at binding.",
+    "Under the indemnity clause, the insurer's liability is capped at the sum insured on the schedule.",
+    "Subrogation rights transfer to the insurer upon settlement of the claim in full.",
+]
+
+def fine_tune(model, tokenizer, texts, steps=30, lr=5e-5):
+    model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    for step in range(steps):
+        text = texts[step % len(texts)]
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        loss = model(input_ids, labels=input_ids).loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    model.eval()
+    return model
+
+fine_tuned_model = copy.deepcopy(base_model)
+fine_tuned_model = fine_tune(fine_tuned_model, tokenizer, domain_texts, steps=30)
+
+fine_tuned_accuracy = accuracy(fine_tuned_model, tokenizer, eval_set)
+print(f"fine-tuned model regression-eval accuracy: {fine_tuned_accuracy:.2f}")
+print(f"change: {(fine_tuned_accuracy - base_accuracy) * 100:+.1f} percentage points")
+```
+
+**Step 4: Read the result as a regression signal, not a capability score.** With only six questions and
+a tiny demo model, the absolute accuracy numbers here are not meaningful on their own, a real
+general-capability check needs a benchmark the size of MMLU to say anything reliable. What this harness
+demonstrates is the pattern: the exact same eval set, run against the model before and after fine-tuning,
+turns catastrophic forgetting from an abstract risk into a concrete before-and-after number a team can
+put a threshold on before shipping.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Task-specific held-out eval', 'General-capability benchmark (e.g. MMLU)', 'LLM-as-judge / human eval']}
+  rows={[
+    {aspect: 'What it measures', values: ['Whether the targeted fine-tuning behavior actually improved', 'Whether anything outside that behavior regressed', 'Open-ended output quality that scoring alone cannot capture'], decisive: true},
+    {aspect: 'Scoring method', values: ['Task-specific metric against the fine-tune\'s own success criteria', 'Multiple-choice / exact-match against a broad question set', 'Pairwise or scored judgment, by a model or a person'], decisive: true},
+    {aspect: 'What it misses', values: ['Regressions outside the fine-tuning task\'s own distribution', 'Open-ended quality and task-specific nuance', 'Consistency: judges carry position, verbosity, self-enhancement bias'] },
+    {aspect: 'Contamination risk', values: ['Real, if fine-tuning data overlaps the held-out set', 'Real: MMLU questions have been recovered by guessing, per Deng et al.', 'Lower, but a judge trained on the same data can still be biased toward it'] },
+  ]}
+  caption="No single check answers all three questions; a fine-tune that passes one of these can still fail silently on the other two."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where each evaluation check fits before a fine-tuned model ships"
+  mermaid={`
+flowchart TD
+  MODEL[Fine-tuned model candidate] --> CONTAM{Contamination check: does the eval overlap training data?}
+  CONTAM -->|Fails| BLOCK[Do not trust scores from this eval; find or build a clean one]
+  CONTAM -->|Passes| TASK[Task-specific held-out eval]
+  CONTAM -->|Passes| GENERAL[General-capability benchmark, e.g. MMLU, vs. base model]
+  CONTAM -->|Passes| JUDGE[LLM-as-judge / human eval on open-ended outputs]
+  TASK --> DECISION{All three checks pass thresholds?}
+  GENERAL --> DECISION
+  JUDGE --> DECISION
+  DECISION -->|Yes| SHIP[Ship the fine-tuned model]
+  DECISION -->|No| ITERATE[Iterate: revisit fine-tuning data or technique]
+`}
+  components={[
+    {name: 'Contamination check', responsibility: 'Gates every other check; a score from a contaminated eval is not evidence of anything.'},
+    {name: 'Task-specific held-out eval', responsibility: 'Confirms the fine-tune improved the behavior it specifically targeted.'},
+    {name: 'General-capability benchmark', responsibility: 'Catches regressions and catastrophic forgetting outside the fine-tuning task, run against the base model as a baseline.'},
+    {name: 'LLM-as-judge / human eval', responsibility: 'Scores open-ended output quality that exact-match and multiple-choice metrics cannot capture.'},
+  ]}
+/>
+
+A fine-tuned model that fails the contamination check has not really passed any of the other checks
+either, even if their raw scores look good; the scores just are not evidence of anything until a clean
+evaluation set confirms they mean what they appear to mean.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A trade-summary fine-tune that passed its own eval and still needed to be caught by a broader one', problem: 'A fine-tuned trade-summary model scored well on the team\'s task-specific held-out set, summaries reviewers rated highly, and the team nearly shipped it on that evidence alone, without checking anything outside the summarization task itself.', solution: 'It was the general-capability benchmark, not the task eval, that told the real story: run against the same model before and after the fine-tune, it showed a clear drop on questions that had nothing to do with trade summaries, exactly the kind of forgetting the task-specific score was never built to catch.', risk: 'A model can look ready by every measure the fine-tuning task itself provides and still have quietly lost ground everywhere else; the task-specific score was never designed to catch that.'},
+    {title: 'A compliance-assistant benchmark score that turned out to be measuring memorization, not skill', problem: 'A compliance assistant scored unexpectedly well on a public multiple-choice benchmark the team had been using to track progress, well above what its size and training history would predict.', solution: 'The unusually high score turned out to be the tell. Feeding the model partial benchmark questions with the answer choices stripped out, the team found it could reconstruct the missing options far more often than chance allowed, evidence the benchmark text had already made its way into training data, and they retired that benchmark from progress tracking.', risk: 'A benchmark score that looks too good to be true, relative to a model\'s actual training and size, is exactly the pattern contamination produces, and trusting it without checking can waste a team\'s confidence on a number that measures nothing real.'},
+    {title: 'A client-facing chatbot where a human check caught what an automatic score missed', problem: 'A fine-tuned client-facing chatbot scored well on an LLM-as-judge evaluation of response quality, but the judge model consistently favored the chatbot\'s longer, more verbose answers over shorter, equally correct ones from a comparison model.', solution: 'Someone on the team, familiar with the verbosity bias Zheng et al. documented in LLM judges, pulled a sample of the judge\'s verdicts and had human reviewers redo them blind. The pattern held: longer answers were winning regardless of correctness, and the evaluation got reweighted once that became clear.', risk: 'An LLM judge\'s known biases do not announce themselves in the score; a team that never spot-checks judge verdicts against human judgment can ship a model optimized for what the judge rewards rather than what users actually prefer.'},
+    {title: 'A risk-scoring pipeline where all three evaluation layers together caught a problem none of them caught alone', problem: 'Two checks were clean: the task-specific held-out eval and the general-capability benchmark both gave a newly fine-tuned risk-scoring model a pass, and the team was nearly ready to call the evaluation done on that basis.', solution: 'It took a third look, an LLM-as-judge pass over the model\'s free-text risk explanations rather than just its final labels, to find the actual problem: the explanations had gotten harder to audit even though the labels underneath them were unchanged, something no score built to grade a label could ever have flagged.', risk: 'Two passing checks can create false confidence when neither was built to catch the specific way a model regressed, and a model shipped on two-out-of-three evidence is still shipped on incomplete evidence.'},
+  ]}
+  healthcare={[
+    {title: 'A discharge-note fine-tune whose real cost only showed up outside its own task', problem: 'A team fine-tuned a discharge-note generator, watched its note-quality scores improve steadily against the task-specific held-out set, and had little reason from that data alone to look for problems anywhere else in the model.', solution: 'A before-and-after run of a general-capability benchmark, unrelated to note generation, showed a measurable accuracy drop, prompting the team to add a replay-based fix before the model went anywhere near production.', risk: 'Improvement on the metric a team is watching says nothing about what is happening to the metrics nobody is watching, and a general-capability check is what closes that blind spot.'},
+    {title: 'Why a triage-assistant\'s headline benchmark result did not hold up to scrutiny', problem: 'A triage-assistant model\'s strong score on a widely used medical knowledge benchmark became the headline result in an internal review, until someone asked whether that benchmark\'s questions could have entered the training pipeline through any of the public medical text sources used during pretraining.', solution: 'Someone finally asked the obvious question: could this benchmark\'s questions already have passed through the model during pretraining, given how much public medical text touches the same sources? Testing it directly, by hiding correct answers and seeing how often the model guessed them back, the recovery rate answered that question, and the team replaced the benchmark with a held-out set built after the model\'s training cutoff.', risk: 'A benchmark score presented without a contamination check is a claim, not evidence, and treating it as evidence in a clinical context raises the stakes of getting that distinction wrong.'},
+    {title: 'A symptom-checker chatbot where judge bias nearly rewarded the wrong answer', problem: 'An LLM-as-judge evaluation consistently rated a fine-tuned symptom-checker\'s answers above a comparison model\'s, but the ratings tracked answer length almost as closely as they tracked correctness, a pattern that raised suspicion once someone looked for it.', solution: 'A parallel round of human scoring on the same response pairs put the suspicion to the test, and it held up: the shorter, less verbose model was frequently the more accurate one despite losing to the automatic judge every time, and the team\'s evaluation weighting changed as a result.', risk: 'A known bias left unchecked does not just add noise to an evaluation, it can systematically favor the wrong model, and the fix is checking for it, not assuming a strong judge model is immune.'},
+    {title: 'A clinical-summary pipeline saved by the evaluation step the team almost skipped', problem: 'A clinical-summary model cleared its task-specific eval and its general-capability benchmark comfortably, and a first pass at LLM-as-judge scoring on summary quality looked strong enough that the team considered the evaluation phase essentially finished.', solution: 'It was only in a closer human read of the LLM-judge\'s top-scoring summaries, a step the team almost skipped since the automatic score already looked strong, that a handful of summaries turned up missing a clinically relevant detail the judge had not penalized, a gap no scoring rubric built around the task label or the benchmark score was ever going to surface.', risk: 'Passing three checks is not the same as being defect-free; each check has its own blind spot, and skipping a final human look at the check with the least structure is where that gap tends to hide.'},
+  ]}
+  telecom={[
+    {title: 'An incident-summary fine-tune whose regression showed up only once someone looked outside the task', problem: 'A network incident-summary model\'s fine-tuning metrics improved with every training round, and the team had no signal from those metrics alone that anything else about the model might be getting worse.', solution: 'The team had been skipping the general-capability check between rounds to save time, and reinstating it told a different story than the task metrics alone: measured against the same benchmark before and after the latest round, the model had genuinely gotten worse outside the incident-summary task, and the practice went back into every round from then on.', risk: 'A metric that only measures the thing being optimized will keep looking better every round even as something unmeasured gets worse, which is exactly the blind spot a general-capability check exists to close.'},
+    {title: 'A capacity-planning benchmark result that turned out to be an artifact of contamination', problem: 'A capacity-planning model\'s unusually strong score on an industry-standard technical benchmark became a selling point in an internal report, before anyone had checked whether that benchmark\'s content could have entered the model\'s training data through public documentation the model had already seen.', solution: 'Rather than take the number at face value, the team ran the same kind of masked-answer test researchers use to detect contamination: hide the correct option, ask the model to guess it, and see if the guess rate exceeds chance. It did, by a wide margin, and that single test was enough to retire the number as evidence of anything.', risk: 'A benchmark number that becomes a selling point before its integrity is checked can commit a team to a claim that later turns out to be an artifact of contamination rather than genuine capability.'},
+    {title: 'What a NOC lead noticed that an LLM judge had missed entirely', problem: 'An LLM-as-judge comparison consistently ranked a fine-tuned NOC assistant\'s incident-response suggestions above a baseline model\'s, but a NOC lead reviewing the same transcripts noticed the winning answers were often more confidently worded rather than more correct.', solution: 'A blind pass, human reviewers scoring the same transcripts without knowing which model produced which answer, settled the question: the judge had been rewarding confident phrasing more than it was rewarding correctness, and the team split its evaluation criteria into confidence and accuracy going forward so the two could not be conflated again.', risk: 'A judge that rewards how an answer sounds rather than whether it is right will keep producing scores that look decisive, and a human spot-check is often the only thing that catches the difference.'},
+    {title: 'Why an incident-response model still needed a third opinion after acing two checks', problem: 'Two checks in, the model looked fine: it hit its numbers on the task-specific eval, and the general-capability benchmark showed nothing unusual either, but the team had been burned before by stopping there.', solution: 'Adding an LLM-as-judge pass on the model\'s free-text recommendations, cross-checked against a small human sample, turned up a subtle drift in tone that neither of the first two checks had any way to register, and the team fixed it before the rollout went ahead.', risk: 'A team that stops evaluating once two of three checks pass is trusting the checks it ran more than the evidence actually supports, and the third check is often where the remaining problems are hiding.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why is a task-specific held-out eval not sufficient on its own to decide whether a fine-tune should ship?', answer: 'A task-specific eval only measures whether the targeted behavior improved; it has no way to detect regressions outside that behavior, such as the catastrophic forgetting discussed in Chapter 7.4. A model can score well on its own task while quietly getting worse at everything else, which is why a general-capability benchmark like MMLU needs to be run before and after as a separate check.'},
+    {question: 'What did Zheng et al. find about how well GPT-4 as a judge agrees with human preferences, and what biases did they document alongside that finding?', answer: 'They found that strong LLM judges like GPT-4 can match both controlled and crowdsourced human preferences well, achieving over 80% agreement, the same level of agreement between two humans. Alongside that result, they documented position bias, verbosity bias, self-enhancement bias, and limited reasoning ability in LLM judges, meaning the agreement rate is real but the judge is not unbiased.'},
+    {question: 'What did the contamination study find when it tested whether ChatGPT and GPT-4 could guess MMLU\'s missing answer options, and why does that matter for evaluating a fine-tuned model?', answer: 'The study found ChatGPT and GPT-4 could guess the missing options with an exact match rate of 52% and 57% respectively, a rate consistent with the benchmark text having appeared in training data rather than genuine reasoning over an unfamiliar question. This matters because a fine-tuning dataset can also accidentally include benchmark questions or near-duplicates, inflating a post-fine-tune score for reasons that have nothing to do with the fine-tune actually working.'},
+    {question: 'In the Hands-On regression eval harness, what specifically changed between measuring accuracy on the base model and measuring it on the fine-tuned model?', answer: 'The eval set itself did not change at all; the same six general-knowledge questions, scored the same way, were run against the base model and then against a copy of it fine-tuned on unrelated narrow domain text. Any difference in accuracy between the two runs is therefore attributable to the fine-tuning step, not to any change in what was being measured.'},
+    {question: 'Why does a contamination check need to come before the other evaluation checks are trusted, rather than being treated as one more check among equals?', answer: 'A contamination check determines whether a benchmark score reflects genuine capability or memorized benchmark content; if a benchmark is contaminated, the score it produces is not evidence of anything, regardless of how good or bad that score looks. Running the task-specific, general-capability, and LLM-as-judge checks without first ruling out contamination risks building confidence on numbers that do not mean what they appear to mean.'},
+  ]}
+/>

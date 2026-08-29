@@ -21,8 +21,8 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [7.3 Alignment Techniques Deep Dive: Instruction Tuning, RLHF, RLAIF, DPO](./7-3-alignment-techniques-deep-dive.mdx)
 - [7.4 Domain Adaptation & Continual Pretraining](./7-4-domain-adaptation-continual-pretraining.mdx)
 - [7.5 Model Compression: Distillation, Quantization, Pruning](./7-5-model-compression-distillation-quantization-pruning.mdx)
+- [7.6 Evaluating & Benchmarking Fine-Tuned Models](./7-6-evaluating-benchmarking-fine-tuned-models.mdx)
 
 ## Planned chapters
 
-- 7.6 Evaluating & Benchmarking Fine-Tuned Models
 - 7.7 Deployment Considerations for Custom Models
