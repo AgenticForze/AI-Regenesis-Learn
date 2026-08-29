@@ -20,7 +20,4 @@ Google Cloud's Open Knowledge Format.
 - [6.7 Caching Infrastructure for GenAI & Agents](./6-7-caching-infrastructure-for-genai-and-agents.mdx)
 - [6.8 Evaluating RAG Systems: Retrieval Metrics, Faithfulness, RAGAS](./6-8-evaluating-rag-systems.mdx)
 - [6.9 RAG Reference Architecture Blueprint](./6-9-rag-reference-architecture-blueprint.mdx)
-
-## Coming soon
-
-- 6.10 Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard
+- [6.10 Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard](./6-10-open-knowledge-format.mdx)

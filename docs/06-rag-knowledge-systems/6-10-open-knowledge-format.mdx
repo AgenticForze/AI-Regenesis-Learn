@@ -1,0 +1,328 @@
+---
+title: "Open Knowledge Format (OKF): A Portable, Agent-Readable Knowledge Standard"
+sidebar_label: "6.10 Open Knowledge Format"
+sidebar_position: 10
+phase: 6
+chapter: "6.10"
+lms_presentation: "6.10-Open-Knowledge-Format-Slides.pptx"
+prerequisites: ["6.9"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 6.9's ingestion pipeline assumed a source of documents to parse, chunk, embed, and index, but it
+never addressed a problem that sits one layer earlier: most organizational knowledge lives in fragmented
+systems that were never built to be read by anything outside themselves, metadata catalogs, wikis, shared
+drives, code comments, docstrings, each with its own API or its own way of being opened. "Every agent
+builder is solving the same context-assembly problem from scratch, every catalog vendor is reinventing the
+same data models, and the knowledge itself is locked behind whichever surface created it." The Open
+Knowledge Format, introduced by Google Cloud in 2026, is an attempt to fix that at the format level rather
+than the tooling level: "OKF v0.1 represents knowledge as a directory of markdown files with YAML
+frontmatter, with a small set of agreed-upon conventions that let wikis written by different producers be
+consumed by different agents without translation." Each concept, a table, a dataset, a metric, a playbook, a
+runbook, an API, becomes one markdown file identified by its own file path, carrying "the small set of
+structured fields that need to be queryable: type, title, description, resource, tags, and timestamp," and
+the files link to each other with ordinary markdown links, which turns a flat directory into something
+closer to a graph of relationships than a simple parent-child file hierarchy. A bundle of OKF documents needs
+nothing more than plain markdown files to work, so it opens in any editor, renders on GitHub, and packages as
+an ordinary tarball, and because "OKF is not tied to any specific cloud, database, model provider, or agent
+framework," an ingestion pipeline built for one organization's OKF bundle needs no custom connector to read
+another's. This chapter covers what OKF actually specifies, what it deliberately leaves out, and where it
+fits relative to a wiki, a proprietary catalog API, and the knowledge graphs from Chapter 6.6.
+
+## High-Level Explanation
+
+Think of the difference between a library that lends you a book in whatever binding, font, and shelving
+system it happens to use internally, and a library that has agreed, along with every other library in the
+country, to describe every book with the same handful of fields on the same kind of card: title, author,
+subject, location. You do not need a special adapter to walk into a different library and find what you
+need, because the description format is shared even though every library's actual collection, building, and
+staff are completely different. OKF is that shared card catalog format for organizational knowledge. It does
+not tell a company how to run its wiki, its BigQuery catalog, or its code repository, it just gives every
+one of those systems a common, minimal way to export what they know, one markdown file per concept, so that
+any agent or ingestion pipeline that understands OKF can read any organization's exported knowledge without
+being built specifically for that organization's tools.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-10-okf-overview.svg').default}
+    alt="A diagram showing three different internal knowledge sources, a metadata catalog, a wiki, and a code repository, each exporting its knowledge as an OKF bundle, a directory of markdown files with YAML frontmatter, which any OKF-aware ingestion pipeline or agent can then read without a custom connector for each individual source system."
+  />
+  <figcaption>OKF does not replace a wiki, a catalog, or a code repository. It gives each of them a common, minimal export format that any agent or pipeline can read without a custom connector.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**The problem OKF targets is not a missing tool, it is a missing shared format.** Most organizational
+knowledge already exists somewhere: the schema behind a table, what a metric actually means to the business,
+the runbook for an incident, the join path between two systems. The trouble is that it exists in mutually
+unreadable places, spread across metadata catalogs with their own APIs, wikis and shared drives, code
+comments and docstrings, so nothing outside the system that created a piece of knowledge can read it without
+custom integration work. Every team building an agent against that knowledge ends up solving the same
+integration problem in isolation, "every agent builder is solving the same context-assembly problem from
+scratch, every catalog vendor is reinventing the same data models," which means the cost of connecting a new
+knowledge source to a new agent framework gets paid again and again rather than once. OKF does not try to
+replace any of those underlying systems, a wiki stays a wiki and a catalog stays a catalog, it defines a
+minimal export shape those systems can all target, so the integration cost gets paid once per source rather
+than once per source-consumer pair.
+
+**An OKF bundle represents each piece of knowledge as exactly one markdown file, identified by its own file
+path.** A bundle is a directory of markdown files, one per concept, and a concept can be almost anything an
+organization wants to capture: a table, a dataset, a metric, a playbook, a runbook, an API. Each concept gets
+exactly one file, and that file's path in the directory is its identity, there is no separate ID scheme to
+maintain. A concept file opens with YAML frontmatter carrying a small, fixed set of fields, for example:
+
+```yaml
+---
+type: BigQuery Table
+title: Orders
+description: One row per completed customer order.
+resource: https://console.cloud.google.com/bigquery?p=acme&d=sales&t=orders
+tags: [sales, revenue]
+timestamp: 2026-05-28T14:30:00Z
+---
+```
+
+followed by a markdown body carrying whatever free-text explanation, schema notes, or examples the concept
+needs. The directory structure itself carries meaning too, a `tables/` folder groups table concepts, a
+`metrics/` folder groups metric concepts, and an `index.md` at each level can summarize what that folder
+contains, but nothing about OKF requires a database, an API server, or a specific vendor's tooling to produce
+or consume it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-10-okf-file-structure.svg').default}
+    alt="A diagram showing an OKF bundle as a directory tree with folders for datasets, tables, and metrics, each containing individual markdown files representing one concept each, with one example file expanded to show its YAML frontmatter fields, type, title, description, resource, tags, and timestamp, followed by a markdown body."
+  />
+  <figcaption>Each concept is one markdown file, identified by its file path, with a small set of reserved YAML frontmatter fields followed by a free-text markdown body.</figcaption>
+</figure>
+
+**Of the reserved fields, only one is actually required on every concept, and it is the one that makes
+filtering and governance possible without reading every file's prose.** "OKF requires exactly one thing of
+every concept: a type field." Everything else in the reserved vocabulary, "the small set of structured
+fields that need to be queryable: type, title, description, resource, tags, and timestamp," is there to
+support the same kind of structured filtering a database column would support, without requiring a database:
+an ingestion pipeline can decide to pull only concepts whose type is `BigQuery Table`, or only ones tagged
+`sales`, or only ones updated after a given timestamp, using nothing more than a directory walk and a YAML
+parser. This is deliberately less expressive than a real schema or ontology, and that is the point: the
+format asks for the minimum structure that makes bulk automated processing possible, and leaves everything
+else, the actual meaning of a concept, to the markdown body a human or a model can read directly.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-10-type-field-filtering.svg').default}
+    alt="A diagram showing an OKF bundle of many concept files, each with a type field, being filtered by a directory walk and YAML parser into a smaller subset matching a chosen type, such as BigQuery Table, before that subset is passed on to an ingestion pipeline, illustrating how the required type field enables structured filtering without a database."
+  />
+  <figcaption>The type field is the only one OKF requires. It is enough to filter a large bundle down to a relevant subset with nothing more than a directory walk and a YAML parser.</figcaption>
+</figure>
+
+**Concepts reference each other the same way any markdown document references another, and that turns a flat
+directory of files into something closer to a graph.** Concepts link to each other with ordinary markdown
+links, and those links turn a flat directory into a graph of relationships richer than the parent-child
+structure the file system alone would imply. A table's concept file can note a foreign key relationship with
+an ordinary link, `FK to [customers](/tables/customers.md)`, and that link is both human-readable prose and a
+machine-traceable edge at the same time. This is a much lighter mechanism than the property graphs or RDF triple stores from
+Chapter 6.6, OKF has no query language, no schema validation, and no dedicated storage engine, but it costs
+nothing to adopt beyond writing markdown, and for many organizations it is enough structure to make relevant
+concepts discoverable without standing up a graph database at all. A team that outgrows what markdown links
+can express can still migrate the same concepts into a full knowledge graph later, since the concepts and
+their relationships are already identified.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/6-10-markdown-link-graph.svg').default}
+    alt="A diagram showing several OKF concept files connected by ordinary markdown links, such as a customers table file and an orders table file linked by a foreign-key reference, forming a lightweight graph structure from the directory of files without any dedicated graph database or query language."
+  />
+  <figcaption>Ordinary markdown links between concept files turn a flat directory into a lightweight, traversable graph, far less expressive than Chapter 6.6's knowledge graphs but far cheaper to adopt.</figcaption>
+</figure>
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['OKF (markdown + YAML frontmatter)', 'Proprietary wiki or catalog API', 'Knowledge graph (Ch. 6.6)', 'Unstructured documents']}
+  rows={[
+    {aspect: 'What a consumer needs to read it', values: ['A directory walk and a YAML parser, nothing vendor-specific', 'A client for that specific system\'s API, rebuilt per source', 'A graph query language and a schema-aware client', 'A document parser and no guarantee of structure at all'], decisive: true},
+    {aspect: 'Portability', values: ['Renders on GitHub, ships as a tarball, mounts on any filesystem', 'Tied to whichever platform hosts it', 'Tied to whichever graph database holds it', 'Portable as files, but with no shared metadata convention'], decisive: true},
+    {aspect: 'Expressiveness of relationships', values: ['Markdown links between concept files; no query language', 'Whatever the platform\'s own linking model supports', 'Typed relationships, queryable via Cypher or SPARQL', 'None, beyond whatever a reader infers from prose'] },
+    {aspect: 'Best suited for', values: ['A common export target so many sources feed one ingestion pipeline without custom connectors', 'Teams already fully invested in one platform\'s ecosystem', 'Deep multi-hop relationship queries at scale (Ch. 6.6)', 'A single source with no need to interoperate with others'] },
+  ]}
+  caption="OKF is deliberately less expressive than a knowledge graph and less capable than a full platform API. What it trades for that is near-zero integration cost across sources that would otherwise all need their own connector."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="OKF as a common export target feeding the Chapter 6.9 ingestion pipeline"
+  mermaid={`
+flowchart TD
+  CATALOG[Metadata catalog] --> BUNDLE1[OKF bundle: catalog export]
+  WIKI[Internal wiki] --> BUNDLE2[OKF bundle: wiki export]
+  CODE[Code repository] --> BUNDLE3[OKF bundle: code/API export]
+  BUNDLE1 --> WALK[Directory walk + YAML parse: filter by type, tags, timestamp]
+  BUNDLE2 --> WALK
+  BUNDLE3 --> WALK
+  WALK --> INGEST[Ingestion pipeline: parse, chunk, embed, index, Ch. 6.9]
+  INGEST --> INDEX[(Vector + graph index)]
+  WALK --> AGENT[Agent reads OKF files directly for a narrow lookup]
+  AGENT --> ANSWER[Answer, no retrieval pipeline needed]
+  INDEX --> RETRIEVE[Retrieval + generation, Ch. 6.4-6.5]
+  RETRIEVE --> ANSWER
+`}
+  components={[
+    {name: 'OKF bundle', responsibility: 'A directory of markdown files with YAML frontmatter exported from one source system, requiring no custom connector for a consumer to read.'},
+    {name: 'Directory walk + YAML parse', responsibility: 'The only machinery an OKF consumer needs: filter concepts by type, tags, or timestamp before deciding what to ingest.'},
+    {name: 'Ingestion pipeline (Ch. 6.9)', responsibility: 'Treats an OKF bundle as one more source format to parse, chunk, embed, and index, unchanged from how it treats any other document source.'},
+    {name: 'Direct agent read', responsibility: 'For a narrow lookup, an agent can read OKF files directly with no retrieval pipeline at all, since the files are already both human- and machine-readable.'},
+  ]}
+/>
+
+OKF sits upstream of everything built in this phase. It does not replace the ingestion pipeline, the vector
+index, or the retrieval and generation steps, it changes how many different, incompatible source systems an
+ingestion pipeline has to write a custom connector for. A source that exports a valid OKF bundle needs no
+special-case code at all, it looks like every other OKF bundle to the pipeline that consumes it.
+
+## Hands-On: Build Your First OKF Bundle
+
+Everything above is easier to believe once you have actually written one of these bundles yourself. Nothing
+here needs a cloud account, a database, or a special SDK, just a text editor and, if you want to parse it
+back out, a few lines of Python. Fifteen minutes gets you a working bundle and a script that filters it.
+
+**Step 1: Create the directory.** An OKF bundle is just a folder. Start small, one concept type is enough to
+begin with.
+
+```bash
+mkdir -p sales/tables
+```
+
+**Step 2: Write your first concept file.** Every concept is one markdown file: YAML frontmatter on top, a
+free-text body underneath. Create `sales/tables/orders.md`:
+
+```markdown
+---
+type: BigQuery Table
+title: Orders
+description: One row per completed customer order.
+resource: https://console.cloud.google.com/bigquery?p=acme&d=sales&t=orders
+tags: [sales, revenue]
+timestamp: 2026-05-28T14:30:00Z
+---
+
+# Orders
+
+One row per completed order. Grain: order_id.
+```
+
+That is a complete, valid concept on its own. `type` is the one field OKF actually requires, everything
+else in the frontmatter is there to make filtering possible later.
+
+**Step 3: Add a second concept and link it.** This is where OKF starts to feel different from a plain
+document dump. Create `sales/tables/customers.md`, and reference the first file with an ordinary markdown
+link:
+
+```markdown
+---
+type: BigQuery Table
+title: Customers
+description: One row per known customer account.
+resource: https://console.cloud.google.com/bigquery?p=acme&d=sales&t=customers
+tags: [sales]
+timestamp: 2026-05-28T14:30:00Z
+---
+
+# Customers
+
+One row per customer. Referenced by [orders](./orders.md) via `customer_id`.
+```
+
+Two files, one link. That link is the entire relationship, no schema registration, no separate edges table.
+
+**Step 4: Walk the bundle and parse it back out.** This is the fifteen-line script that makes the rest of
+this chapter concrete. It needs `pyyaml` (`pip install pyyaml`):
+
+```python
+from pathlib import Path
+import yaml
+
+def load_concepts(bundle_root: Path):
+    concepts = []
+    for md_file in sorted(bundle_root.rglob("*.md")):
+        text = md_file.read_text()
+        if not text.startswith("---"):
+            continue
+        _, frontmatter, body = text.split("---", 2)
+        meta = yaml.safe_load(frontmatter) or {}
+        meta["path"] = str(md_file)
+        meta["body"] = body.strip()
+        concepts.append(meta)
+    return concepts
+
+concepts = load_concepts(Path("sales"))
+print(f"loaded {len(concepts)} concepts")
+for c in concepts:
+    print(f"  {c['type']:<16} {c['title']:<12} {c['path']}")
+```
+
+Running it against the two files from steps 2 and 3 prints:
+
+```
+loaded 2 concepts
+  BigQuery Table   Customers    sales/tables/customers.md
+  BigQuery Table   Orders       sales/tables/orders.md
+```
+
+**Step 5: Filter by type, the way an ingestion pipeline would.** Add one line to the script above:
+
+```python
+tables = [c for c in concepts if c.get("type") == "BigQuery Table"]
+```
+
+`tables` is now exactly the input an ingestion pipeline needs, a list of dicts with a title, a description,
+and a body, ready to chunk and embed the same way Chapter 6.9 handles any other document source. Scale this
+same fifteen-line pattern up to a bundle with hundreds of concepts across several types, and the filter line
+is the only thing that changes: swap `"BigQuery Table"` for whatever type the pipeline actually needs next.
+
+That is the whole mechanism. Everything in the rest of this phase, chunking, embedding, retrieval,
+generation, caching, evaluation, runs unchanged once a bundle like this one is what feeds it.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'One ingestion pipeline reading three departments\' knowledge without three custom connectors', problem: 'A compliance assistant needed knowledge from a metadata catalog, a policy wiki, and a risk-modeling code repository, and the ingestion team was facing three separate connector projects, one per source system\'s own API.', solution: 'Have each of the three source systems export its relevant concepts as an OKF bundle, so the ingestion pipeline reads all three the same way, through a directory walk and a YAML parser, with no source-specific code.', risk: 'A source that exports an incomplete or malformed OKF bundle, missing the required type field on some concepts, fails silently at the filtering step rather than the ingestion step, so bundle validation needs to happen before ingestion, not after.'},
+    {title: 'An analyst\'s agent answering a schema question straight from OKF files, no retrieval pipeline involved', problem: 'An analyst asked a coding assistant what columns a specific reporting table contained, a question the full RAG pipeline could answer but only after an embedding, retrieval, and reranking round trip for what was really a direct lookup.', solution: 'Let the agent read the relevant OKF concept file directly, since the file path and type field alone are often enough to locate the exact table concept without going through vector search at all.', risk: 'Relying on direct file reads for lookups that could grow more complex risks an agent that never gracefully falls back to full retrieval when a question genuinely needs it, so the fallback path needs to exist and be tested, not just the fast path.'},
+    {title: 'Filtering ingestion to only current, revenue-tagged concepts using the type and tags fields', problem: 'An ingestion pipeline needed to index only the subset of a large OKF bundle that was tagged for revenue reporting and updated within the last quarter, out of a much larger bundle covering every department\'s knowledge.', solution: 'Filter on the tags and timestamp fields during the directory walk, before any parsing or embedding happens, so only the relevant subset of concepts ever reaches the expensive part of the pipeline.', risk: 'A tag applied inconsistently across concepts, revenue on some files and Revenue or sales-revenue on others, silently excludes concepts a filter was supposed to include, with no error to signal the mismatch.'},
+    {title: 'Discovering a hidden foreign-key relationship between two tables through a markdown link', problem: 'An analyst investigating a discrepancy between two financial tables did not know the tables were related until stumbling on an FK reference inside one table\'s OKF concept file, a relationship no dashboard had surfaced.', solution: 'Treat markdown links inside OKF concept files as a lightweight relationship graph worth traversing during investigation, even without a dedicated graph database, since the links were already there in the exported knowledge.', risk: 'Markdown links only capture relationships someone thought to write down; a real foreign-key relationship left undocumented in the OKF bundle stays just as invisible as it was before OKF existed.'},
+  ]}
+  healthcare={[
+    {title: 'Unifying a clinical-guidelines wiki and a lab-systems catalog into one ingestion source', problem: 'A clinical decision-support assistant needed both clinical guidelines, stored in a wiki, and lab-system table definitions, stored in a separate metadata catalog, and building two custom ingestion connectors was consuming more engineering time than writing the assistant itself.', solution: 'Export both the wiki and the catalog as OKF bundles and point the same ingestion pipeline at both, since the pipeline needs to understand only the OKF structure once rather than two different source APIs.', risk: 'Treating two genuinely different knowledge domains identically just because both are now OKF bundles can obscure the fact that clinical guidelines and lab-table schemas need very different review and approval processes before either reaches a clinician.'},
+    {title: 'Why a lab-panel definition question never needed the full retrieval pipeline at all', problem: 'A clinician asked exactly what a specific lab panel measured, a question with one correct, stable answer sitting in a single OKF concept file, yet the assistant routed it through the full retrieval pipeline built for open-ended clinical questions.', solution: 'Recognize narrow, single-concept lookups like this one and let the agent read the relevant OKF file directly rather than paying the cost and added uncertainty of a full retrieval-and-generation round trip.', risk: 'A direct file read skips the Faithfulness and Context Recall checks from Chapter 6.8 entirely, so this shortcut needs its own, simpler correctness check, confirming the file read actually matched the concept the clinician asked about.'},
+    {title: 'Why only guidelines from the current review cycle make it into the index', problem: 'A large OKF bundle covering years of clinical documentation included guidelines that had since been superseded, and an unfiltered ingestion run would have indexed outdated guidance alongside the current version with no way to distinguish them at query time.', solution: 'Filter on the timestamp field during ingestion to include only guidelines reviewed within the current cycle, treating an older timestamp as a signal to exclude a concept rather than index it alongside its replacement.', risk: 'A superseded guideline whose timestamp was never updated to reflect its retirement passes the filter anyway, since the timestamp field only reflects what a producer actually recorded, not what is objectively still current.'},
+    {title: 'Tracing a medication\'s documented interactions through linked OKF concept files', problem: 'A pharmacist investigating a potential drug interaction found the connection not through a search query but by following a markdown link from one medication\'s OKF concept file to a related interaction-profile concept file.', solution: 'Treat the linked structure of an OKF bundle as a navigable map of related concepts during investigation, useful even before or without building the fuller knowledge graph from Chapter 6.6.', risk: 'A pharmacist relying on manually-authored links can miss an interaction that exists in the underlying data but was never captured as an explicit markdown link between the two concept files.'},
+  ]}
+  telecom={[
+    {title: 'How three planned connector projects for an on-call assistant became one shared integration path', problem: 'Network topology data lived in an internal catalog, incident runbooks lived in a wiki, and API documentation lived in a separate registry, and before OKF entered the picture, the on-call assistant\'s roadmap included a separate connector build for each.', solution: 'Export all three sources as OKF bundles feeding one ingestion pipeline, collapsing three connector projects into one shared integration path the pipeline already understands.', risk: 'Collapsing three sources into one ingestion path makes it easy to lose track of which source a given concept actually came from unless the resource field in each concept\'s frontmatter is populated consistently enough to trace it back.'},
+    {title: 'An on-call engineer\'s assistant reading a runbook file directly instead of retrieving and reranking it', problem: 'An engineer, mid-incident, named a specific runbook by title rather than describing the problem, and several hundred milliseconds of embedding and reranking stood between that request and an answer a direct file lookup could have returned immediately.', solution: 'Let the agent match the request to the runbook\'s OKF concept file directly by title or type when the request is specific enough, reserving the full retrieval pipeline for genuinely open-ended incident questions.', risk: 'A confidently-matched wrong runbook, chosen by a fuzzy title match rather than actual retrieval scoring, could send an engineer through the wrong remediation steps during an active outage.'},
+    {title: 'Keeping a migration-scoped assistant blind to every API concept outside the service being moved', problem: 'A migration project needed the assistant to know about only one service\'s worth of API concepts, and the source bundle it was drawing from covered the company\'s entire API surface, every service, not just the one under migration.', solution: 'Filter the ingestion pipeline\'s input on the tags field to include only the service under migration, keeping the assistant\'s knowledge scoped to what the current project actually needs.', risk: 'A newly-added API concept that the team forgot to tag for the service it belongs to never reaches the filtered ingestion run at all, leaving a documentation gap the team may not notice until someone asks about it.'},
+    {title: 'What a markdown link revealed about two services that the architecture diagrams never showed', problem: 'Two services turned out to depend on each other, something a reliability engineer only learned by noticing a markdown link connecting their two OKF concept files; the official architecture diagrams had never recorded that dependency at all.', solution: 'Periodically audit the link structure across an OKF bundle for dependencies that exist in the files but never made it into the team\'s official architecture diagrams, treating the bundle as a second source of truth worth reconciling against the first.', risk: 'An audit built only around markdown links inherits the same blind spot: a dependency nobody ever bothered to link stays just as absent from the OKF bundle as it was from the diagram that missed it first.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What problem does OKF solve that a better ingestion pipeline alone cannot fix?', answer: 'OKF addresses the fact that organizational knowledge sits in mutually incompatible systems before it ever reaches an ingestion pipeline: "every agent builder is solving the same context-assembly problem from scratch, every catalog vendor is reinventing the same data models, and the knowledge itself is locked behind whichever surface created it." A better ingestion pipeline still needs a custom connector for each incompatible source; OKF removes the need for that connector by giving every source a common export shape.'},
+    {question: 'What is the only field OKF actually requires on every concept, and what does that field make possible?', answer: '"OKF requires exactly one thing of every concept: a type field." The type field, along with the other reserved fields (title, description, resource, tags, timestamp), makes it possible to filter and query a large bundle of concepts using nothing more than a directory walk and a YAML parser, without needing a database or a custom schema.'},
+    {question: 'How do OKF concepts reference each other, and how does this compare to a knowledge graph from Chapter 6.6?', answer: '"Concepts link to each other with normal markdown links. Those links turn the directory into a graph that is richer than file-system parent/child relationships." This is much lighter than a property graph or RDF triple store: there is no query language, no schema validation, and no dedicated storage engine, but it costs nothing beyond writing markdown, and the same concepts can later migrate into a full knowledge graph if an organization outgrows what markdown links can express.'},
+    {question: 'Why does OKF ship as a specification rather than a hosted service, and why does that distinction matter for portability?', answer: 'Google Cloud framed the gap OKF fills directly: "what\'s missing is a format, not another service." A bundle of OKF documents needs nothing more than plain markdown files, so it opens in any editor, renders on GitHub, and packages as an ordinary tarball, with no dependency on any particular cloud, database, or vendor. A hosted service would tie an organization\'s knowledge to whoever operates it; a format lets the same bundle be read by any tool that understands markdown and YAML, indefinitely, regardless of which vendor built the tool.'},
+    {question: 'When might an agent read an OKF file directly instead of going through the full retrieval pipeline from Chapters 6.4 and 6.5, and what does that shortcut give up?', answer: 'A narrow, single-concept lookup, like a specific table\'s schema or a specific runbook by name, can often be answered by reading the matching OKF file directly, since the file path, type, and title fields alone may be enough to locate it without embedding or reranking. What that shortcut gives up is the Faithfulness and Context Recall checking built in Chapter 6.8 for the full pipeline, so a direct file read needs its own, simpler correctness check to confirm the file actually matches what was asked, and a reliable fallback to full retrieval for anything the direct match does not confidently resolve.'},
+  ]}
+/>
