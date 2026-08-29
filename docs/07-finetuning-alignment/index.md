@@ -8,12 +8,6 @@ sidebar_position: 0
 
 When to fine-tune instead of prompt or retrieve, and how to do it — PEFT, RLHF/DPO, distillation, and deployment.
 
-:::info Chapter shells
-The chapters below are planned and tracked, but not yet written. Content is added
-incrementally — see the [Contribution Guide](/docs/capstones-and-contributing) to propose or
-draft one. Check the [Recently Added](/docs) page for what has shipped so far.
-:::
-
 ## Chapters
 
 - [7.1 When to Fine-Tune vs. Prompt vs. RAG: A Decision Framework](./7-1-fine-tune-vs-prompt-vs-rag-decision-framework.mdx)
@@ -22,7 +16,4 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [7.4 Domain Adaptation & Continual Pretraining](./7-4-domain-adaptation-continual-pretraining.mdx)
 - [7.5 Model Compression: Distillation, Quantization, Pruning](./7-5-model-compression-distillation-quantization-pruning.mdx)
 - [7.6 Evaluating & Benchmarking Fine-Tuned Models](./7-6-evaluating-benchmarking-fine-tuned-models.mdx)
-
-## Planned chapters
-
-- 7.7 Deployment Considerations for Custom Models
+- [7.7 Deployment Considerations for Custom Models](./7-7-deployment-considerations-for-custom-models.mdx)

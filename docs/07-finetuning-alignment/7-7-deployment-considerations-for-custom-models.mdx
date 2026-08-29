@@ -1,0 +1,321 @@
+---
+title: "Deployment Considerations for Custom Models"
+sidebar_label: "7.7 Deployment Considerations for Custom Models"
+sidebar_position: 7
+phase: 7
+chapter: "7.7"
+lms_presentation: "7.7-Deployment-Considerations-for-Custom-Models-Slides.pptx"
+prerequisites: ["7.6"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+A fine-tuned model that has passed Chapter 7.6's evaluation gate still is not ready for every user at
+once. Two decisions shape how safely it gets there. The first is how it gets served: merging a LoRA
+adapter into the base model gives one tenant maximum throughput with no added latency, but that stops
+scaling once there is more than one fine-tune to serve. S-LoRA's authors motivate their alternative this
+way: once a team is "scaling the fine-tuning of a base model for numerous tasks, such as personalized
+assistants, which could involve thousands or millions of users, the associated training and serving costs
+can become substantial." Part of that cost is architectural: "directly merging the models requires
+maintaining many copies of the full language model." Their alternative keeps adapters unmerged and pools
+them behind one base deployment, reporting it "can improve the throughput by up to 4 times and increase
+the number of served adapters by several orders of magnitude." The second decision is how the rollout
+itself proceeds: a shadow deployment lets a team "send the same production traffic" to the new model "to
+gather data on how the shadow model performs before promoting it," with zero user-facing risk, and a
+canary release then exposes a small share of real users first, with a rollback plan ready that is "simply
+to reroute users back to the old version until you have fixed the problem."
+
+## High-Level Explanation
+
+Deploying a fine-tuned model is not the same problem as deploying a fixed piece of software, because the
+artifact under consideration was validated against a set of eval scores, not against the exact traffic it
+is about to see. Getting a validated model safely in front of real users means making three separate
+decisions well. The first is architectural: whether to merge the fine-tune's adapter weights into the base
+model as a single deployable artifact, or to keep the adapter separate and serve it dynamically alongside
+potentially many other adapters sharing one base model, a choice that changes both cost and operational
+complexity as the number of fine-tunes grows. The second is about consistency: the exact preprocessing,
+prompt template, and tokenizer that produced good eval scores during training have to be the same ones
+running at serving time, or a model that looked fine in Chapter 7.6's evaluation harness can quietly
+perform worse in production for reasons that have nothing to do with the fine-tune itself. The third is
+about how the rollout proceeds once the first two are settled: exposing the new model to a shadow copy of
+production traffic before any real user sees it, then ramping up real traffic gradually with a rollback
+plan ready, rather than switching every user over at once.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-7-safe-rollout-pipeline.svg').default}
+    alt="A model that has passed the Chapter 7.6 evaluation gate moves through a shadow deployment that mirrors production traffic with no user impact, then a canary release that ramps a small and growing share of real users. A decision at each stage checks for regression against the current champion beyond a threshold. If regression is detected, traffic rolls back to the previous version; otherwise the rollout ramps to 100 percent and the new version becomes the champion."
+  />
+  <figcaption>An evaluation gate answers whether a model is good; the rollout pipeline answers whether it is safe to find out with real traffic.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**How a fine-tuned model gets served changes the deployment math as much as how it was trained, and the
+choice comes down to merging the adapter into the base model or keeping it separate and serving many
+adapters dynamically.** Chapter 7.2 covered LoRA's own case for the merged path: once training finishes,
+an adapter's low-rank matrices can be folded directly into the base model's weights, adding no extra
+inference latency at all. That works well for a single fine-tune serving all of its own traffic. It works
+less well the moment an organization has more than one fine-tune to serve. As the authors of S-LoRA
+explain, once a team is "scaling the fine-tuning of a base model for numerous tasks, such as personalized
+assistants, which could involve thousands or millions of users, the associated training and serving costs
+can become substantial." Part of that cost is architectural: "directly merging the models requires
+maintaining many copies of the full language model," one full deployment per fine-tune. S-LoRA's answer is
+to keep every adapter unmerged and serve them from one shared base-model deployment instead: "Unified
+Paging uses a unified memory pool to manage dynamic adapter weights with different ranks and KV cache
+tensors with varying sequence lengths." To make that shared deployment fast, its serving engine batches
+requests that carry entirely different adapters together, describing the approach as one where "we batch
+the computation of the base model and then employ custom CUDA kernels to execute the additional xAB for
+all adapters separately," relying on "custom CUDA kernels that support batching LoRA computations with
+varying ranks and sequence lengths in a non-contiguous memory layout." Because no adapter's weights get
+folded into a private copy of the base model, "this avoids weight duplication and enables batching of the
+more costly xW operation," and the reported gain is concrete: S-LoRA "can improve the throughput by up to
+4 times and increase the number of served adapters by several orders of magnitude" compared with prior
+LoRA-serving approaches. The trade-off is straightforward once stated: merge when one fine-tune needs to
+run at its absolute fastest for one purpose; keep adapters separate when many distinct fine-tunes need to
+share infrastructure economically.
+
+**A custom model can be correct in the eval harness and wrong in production for reasons that have nothing
+to do with the model itself, if the code preparing its input diverges between training and serving.**
+This is not a problem invented by fine-tuning; Zinkevich's widely used engineering guidance for production
+ML puts it plainly: "the best way to make sure that you train like you serve is to save the set of
+features used at serving time, and then pipe those features to a log to use them at training time," and
+more directly still, to "re-use code between your training pipeline and your serving pipeline whenever
+possible." For a fine-tuned language model, the same failure shows up as a prompt template that changed
+between the fine-tuning script and the serving stack, a tokenizer version mismatch, or a chat-formatting
+difference that silently reshapes every input the model sees, none of which would show up by re-reading
+the model's weights, only by comparing what actually reaches the model at each stage. The same guidance
+also has a rule for the moment right before a model ships at all: "do sanity checks right before you
+export the model. Specifically, make sure that the model's performance is reasonable on held out data,"
+which is precisely what Chapter 7.6's evaluation gate exists to satisfy for a fine-tuned model
+specifically, not a generic reminder to be careful, but a concrete, scored check that has to pass before
+deployment questions even begin.
+
+**Passing Chapter 7.6's evaluation gate is necessary before a fine-tuned model reaches production traffic,
+but it is not sufficient, because an offline eval set is never a perfect stand-in for what real traffic
+actually sends the model.** The lowest-risk way to close that gap is a shadow deployment. Martin Fowler's
+writing on continuous delivery for machine learning describes it directly: a team can "deploy the new
+model side-by-side with the current one, as a shadow model, and send the same production traffic to
+gather data on how the shadow model performs before promoting it," with no user ever seeing the shadow's
+output. Once a shadow run looks healthy, canary release is the next step. Fowler's separate writing on
+canary release defines it as "a technique to reduce the risk of introducing a new software version in
+production by slowly rolling out the change to a small subset of users before rolling it out to the
+entire infrastructure and making it available to everybody." The setup looks similar to a
+BlueGreenDeployment in that "you start by deploying the new version of your software to a subset of your
+infrastructure, to which no users are routed," and then, once the team is satisfied, "you can start
+routing a few selected users to it." If anything looks wrong at any stage, the exit Fowler describes is
+deliberately simple: "the rollback strategy is simply to reroute users back to the old version until you
+have fixed the problem," which only works quickly if the previous version is still deployed and warm, not
+archived somewhere that takes an hour to restore. Keeping track of which version is currently live and
+which one rollback would revert to is itself a discipline worth naming: Fowler's continuous-delivery
+writing frames each fine-tuned model "as an artifact that needs to be versioned and deployed to
+production," which turns "what do we roll back to" from a question someone has to remember the answer to
+into a fact a model registry can just answer.
+
+## Hands-On: Build a Canary Rollout Simulator with an Automatic Rollback Gate
+
+Chapter 7.6 built a harness that scores a model's accuracy on a small multiple-choice eval set, before and
+after a fine-tune. This reuses that same scoring method, but runs it at each stage of a simulated canary
+ramp and adds the one piece Chapter 7.6 did not need: an automatic decision about whether to keep ramping
+traffic toward the new model or roll it back to the champion.
+
+**Step 1: Load a champion model and define a small sample standing in for production requests.** The
+champion is the model currently serving all traffic; nothing about it changes during this exercise.
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_name = "distilgpt2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+champion_model = AutoModelForCausalLM.from_pretrained(model_name)
+champion_model.eval()
+
+eval_sample = [
+    {"question": "The chemical symbol for water is", "choices": {"A": "H2O", "B": "CO2", "C": "NaCl", "D": "O2"}, "answer": "A"},
+    {"question": "The largest planet in the solar system is", "choices": {"A": "Earth", "B": "Jupiter", "C": "Mars", "D": "Venus"}, "answer": "B"},
+    {"question": "The author of Romeo and Juliet is", "choices": {"A": "Dickens", "B": "Shakespeare", "C": "Austen", "D": "Twain"}, "answer": "B"},
+    {"question": "The capital of Japan is", "choices": {"A": "Seoul", "B": "Beijing", "C": "Tokyo", "D": "Bangkok"}, "answer": "C"},
+    {"question": "The freezing point of water in Celsius is", "choices": {"A": "0", "B": "32", "C": "100", "D": "-10"}, "answer": "A"},
+    {"question": "The gas plants absorb for photosynthesis is", "choices": {"A": "Oxygen", "B": "Nitrogen", "C": "Carbon dioxide", "D": "Hydrogen"}, "answer": "C"},
+]
+```
+
+**Step 2: Score each candidate model the same way Chapter 7.6 did, by the log-probability of its answer
+letter.** This is the "quality signal" that a real rollout would collect from shadow and canary traffic;
+here it runs against the same fixed sample at every stage.
+
+```python
+def score_choices(model, tokenizer, item):
+    prompt = item["question"] + "\n"
+    for letter, text in item["choices"].items():
+        prompt += f"{letter}. {text}\n"
+    prompt += "Answer:"
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    with torch.no_grad():
+        logits = model(input_ids).logits
+    next_token_logits = logits[0, -1, :]
+    scores = {}
+    for letter in item["choices"]:
+        token_id = tokenizer.encode(" " + letter, add_special_tokens=False)[0]
+        scores[letter] = next_token_logits[token_id].item()
+    return max(scores, key=scores.get)
+
+def accuracy(model, tokenizer, eval_set):
+    correct = sum(score_choices(model, tokenizer, item) == item["answer"] for item in eval_set)
+    return correct / len(eval_set)
+
+champion_accuracy = accuracy(champion_model, tokenizer, eval_sample)
+print(f"champion accuracy: {champion_accuracy:.2%}")
+```
+
+**Step 3: Build a challenger by fine-tuning a copy of the champion on narrow domain text, the same
+no-replay setup Chapter 7.4 used to demonstrate forgetting.** This challenger is deliberately built to
+have regressed on the general sample, so the rollback gate below has something real to catch.
+
+```python
+import copy
+
+domain_texts = [
+    "The claimant's policy excludes coverage for pre-existing conditions disclosed at binding.",
+    "Under the indemnity clause, the insurer's liability is capped at the sum insured on the schedule.",
+    "Subrogation rights transfer to the insurer upon settlement of the claim in full.",
+]
+
+def fine_tune(model, tokenizer, texts, steps=30, lr=5e-5):
+    model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    for step in range(steps):
+        text = texts[step % len(texts)]
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        loss = model(input_ids, labels=input_ids).loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    model.eval()
+    return model
+
+challenger_model = copy.deepcopy(champion_model)
+challenger_model = fine_tune(challenger_model, tokenizer, domain_texts, steps=30)
+
+challenger_accuracy = accuracy(challenger_model, tokenizer, eval_sample)
+print(f"challenger accuracy: {challenger_accuracy:.2%}")
+```
+
+**Step 4: Ramp the challenger through canary stages, re-checking for regression against the champion at
+each one, and roll back automatically the moment the drop crosses a threshold.** A real rollout would
+score fresh live traffic sampled at each stage, so an early stage could pass while a later one, seeing a
+different slice of traffic, fails. This simulation re-checks the same fixed sample at every stage instead,
+to keep the comparison exact and the mechanism visible; one consequence of that simplification is that
+with a fixed challenger, the check can only ever fire at the first stage it reaches or never fire at all,
+not partway through a ramp.
+
+```python
+canary_stages = [0.05, 0.25, 1.00]
+rollback_threshold_pp = 15.0  # max allowed drop, in percentage points, before rolling back
+
+def run_canary_rollout(champion_acc, challenger_acc, stages, threshold_pp):
+    for stage_pct in stages:
+        drop_pp = (champion_acc - challenger_acc) * 100
+        print(f"canary stage {stage_pct:.0%}: challenger accuracy {challenger_acc:.2%} "
+              f"({drop_pp:+.1f} pp vs. champion)")
+        if drop_pp > threshold_pp:
+            print(f"rollback triggered at {stage_pct:.0%}: rerouting all traffic back to the champion")
+            return "rolled_back", stage_pct
+    print("canary ramp completed: full traffic now on the challenger; it becomes the new champion")
+    return "shipped", 1.00
+
+outcome, stage_reached = run_canary_rollout(
+    champion_accuracy, challenger_accuracy, canary_stages, rollback_threshold_pp
+)
+print(f"outcome: {outcome} at stage {stage_reached:.0%}")
+```
+
+With a large enough drop from the narrow, no-replay fine-tune, the rollback triggers at the very first
+canary stage this simplified check runs, before the challenger ever reaches more than a sliver of traffic.
+A production system scoring fresh traffic at each stage could instead let that same regression through an
+early stage and only catch it once the canary reaches a slice of traffic that exposes it. Either way, the
+mechanism is the point: the same regression Chapter 7.4 discussed as catastrophic forgetting and Chapter
+7.6 measured with a before-and-after eval score becomes, here, a live rollout decision made automatically,
+not a number someone has to remember to check by hand.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Shadow deployment', 'Canary release', 'Full cutover']}
+  rows={[
+    {aspect: 'What real users see', values: ['Nothing; outputs are logged, never shown', 'A small, then growing, share of real requests', 'Every request, immediately'], decisive: true},
+    {aspect: 'Risk if the new model has a hidden regression', values: ['None; the shadow never serves a real response', 'Limited to the canary share, and shrinks further with a fast rollback', 'Full-blown; every user is affected before anyone might notice'], decisive: true},
+    {aspect: 'What it actually validates', values: ['How the new model performs against real traffic patterns, side by side with the champion', 'How the new model performs under real user behavior at increasing scale', 'Nothing in advance; validation happens by observing production after the fact']},
+    {aspect: 'Typical use', values: ['The step right after Chapter 7.6\'s evaluation gate passes', 'After a shadow run looks healthy, before trusting the model with all traffic', 'Reasonable only for changes too small to bother canarying, rarely a fine-tune']},
+  ]}
+  caption="Shadow and canary exist because Chapter 7.6's evaluation gate, however thorough, is still an offline proxy for what real traffic will do."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where serving architecture and safe rollout fit for a custom model"
+  mermaid={`
+flowchart TD
+  MODEL[Fine-tuned model, passed the Chapter 7.6 gate] --> REGISTRY[(Model registry: versioned artifact)]
+  REGISTRY --> MERGE[Merge into base weights: one tenant, max throughput]
+  REGISTRY --> MULTI[Serve adapters unmerged, S-LoRA style: many tenants share one base deployment]
+  MERGE --> SHADOW[Shadow deployment: mirrors production traffic, no user impact]
+  MULTI --> SHADOW
+  SHADOW --> CANARY[Canary release: ramps a small, then growing, share of real users]
+  CANARY --> DECISION{Regression vs. champion beyond threshold?}
+  DECISION -->|Yes| ROLLBACK[Rollback to the previous registered version]
+  DECISION -->|No| SHIP[New version becomes champion in the registry]
+`}
+  components={[
+    {name: 'Model registry', responsibility: 'Records the current champion as a versioned artifact, so rollback has an exact previous version to revert to.'},
+    {name: 'Serving architecture choice', responsibility: 'Merge into base weights for one tenant at maximum throughput, or serve adapters unmerged when many fine-tunes must share infrastructure.'},
+    {name: 'Shadow deployment', responsibility: 'Validates the model against real traffic patterns with zero user-facing risk, before any real user is exposed.'},
+    {name: 'Canary release', responsibility: 'Ramps real traffic gradually, keeping the blast radius of an undetected regression small.'},
+    {name: 'Rollback', responsibility: 'Reroutes traffic back to the previous registered version the moment a regression crosses the threshold.'},
+  ]}
+/>
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'Eight fine-tunes in, a finance team\'s GPU bill stopped making sense', problem: 'Every new compliance-summary fine-tune got merged into its own full copy of the base model and its own dedicated deployment, and by the eighth one the finance team\'s GPU spend on fine-tunes alone had quietly become larger than the spend on everything else combined.', solution: 'One shared deployment now serves every adapter unmerged, S-LoRA style, so a ninth fine-tune costs the team a new adapter, not a new base-model deployment.', risk: 'Merging works cleanly for the first fine-tune or two. Nobody budgets for what happens at the eighth.'},
+    {title: 'One deploy, every trading desk, no warning', problem: 'A newly fine-tuned trading-desk assistant cleared its evaluation suite cleanly. Under deadline pressure, it went to all users in a single deploy, with no shadow or canary stage in between.', solution: 'A formatting regression the eval set never surfaced hit every desk at once. The fix that mattered most was not technical: shadow and canary became mandatory steps, deadline or not.', risk: 'An evaluation gate proves a model is good at the questions it was asked. It proves nothing about the traffic it has not met yet, and skipping straight to that traffic is how a team finds out the hard way.'},
+    {title: 'Five percent of traffic was all it took', problem: 'Nobody expected the canary stage to find anything. A credit-risk fine-tune had already sailed through its Chapter-7.6-style evaluation, and the canary that followed it felt like a formality on the way to a full rollout.', solution: 'It was not a formality. At 5% of live traffic, accuracy on unusual account structures, a pattern underrepresented in the offline eval set, dropped noticeably, and the rollout stopped there rather than continuing to 100%.', risk: 'Whatever an eval set does not contain, a canary eventually will. That is the entire reason to run one instead of trusting the score and moving on.'},
+    {title: 'Weeks of lower accuracy, and the model was never the problem', problem: 'For weeks, a fraud-review model\'s live accuracy trailed its evaluation-set accuracy by a wide margin, and every attempt to explain the gap by examining the model itself came up empty.', solution: 'Nobody found the answer in the model, because it was not there. Another team had quietly changed the prompt template between the fine-tuning script and the serving stack, and once training and serving were pointed at the same templating code again, the fraud-review model\'s live accuracy matched its evaluation score within days.', risk: 'Weights do not change on their own between training and serving. The code that turns a request into a prompt can, and quietly, which is exactly why nobody thought to look there first.'},
+  ]}
+  healthcare={[
+    {title: 'A hospital\'s infrastructure bill was tracking department count, not usage', problem: 'Radiology, cardiology, and discharge planning each had their own fine-tuned documentation assistant, each merged into its own full deployment on its own hardware, and the infrastructure budget grew every time a new department wanted one, regardless of how much any of them were actually used.', solution: 'Every department now shares one base-model deployment, with each adapter served unmerged rather than merged into its own copy. A new department launching no longer means a new hardware order behind the scenes.', risk: 'A budget that scales with department count instead of usage looks fine right up until finance asks why.'},
+    {title: 'A launch date the shadow stage never got to test against', problem: 'A fine-tuned symptom-checker had cleared its evaluation gate weeks before its public launch date. When that date arrived, shadow deployment got skipped so the launch would not slip, and the model went straight to every patient-facing user.', solution: 'A rare regression in how the model handled multi-symptom queries reached the full user base before anyone caught it. Afterward, shadow deployment became non-negotiable before any clinical launch, calendar be damned.', risk: 'A public launch date is a commitment to a timeline, not evidence that shadow and canary would have found nothing. In a clinical setting, the second thing is what actually protects patients.'},
+    {title: 'The population the eval set forgot', problem: 'The evaluation scores looked complete: strong across every section of a discharge-summary fine-tune\'s held-out set. What they did not cover was one patient population the fine-tuning data had barely touched, and nobody realized that until the canary stage was already underway.', solution: 'The population turned out to be the story. Once real traffic reached the canary, discharge summaries written for it came back noticeably weaker than the eval scores had suggested, and the fine-tuning data got expanded to cover that gap before the rollout continued.', risk: 'Building a broader eval set after the fact is easy advice and hard practice; catching the gap at 5% of traffic, before it reached every clinician, is what canary release is actually for.'},
+    {title: 'Retested offline, scored exactly as expected, still wrong in production', problem: 'A radiology-report fine-tune kept scoring exactly as expected every time it was retested offline, while its live production accuracy sat well below what that same evaluation had predicted.', solution: 'The tokenizer was the answer, not the model, though it took a while to think to check it. An independent upgrade to the serving environment\'s tokenizer library had changed how a handful of clinical terms got split into tokens at inference time; pinning both environments to one tokenizer version made the gap disappear.', risk: 'Offline retesting only re-checks the model. When the problem lives one layer below the model, in the code around it, retesting the model finds nothing, no matter how many times it is run.'},
+  ]}
+  telecom={[
+    {title: 'A new region should not require a new GPU order', problem: 'Each region\'s network-operations assistant had been fine-tuned on that region\'s own terminology and merged into its own full deployment, so launching in a new region meant standing up another complete copy of the base model.', solution: 'The base model was already running; it just needed to serve one more adapter, not one more copy of itself. That is what unmerged, shared-deployment serving let a new region do: launch on infrastructure that already existed.', risk: 'A cost structure where each new region needs its own full deployment is one that gets worse, not better, the more successful the expansion is.'},
+    {title: 'The outage that exposed a shortcut nobody meant to take', problem: 'Passing its checks was the easy part. Getting a fine-tuned incident-response model through an outage-prone quarter without delay was what actually decided the rollout, so the team shipped it to every on-call engineer at once rather than ramping it through a canary.', solution: 'A regression specific to a rare incident category surfaced during a live outage, the worst possible time to discover it. The retrospective set one firm rule going forward: every fine-tune canaries, however urgent the quarter feels.', risk: 'The more urgent a rollout feels, the more tempting it is to skip the step that exists specifically to catch what urgency makes people miss.'},
+    {title: 'A network topology the eval set never modeled', problem: 'A capacity-planning fine-tune\'s evaluation set covered dozens of network scenarios, just not the one a canary user actually sent it. The gap only became visible once real traffic, not the eval set, was doing the asking.', solution: 'The team did not have to guess which topology was missing. Canary traffic surfaced it directly: recommendations for that specific scenario were noticeably worse than everywhere else, and the rollout held at that stage until the fine-tuning data caught up.', risk: 'An eval set is a guess at what traffic will look like, an educated one, but still a guess; a canary stage is where that guess gets checked against reality, cheaply, before a full rollout checks it expensively.'},
+    {title: 'A second fine-tune that fixed nothing, because nothing was wrong with the model', problem: 'A NOC assistant\'s live performance drifted noticeably worse than its evaluation results over several weeks, and the team\'s response was to fine-tune it again.', solution: 'A second fine-tune came first, and it did nothing, because the model was never broken. What had actually changed was a chat-formatting update on the serving side, reshaping how conversation history got built into each prompt before the model ever saw it. Once training and serving shared the same formatting code again, the regression was gone.', risk: 'Fine-tuning a model to fix a problem that lives in the serving code around it burns a fine-tuning cycle and leaves the actual cause exactly where it was.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'Why might a team with only one fine-tuned model choose to merge its adapter into the base model, and why does that choice usually stop making sense once there are many fine-tunes to serve?', answer: 'Merging adds no extra inference latency and gives that one fine-tune maximum throughput, which is ideal when it is the only model being served. Once there are many fine-tunes, merging each one requires maintaining a full separate copy of the base model per fine-tune, which S-LoRA\'s authors note becomes substantial at scale; serving adapters unmerged from one shared deployment avoids that duplication.'},
+    {question: 'According to Zinkevich\'s guidance, what is the recommended way to keep a model\'s training and serving pipelines consistent, and what LLM-specific failure does this same problem cause when it goes wrong?', answer: 'The guidance recommends reusing code between the training and serving pipelines, and logging the exact features used at serving time so they can be reused for training. For a fine-tuned language model, the equivalent failure is a prompt template, tokenizer version, or chat-formatting difference between the fine-tuning script and the serving stack, which silently changes what the model actually receives without changing the model itself.'},
+    {question: 'What is the difference between a shadow deployment and a canary release, and why does a team typically use both rather than picking one?', answer: 'A shadow deployment mirrors production traffic to the new model without ever showing its output to a real user, so it carries zero user-facing risk but only validates the model against traffic patterns. A canary release exposes a small, growing share of real users to real output, which is the only way to test how the model performs under actual user behavior. Using shadow first and canary second lets a team catch problems with zero risk before accepting any real risk at all.'},
+    {question: 'What does Martin Fowler describe as the rollback strategy for a canary release, and what has to be true about the previous version for that strategy to actually be fast?', answer: 'The rollback strategy is to reroute users back to the old version until the problem is fixed. For that to be fast, the previous version has to still be deployed and warm, not archived somewhere that takes significant time to restore, which is part of why treating each version as a versioned, registered artifact matters.'},
+    {question: 'In the Hands-On canary rollout simulator, what specifically triggers a rollback, and how is that different from what Chapter 7.6\'s evaluation gate alone would have caught?', answer: 'A rollback triggers when the challenger\'s accuracy on the sample eval drops more than the set threshold, in percentage points, below the champion\'s accuracy, checked at each canary stage before ramping further. Chapter 7.6\'s evaluation gate is a one-time before-and-after check that happens before deployment; this simulator applies that same kind of check repeatedly during the rollout itself, so a regression can still trigger an automatic response even after the model already passed the gate.'},
+  ]}
+/>
