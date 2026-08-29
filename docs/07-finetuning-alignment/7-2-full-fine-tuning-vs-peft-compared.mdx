@@ -1,0 +1,315 @@
+---
+title: "Full Fine-Tuning vs. Parameter-Efficient Fine-Tuning, Compared"
+sidebar_label: "7.2 Full Fine-Tuning vs. PEFT"
+sidebar_position: 2
+phase: 7
+chapter: "7.2"
+lms_presentation: "7.2-Full-Fine-Tuning-vs-PEFT-Slides.pptx"
+prerequisites: ["7.1"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 7.1 established when to fine-tune. This chapter covers how, and specifically why almost nobody
+in 2026 fine-tunes a model the way the term originally meant: updating every one of its weights. The
+paper that changed that, Hu et al.'s "LoRA: Low-Rank Adaptation of Large Language Models," is direct
+about the problem it set out to solve: "as we pre-train larger models, full fine-tuning, which retrains
+all model parameters, becomes less feasible." Their fix freezes the pretrained weights entirely and
+trains a small pair of low-rank matrices injected into each layer instead, and the reduction is not
+incremental: "compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable
+parameters by 10,000 times and the GPU memory requirement by 3 times," while performing "on-par or
+better than fine-tuning in model quality." QLoRA pushed the same idea further by fine-tuning through a
+quantized copy of the base model, reporting that it "reduces memory usage enough to finetune a 65B
+parameter model on a single 48GB GPU while preserving full 16-bit finetuning task performance." These
+are not the only parameter-efficient technique, adapter modules predate LoRA and add "within 0.4% of the
+performance of full fine-tuning, adding only 3.6% parameters per task," where "fine-tuning trains 100%
+of the parameters per task" by contrast. But parameter-efficient fine-tuning (PEFT) is not simply a
+cheaper way to reach the same destination: recent research analyzing the actual weight matrices LoRA and
+full fine-tuning produce found "LoRA and full fine-tuning yield weight matrices whose singular value
+decompositions exhibit very different structure," meaning the two methods learn genuinely different
+solutions even when their benchmark scores match. This chapter covers the mechanics of low-rank
+adaptation, why quantization stacks on top of it without destroying it, where adapters and prefix-tuning
+fit alongside LoRA, and the real cases where full fine-tuning's higher cost still buys something PEFT
+cannot.
+
+## High-Level Explanation
+
+Think of a pretrained model's weights as a finished, enormous reference library, correct enough to be
+useful for almost anything, too large and too expensive to rewrite from scratch every time one department
+needs it to talk differently. Full fine-tuning is rewriting every book in that library to reflect a new
+department's needs: thorough, but the storage cost and the printing cost are the size of the whole
+library, every single time, for every single department. Parameter-efficient fine-tuning is something
+closer to slipping a thin insert into the spine of each relevant book, small enough to produce and store,
+easily removed or swapped for a different department's insert, and yet capable of redirecting how the
+book reads without a single original page being reprinted. LoRA is the most widely used version of that
+insert: instead of touching the model's original weight matrices at all, it adds a small, trainable
+low-rank pair of matrices alongside them, and only that small pair gets updated during training.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-2-library-insert-analogy.svg').default}
+    alt="A side-by-side comparison: full fine-tuning shown as rewriting every book in an enormous library, versus parameter-efficient fine-tuning shown as slipping a small trainable insert into each relevant book while every original page stays untouched."
+  />
+  <figcaption>Full fine-tuning updates the whole library. PEFT trains a small, swappable insert and leaves every original page exactly as it was.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Full fine-tuning stopped scaling before parameter-efficient techniques existed to replace it.** The
+LoRA paper names the exact problem: "as we pre-train larger models, full fine-tuning, which retrains all
+model parameters, becomes less feasible," and it is specific about why: "using GPT-3 175B as an
+example... deploying independent instances of fine-tuned models, each with 175B parameters, is
+prohibitively expensive." Every downstream task fine-tuned this way needs its own full-sized copy of the
+model, stored and served independently. LoRA's fix freezes the pretrained weights entirely and injects a
+pair of small, trainable low-rank matrices into each layer of the transformer, so training only ever
+touches that pair. The resulting numbers are not a modest improvement: "compared to GPT-3 175B fine-tuned
+with Adam, LoRA can reduce the number of trainable parameters by 10,000 times and the GPU memory
+requirement by 3 times." Despite training a tiny fraction of the parameters, LoRA "performs on-par or
+better than fine-tuning in model quality on RoBERTa, DeBERTa, GPT-2, and GPT-3," with a further practical
+advantage: unlike some earlier adapter approaches, it adds "no additional inference latency," since the
+low-rank update can be merged back into the original weights before serving.
+
+**QLoRA stacks quantization underneath LoRA without sacrificing the fine-tune's quality.** Dettmers et
+al.'s QLoRA fine-tunes through a 4-bit quantized copy of the frozen base model while still training
+full-precision LoRA adapters on top of it, and the memory savings compound directly with LoRA's own: it
+"reduces memory usage enough to finetune a 65B parameter model on a single 48GB GPU while preserving full
+16-bit finetuning task performance." Three specific techniques make that possible: "4-bit NormalFloat
+(NF4), a new data type that is information theoretically optimal for normally distributed weights,"
+"double quantization to reduce the average memory footprint by quantizing the quantization constants,"
+and "paged optimizers to manage memory spikes" during training. The model QLoRA produced, Guanaco,
+"outperforms all previous openly released models on the Vicuna benchmark, reaching 99.3% of the
+performance level of ChatGPT while only requiring 24 hours of finetuning on a single GPU." QLoRA is the
+reason a single consumer or workstation-class GPU can fine-tune a model that would otherwise need a
+multi-GPU server just to hold in memory, let alone train.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-2-qlora-quantization-stack.svg').default}
+    alt="A diagram showing QLoRA's stack: the frozen base model is quantized to 4-bit NormalFloat precision to shrink its memory footprint, double quantization further compresses the quantization constants themselves, and paged optimizers absorb memory spikes during training, while the trainable LoRA adapter pair sits on top and continues to train at full precision."
+  />
+  <figcaption>Quantization only ever touches the frozen base. The trainable low-rank pair still learns at full precision, which is why QLoRA does not trade away fine-tune quality for memory savings.</figcaption>
+</figure>
+
+**LoRA is the most widely adopted parameter-efficient technique, but adapters came first, and the
+underlying principle is the same one Hugging Face's PEFT library states directly.** Houlsby et al.'s
+2019 adapter-tuning paper predates LoRA and inserts small trainable modules between existing transformer
+layers rather than alongside the weight matrices themselves; on the GLUE benchmark, adapters "attain
+within 0.4% of the performance of full fine-tuning, adding only 3.6% parameters per task," where "by
+contrast, fine-tuning trains 100% of the parameters per task." Hugging Face's own framing of why this
+matters generalizes past any one technique: "PEFT approaches only fine-tune a small number of (extra)
+model parameters while freezing most parameters of the pretrained LLMs, thereby greatly decreasing the
+computational and storage costs," and "this also overcomes the issues of catastrophic forgetting, a
+behaviour observed during the full finetuning of LLMs." The storage difference alone is enormous at
+scale: "`bigscience/mt0-xxl` takes up 40GB of storage and full fine-tuning will lead to 40GB checkpoints
+for each downstream dataset whereas using PEFT methods it would be just a few MBs," with one concrete
+adapter checkpoint totaling "just 19MB."
+
+**PEFT is not simply a cheaper way to reach the same destination as full fine-tuning; it finds a
+genuinely different solution.** A 2024 analysis of the actual weight matrices each method produces put
+this precisely: studying the singular value decomposition of trained weights, the authors "find that LoRA
+and full fine-tuning yield weight matrices whose singular value decompositions exhibit very different
+structure: weight matrices trained with LoRA have new, high-ranking singular vectors, which we call
+intruder dimensions, while those trained with full fine-tuning do not." The same research found that
+"LoRA forgets less than full fine-tuning" overall, a genuine PEFT advantage consistent with Hugging
+Face's catastrophic-forgetting framing above, but a more specific finding complicates the "PEFT is just
+cheaper full fine-tuning" mental model directly: examining the intruder dimensions LoRA introduces, the
+authors found "they cause forgetting" exactly where they appear. Two methods reaching similar benchmark
+scores are not proof the underlying solutions are equivalent, and for a task that needs the model's
+behavior to generalize well outside the fine-tuning distribution, or a domain shift large enough that a
+low-rank update genuinely cannot represent the needed change, full fine-tuning's higher cost still buys
+something a rank-limited update structurally cannot.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-2-loss-landscape-different-solutions.svg').default}
+    alt="A diagram illustrating that LoRA and full fine-tuning can reach similar benchmark scores while producing structurally different weight matrices. LoRA-trained weights show new high-ranking singular vectors called intruder dimensions, which full fine-tuning does not produce, and which the same research links to localized forgetting."
+  />
+  <figcaption>Matching benchmark scores do not mean matching solutions: LoRA and full fine-tuning provably learn different structure inside the model's weights.</figcaption>
+</figure>
+
+## Hands-On: Fine-Tune a Small Model with LoRA
+
+The fastest way to see why LoRA's parameter count is so much smaller is to print it. This walkthrough
+fine-tunes a small open-weight model using Hugging Face's `peft` and `transformers` libraries, the same
+libraries the self-hosted path from Chapter 7.1 depends on.
+
+**Step 1: Install the libraries and load a small base model.**
+
+```bash
+pip install transformers peft datasets accelerate
+```
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_name = "distilgpt2"  # a small model, easy to run on a single GPU or CPU
+base_model = AutoModelForCausalLM.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token  # distilgpt2 has no pad token by default
+```
+
+**Step 2: Define a LoRA configuration and wrap the model with it.** `r` is the rank of the injected
+low-rank matrices, the single most important LoRA hyperparameter; a smaller `r` means fewer trainable
+parameters and a more compressed update.
+
+```python
+from peft import LoraConfig, get_peft_model, TaskType
+
+lora_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    r=8,
+    lora_alpha=16,
+    lora_dropout=0.05,
+    target_modules=["c_attn"],  # the attention projection layers in GPT-2-family models
+)
+
+peft_model = get_peft_model(base_model, lora_config)
+```
+
+**Step 3: Print the trainable-parameter count, the number that makes LoRA's case on its own.**
+
+```python
+peft_model.print_trainable_parameters()
+# trainable params: 147,456 || all params: 82,060,032 || trainable%: 0.1797
+```
+
+Fewer than 150,000 of the model's 82 million parameters are trainable, under 0.2%, directly matching the
+order of magnitude Hugging Face's own PEFT documentation reports for a similarly-configured model.
+
+**Step 4: Fine-tune on a small labeled dataset using the standard `Trainer` API, unchanged from a full
+fine-tuning run.** The only difference from a full fine-tune's training code is which model object gets
+passed in; the training loop itself does not need to know it is only updating a small adapter. A handful
+of example strings is enough to see the mechanics work end to end; a real fine-tune would load a curated
+dataset here instead, per the sizing guidance from Chapter 7.1.
+
+```python
+from datasets import Dataset
+from transformers import TrainingArguments, Trainer, DataCollatorForLanguageModeling
+
+examples = [
+    "Trade note: client requested a limit order review before market close.",
+    "Trade note: position flagged for compliance review pending manager sign-off.",
+    # ...50-100 curated examples in a real fine-tune, per Chapter 7.1's thresholds
+]
+raw_dataset = Dataset.from_dict({"text": examples})
+train_dataset = raw_dataset.map(
+    lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=32),
+    batched=True,
+)
+data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+training_args = TrainingArguments(
+    output_dir="./lora-output",
+    per_device_train_batch_size=4,
+    num_train_epochs=3,
+    learning_rate=2e-4,
+    logging_steps=10,
+)
+
+trainer = Trainer(
+    model=peft_model,
+    args=training_args,
+    train_dataset=train_dataset,
+    data_collator=data_collator,
+)
+trainer.train()
+```
+
+**Step 5: Save only the adapter, not the whole model.** This is the checkpoint-size difference from the
+Deep-Dive section made concrete: saving a LoRA adapter produces a few megabytes, not a full multi-gigabyte
+model checkpoint.
+
+```python
+peft_model.save_pretrained("./lora-adapter")
+# ls -lh ./lora-adapter
+# adapter_config.json   adapter_model.safetensors   (a few MB total, not a full model copy)
+```
+
+The same adapter directory can later be loaded back onto the original frozen base model with
+`PeftModel.from_pretrained(base_model, "./lora-adapter")`, or merged directly into the base weights with
+`peft_model.merge_and_unload()` before serving, which is exactly what removes the extra inference latency
+the Deep-Dive section described.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Full fine-tuning', 'Adapters (Houlsby et al.)', 'LoRA', 'QLoRA']}
+  rows={[
+    {aspect: 'What gets trained', values: ['Every model parameter', 'Small modules inserted between existing layers', 'A low-rank matrix pair injected alongside frozen weights', 'The same low-rank pair, trained through a 4-bit quantized frozen base'], decisive: true},
+    {aspect: 'Trainable parameters', values: ['100% of the model', '~3.6% added per task (Houlsby et al.)', 'Can be 10,000x fewer than full fine-tuning (Hu et al.)', 'Same order of magnitude as LoRA, plus a quantized base'], decisive: true},
+    {aspect: 'Checkpoint size', values: ['A full model copy per task, tens of GB', 'A few MB per task', 'A few MB per task, mergeable into the base weights', 'A few MB per task, mergeable into a dequantized base'] },
+    {aspect: 'Hardware needed', values: ['Often a multi-GPU server for a large model', 'Meaningfully less than full fine-tuning', 'A single capable GPU for many mid-sized models', 'A single 48GB GPU can fine-tune a 65B-parameter model (Dettmers et al.)'] },
+    {aspect: 'Where it still wins', values: ['A domain shift large enough that a low-rank update cannot represent it; maximum achievable quality regardless of cost', 'Rarely chosen over LoRA today; largely superseded in practice', 'The default choice for most narrow, well-scoped fine-tunes (Ch. 7.1)', 'The default choice when the base model does not fit in available GPU memory at full precision'] },
+  ]}
+  caption="LoRA and QLoRA are not simply cheaper full fine-tuning: the intruder-dimensions finding above means they can learn a structurally different solution, which is why a large enough domain shift can still favor paying full fine-tuning's cost."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where a LoRA update lives inside a transformer layer"
+  mermaid={`
+flowchart TD
+  IN[Input activations] --> FROZEN[Frozen pretrained weight matrix W]
+  IN --> LORA_A[Trainable low-rank matrix A, rank r]
+  LORA_A --> LORA_B[Trainable low-rank matrix B]
+  FROZEN --> SUM[Sum: W·x + B·A·x]
+  LORA_B --> SUM
+  SUM --> OUT[Output activations, next layer]
+  SUM -.merge before serving.-> MERGED[Merged weights: W' = W + B·A]
+  MERGED --> SERVE[Inference: no extra latency, Hu et al.]
+`}
+  components={[
+    {name: 'Frozen pretrained weight matrix', responsibility: 'Never updated during training; this is what keeps the trainable-parameter count near zero.'},
+    {name: 'Low-rank matrices A and B', responsibility: 'The only parameters trained. Rank r (Step 2 of the Hands-On walkthrough) controls how many parameters this pair actually holds.'},
+    {name: 'Sum at training/inference time', responsibility: 'The frozen path and the low-rank path are added together; QLoRA additionally quantizes the frozen path to 4-bit (NF4) before this sum.'},
+    {name: 'Merge before serving', responsibility: 'Folding B·A directly into W produces a single weight matrix again, which is what removes the extra inference latency other adapter approaches can add.'},
+  ]}
+/>
+
+The same diagram explains why QLoRA does not sacrifice fine-tune quality for memory savings: quantization
+only ever touches the frozen path, never the trainable low-rank pair, so the update itself is still
+learned and applied at full precision regardless of what precision the frozen base is stored in.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A trading-note fine-tune that shrank from a GPU-cluster estimate to a single GPU', problem: 'A team scoped a fine-tuning project for a note-summarization task by pricing out a full fine-tuning run of their base model, arriving at a multi-GPU server estimate that made the whole project a hard sell before any training had actually started.', solution: 'Re-scope the same project around LoRA, training a low-rank adapter pair instead of the full model, cutting the trainable-parameter count and the GPU memory requirement by orders of magnitude while matching full fine-tuning\'s quality on the target task.', risk: 'Pricing a fine-tuning project against full fine-tuning\'s hardware requirements by default, without first checking whether a parameter-efficient method reaches the same quality bar, can kill a project that a single capable GPU would actually have been enough for.'},
+    {title: 'A compliance-formatting adapter that shipped from a single workstation GPU', problem: 'A compliance team needed a narrow formatting fine-tune for flagging trade notes, and their only available hardware was a single workstation-class GPU nowhere near large enough to hold their base model plus full fine-tuning\'s optimizer state in memory at once.', solution: 'Apply QLoRA, fine-tuning through a 4-bit quantized copy of the base model while training a full-precision LoRA adapter on top of it, fitting the entire job on the one GPU the team actually had.', risk: 'Assuming a fine-tuning project is blocked by available hardware, without checking whether quantized fine-tuning changes that calculation, can stall a project for months waiting on a GPU budget approval that quantization would have made unnecessary.'},
+    {title: 'A desk running a dozen narrow fine-tunes that could never have afforded a dozen full checkpoints', problem: 'A trading desk wanted a separately fine-tuned model for each of a dozen narrow formatting tasks, and storing a dozen full-sized model checkpoints, tens of gigabytes each, was a storage and deployment cost nobody had budgeted for.', solution: 'Each of the dozen tasks got its own small LoRA adapter trained against one shared frozen base model, so the desk ended up storing a dozen lightweight adapter files and serving them off a single deployed base, instead of running a dozen independent models side by side.', risk: 'A dozen full fine-tuned checkpoints is a dozen times the storage, the deployment complexity, and the drift-tracking burden of a dozen small adapters sharing one base model, a cost multiplier that compounds with every additional narrow task added later.'},
+    {title: 'When a new asset class turned out to need full fine-tuning after all', problem: 'A research team fine-tuning a model to reason about an entirely new asset class, one the base model had essentially no exposure to during pretraining, found their LoRA fine-tune plateaued below the quality bar a full fine-tuning run on the same data eventually reached.', solution: 'This is exactly the domain-shift case the chapter\'s intruder-dimensions research warns about: a low-rank update cannot represent a change this large, so the higher cost of full fine-tuning got budgeted specifically for this one task.', risk: 'Treating LoRA as a universal default, rather than checking whether a task\'s domain shift is this large, is how a team ends up capping quality on precisely the task where the base model started out furthest from what it needed to know.'},
+  ]}
+  healthcare={[
+    {title: 'A discharge-note formatting adapter that fit in a single hospital-system GPU budget', problem: 'A hospital system wanted a fine-tuned model for discharge-note formatting, and an initial full-fine-tuning cost estimate implied provisioning a multi-GPU training cluster the hospital\'s IT budget for the project could not reasonably support.', solution: 'The same formatting behavior went into a small low-rank adapter instead of a full retrain, and a single GPU already sitting in the hospital\'s infrastructure turned out to be enough to run it, at a fraction of the original hardware estimate.', risk: 'A hospital IT budget built around a full-fine-tuning cost estimate can make an otherwise valuable clinical-formatting project look unaffordable, when a parameter-efficient method would have fit the existing budget from the start.'},
+    {title: 'A clinical triage fine-tune QLoRA made possible without a hardware upgrade', problem: 'A clinical department had identified a larger, more capable base model as the right fit for triage-note structuring, but a full-precision fine-tuning run of that model would not fit in the memory of the GPU already sitting in their server room, and a hardware upgrade was not going to happen before the next budget cycle.', solution: 'QLoRA closed the gap: quantizing the larger base model to 4-bit precision brought its memory footprint down to what the existing GPU could hold, while the LoRA adapter trained on top of it stayed at full precision throughout.', risk: 'Assuming a better base model is out of reach without new hardware, when quantized fine-tuning would have made it reachable on what the department already owned, is a conclusion worth checking before it shapes a budget request.'},
+    {title: 'Why cardiology, oncology, and radiology ended up sharing one deployed model', problem: 'A health system needed distinctly different note-structuring behavior for cardiology, oncology, and radiology, and the first plan, a fully fine-tuned model per specialty, meant three times the storage, three times the patching surface, and three separate deployments to keep synchronized.', solution: 'Cardiology, oncology, and radiology each got their own small LoRA adapter, all three trained against the same frozen base model that stays deployed once; which adapter loads is just a matter of which specialty the request came from.', risk: 'Three independently deployed full models triple everything that has to be patched, monitored, and kept in sync, a cost that scales with every specialty added, in a way three adapters sharing one base model does not.'},
+    {title: 'A benchmark score that hid how far the rare-disease fine-tune still had to go', problem: 'A rare-disease area was barely represented in the base model\'s pretraining data, and a LoRA fine-tune aimed at that area matched a fully fine-tuned baseline on the team\'s benchmark. On real clinical notes that fell outside the benchmark\'s exact phrasing, though, the LoRA version noticeably underperformed.', solution: 'Treat matching benchmark scores as insufficient proof of matching solutions, consistent with the research finding that LoRA and full fine-tuning produce structurally different weight matrices, and specifically test out-of-distribution generalization before trusting a LoRA fine-tune in a domain this far from the base model\'s pretraining exposure.', risk: 'A benchmark score alone cannot reveal that two fine-tuning methods learned different underlying solutions, and shipping on benchmark parity alone risks a clinical model that behaves reliably on the test set and unreliably on the actual variety of notes it will see in production.'},
+  ]}
+  telecom={[
+    {title: 'An incident-classification fine-tune that dropped from a GPU cluster proposal to one GPU', problem: 'A carrier\'s NOC tooling team proposed a full-fine-tuning project for incident-severity classification, and the resulting multi-GPU cluster proposal took long enough to get budget approval that the incident-classification problem it was meant to fix kept costing the team in manual triage time while it waited.', solution: 'Once the same classification task was re-scoped around a small trainable adapter rather than a full retrain, the budget proposal shrank from a multi-GPU cluster to hardware the team already had, and approval followed within days.', risk: 'A budget proposal scoped around full fine-tuning\'s hardware needs, when a parameter-efficient method could have delivered the same result far faster and cheaper, costs a team real time solving the problem it was trying to fix.'},
+    {title: 'How QLoRA let a NOC run five fine-tuning experiments on the GPU that used to run one', problem: 'A NOC wanted to try several candidate base models for incident summarization before committing to one, but a full-precision fine-tuning run of even a single candidate consumed nearly all the memory on the team\'s one available GPU, leaving no room to compare candidates in parallel or in quick succession.', solution: 'Running each candidate through QLoRA instead of a full-precision fine-tune left enough memory headroom to cycle through five candidate models on the same GPU in the time a single full-precision run would have taken.', risk: 'A team that only ever budgets one full-precision fine-tuning run per GPU cycle may never actually compare candidate base models against each other, simply because the memory cost of full-precision fine-tuning made a real comparison impractical.'},
+    {title: 'One base model, five regional adapters, instead of five separate deployments', problem: 'A carrier needed incident reports phrased differently across five operating regions, and standing up a fully fine-tuned model for each region meant five times the deployment footprint and five separate version histories to track through every future update.', solution: 'Each region got a small LoRA adapter trained against one shared base model, and the region a request came from determined which adapter was applied, rather than which of five independently maintained models handled it.', risk: 'Five independently maintained full models multiply the operational burden of every future update by five; five adapters sharing one base model do not.'},
+    {title: 'A network-anomaly fine-tune where the domain shift was large enough to justify full fine-tuning', problem: 'A class of network anomalies sat well outside anything resembling the base model\'s pretraining data. Benchmarked side by side, a LoRA fine-tune and a fully fine-tuned baseline scored about the same, and it was only against genuinely novel anomaly patterns outside that benchmark that the LoRA version\'s behavior noticeably fell behind.', solution: 'This is a large-domain-shift case: a rank-limited update structurally caps how much the model can actually change, so the team budgeted full fine-tuning\'s higher hardware and time cost specifically here rather than defaulting to LoRA across the board.', risk: 'Defaulting to LoRA everywhere, without checking how large a specific task\'s domain shift actually is, is how the anomaly patterns most different from the base model\'s pretraining data, often the ones that matter most to catch, end up with the most quietly capped quality.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What specific problem did LoRA set out to solve, and what are the concrete numbers it reports compared to full fine-tuning?', answer: 'LoRA addresses the fact that "full fine-tuning, which retrains all model parameters, becomes less feasible" as models scale, since each fine-tuned task otherwise needs its own full-sized model copy. Compared to full fine-tuning GPT-3 175B, LoRA reduces trainable parameters by 10,000 times and GPU memory requirements by 3 times, while matching or exceeding full fine-tuning\'s quality and adding no extra inference latency once merged.'},
+    {question: 'How does QLoRA extend LoRA, and what does that combination make possible that LoRA alone does not?', answer: 'QLoRA quantizes the frozen base model to 4-bit precision (using the NF4 data type, double quantization, and paged optimizers) while still training full-precision LoRA adapters on top of it. That combination lets a 65-billion-parameter model be fine-tuned on a single 48GB GPU, something full-precision LoRA fine-tuning of a model that size could not fit into that same hardware.'},
+    {question: 'Why does the chapter say PEFT is "not simply a cheaper way to reach the same destination" as full fine-tuning?', answer: 'Research analyzing the singular value decomposition of trained weight matrices found that LoRA and full fine-tuning produce structurally different results: LoRA introduces new high-ranking singular vectors called intruder dimensions that full fine-tuning does not produce, and those intruder dimensions were shown to cause localized forgetting. Two methods can reach similar benchmark scores while having learned genuinely different underlying solutions.'},
+    {question: 'In the Hands-On walkthrough, what does printing the trainable-parameter count actually demonstrate, and why does merging the adapter before serving matter?', answer: 'Printing the trainable-parameter count shows directly that only a small fraction of the model\'s total parameters, under 0.2% in the walkthrough\'s example, are ever updated during a LoRA fine-tune, since the base model\'s weights stay completely frozen. Merging the adapter into the base weights before serving folds the low-rank update back into a single weight matrix, which is what removes the extra inference-time computation an unmerged adapter would otherwise add.'},
+    {question: 'What kind of situation does this chapter identify as one where full fine-tuning\'s higher cost still buys something PEFT cannot?', answer: 'A domain shift large enough that a low-rank update structurally cannot represent the needed change, such as adapting a model to a subject area the base model had almost no exposure to during pretraining. In that case a LoRA fine-tune can match a full fine-tune\'s benchmark score while still underperforming on behavior that falls outside the benchmark\'s exact distribution, which is the practical consequence of the intruder-dimensions finding.'},
+  ]}
+/>

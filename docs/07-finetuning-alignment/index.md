@@ -17,10 +17,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 ## Chapters
 
 - [7.1 When to Fine-Tune vs. Prompt vs. RAG: A Decision Framework](./7-1-fine-tune-vs-prompt-vs-rag-decision-framework.mdx)
+- [7.2 Full Fine-Tuning vs. Parameter-Efficient Fine-Tuning, Compared](./7-2-full-fine-tuning-vs-peft-compared.mdx)
 
 ## Planned chapters
 
-- 7.2 Full Fine-Tuning vs. Parameter-Efficient Fine-Tuning — Compared
 - 7.3 Alignment Techniques Deep Dive: Instruction Tuning, RLHF, RLAIF, DPO
 - 7.4 Domain Adaptation & Continual Pretraining
 - 7.5 Model Compression: Distillation, Quantization, Pruning
