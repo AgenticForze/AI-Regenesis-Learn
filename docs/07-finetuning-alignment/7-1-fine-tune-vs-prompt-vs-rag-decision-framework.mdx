@@ -1,0 +1,219 @@
+---
+title: "When to Fine-Tune vs. Prompt vs. RAG: A Decision Framework"
+sidebar_label: "7.1 Fine-Tune vs. Prompt vs. RAG"
+sidebar_position: 1
+phase: 7
+chapter: "7.1"
+lms_presentation: "7.1-Fine-Tune-vs-Prompt-vs-RAG-Slides.pptx"
+prerequisites: ["5.8", "6.9"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 5.8 gave the first version of this decision: prompting first, RAG for a knowledge problem,
+fine-tuning for a behavior problem. This chapter revisits it with more weight behind it, now that Phase
+6 covered exactly how RAG works and Phase 7 is about to cover exactly how fine-tuning works. The single
+sharpest test for which side of that split a problem falls on comes from Anyscale's engineering team:
+"Fine-tuning typically results in creating a niche model for a niche use-case. The problems that this
+approach is effective at are usually those that involve learning the style or form of language rather
+than learning new concepts that do not exist in the base knowledge of the foundational model." Their
+own experiment made the failure mode concrete: they fine-tuned a
+model on a version of Shakespeare with every "Romeo" replaced by "Bob," and the model never learned the
+substitution, because "next token prediction loss on a tiny text that replaces Romeo with Bob cannot
+change the internals of the neural networks knowledge base." OpenAI's own guidance backs the same
+sequencing: "the prompt engineering process may be all you need in order to get great results for your
+use case," and a fine-tuning practitioner's guidance from OpenAI puts real numbers on how rarely it's
+warranted even among people already building on the API, noting adoption is "less than one percent" and
+calling fine-tuning "one of the last tools you should reach for." The concrete data floor is also
+smaller than most teams expect: "there should be at least 10 examples," with "between 50 and 100
+examples" as a practical recommendation once a task is well-scoped enough that more data helps. This
+chapter matters more in 2026 than it would have a year earlier for a second reason: OpenAI is winding
+down self-serve fine-tuning, stating plainly that "the platform is no longer accessible to new users,"
+which pushes closed-model fine-tuning toward vendor-assisted programs and pushes the accessible,
+self-serve path toward the open-weight, parameter-efficient techniques covered starting in Chapter 7.2.
+
+## High-Level Explanation
+
+Before touching any training code, a practicing engineer runs one diagnostic question first: is the
+model getting this wrong because it doesn't know something, or because it isn't behaving the way it's
+supposed to? A wrong or outdated fact, a citation nobody can verify, an answer that ignores a document
+that changed last week, all of those are knowledge problems, and Phase 6 exists because fine-tuning
+cannot reliably fix them. A response in the wrong format, a tone that keeps drifting off-brand, an
+instruction that needs to be re-explained in every single prompt, those are behavior problems, and only
+behavior problems are fine-tuning's actual target. Prompting is tried before either, because it is
+the cheapest experiment available and often resolves what looks like a behavior problem without
+touching model weights at all. The mistake this chapter is built to prevent is running that diagnostic
+backward: reaching for a training run to fix a knowledge gap, discovering months later that the model
+still doesn't reliably know the fact, and only then tracing the failure back to a question that should
+have been asked on day one.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-1-three-levers-overview.svg').default}
+    alt="A decision triage diagram: a failure is first diagnosed as either a knowledge gap or a behavior gap. A knowledge gap routes to RAG, covered in Phase 6. A behavior gap routes first to prompting, and only escalates to fine-tuning if prompting cannot close the remaining gap."
+  />
+  <figcaption>The diagnostic question comes before the tool choice: knowledge gaps and behavior gaps are different problems that call for different fixes, and prompting is the first thing tried for either.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Fine-tuning changes form, not facts, and the mechanism explains why.** Anyscale's engineering team ran
+a direct test of what fine-tuning actually teaches a model: they took the works of Shakespeare, replaced
+every instance of the name "Romeo" with "Bob," and fine-tuned a model on that modified text expecting it
+to learn the substitution as a new fact. It did not. Prompted afterward with "Romeo" in the input, the
+model's completion never even produced "Bob" in response, leading the authors to conclude "the model has
+not learned about this new concept." Their explanation is a statement about the training objective
+itself: "next token prediction loss on a tiny text that replaces Romeo with Bob cannot change the
+internals of the neural networks knowledge base." The broader claim generalizes past a name-swap toy
+example: "the area where fine tuning doesn't work that well is when it comes to facts and hallucination,"
+and their recommended fix for a knowledge problem is exactly the architecture Phase 6 spent nine chapters
+building: "have the facts in a separate store, look up those facts and include them in the prompt we send
+to the system." Before starting any fine-tuning project, their framing reduces to one question: "does
+solving my task require incorporating new concepts into the internal knowledge graph represented inside
+the neural network or not." A "yes" points at RAG. A "no," where the task is instead about consistently
+reproducing a style, a format, or a narrow behavior, is what fine-tuning is actually built for.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-1-form-vs-facts.svg').default}
+    alt="Two contrasting boxes. Form and behavior, such as output format, tone, and narrow task compliance, sits on the left as something fine-tuning can reliably learn. Facts and knowledge, such as a changed policy or a new product name, sits on the right as something fine-tuning cannot reliably learn, illustrated by the Romeo-to-Bob substitution that a fine-tuning run failed to teach a model."
+  />
+  <figcaption>The same training run that reliably teaches a model to always answer in JSON will not reliably teach it that a name changed, because next-token prediction loss on a small dataset does not rewrite the model's internal knowledge.</figcaption>
+</figure>
+
+**OpenAI's own sequencing puts prompting first for a concrete, stated reason: it might just be enough.**
+Their model-optimization guidance states it directly: "the prompt engineering process may be all you need
+in order to get great results for your use case." The benefits fine-tuning offers over prompting alone
+are real, but every one of them is a scaling or cost argument rather than a starting-point argument: "you
+can use shorter prompts with fewer examples and context data, which saves on token costs at scale and can
+be lower latency," "you can provide more example inputs and outputs than could fit within the context
+window of a single request," "you can train on proprietary or sensitive data without having to include it
+via examples in every request," and "you can train a smaller, cheaper, faster model to excel at a
+particular task where a larger model is not cost-effective." Every one of those benefits presumes a
+prompt that has already grown long, a cost that is already adding up at volume, or a task that is already
+running often enough for a smaller specialized model to be worth building. None of them is a reason to
+skip straight to fine-tuning before a prompt has been tried and measured against an eval set at all, the
+same golden-dataset discipline Chapter 5.6 already established.
+
+**The practical thresholds are lower, and stricter, than most teams assume.** A fine-tuning practitioner
+guide from an OpenAI team member is specific about both ends of this: on the low end, "there should be at
+least 10 examples," with "between 50 and 100 examples" as the practical recommendation once a task
+justifies the investment; on scope, "ensure that each fine-tuned model is for one task only," rather than
+one general-purpose fine-tune expected to improve several unrelated behaviors at once; and on production
+fidelity, "keep system and user prompts similar between training and production," since a model
+fine-tuned against one prompt template and then served behind a different one in production loses much
+of what the fine-tune was supposed to buy. The same source puts a number on how rarely any of this gets
+reached for in practice among people already building on a frontier model API: fine-tuning adoption sits
+at "less than one percent," described as "one of the last tools you should reach for" only after
+prompting and retrieval have been genuinely exhausted, not tried once and abandoned.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-1-decision-sequencing.svg').default}
+    alt="A sequencing diagram: write an eval set first, then prompt and measure against it, then only fine-tune if a real behavior gap remains after prompting. Concrete thresholds are annotated: at least 10 training examples, 50 to 100 recommended, one task per fine-tuned model, and matching prompts between training and production."
+  />
+  <figcaption>Fine-tuning is the last step in this sequence, not the first, and it comes with concrete minimums, not a vague sense that "the model isn't quite right yet."</figcaption>
+</figure>
+
+**The vendor landscape for fine-tuning itself is shifting in 2026, and that shift changes which path is
+actually accessible.** OpenAI's own deprecation notice lays out a phased wind-down of self-serve
+fine-tuning: on May 7, 2026, "creating fine-tuning jobs or training is not available to organizations
+that have not previously run fine-tuning"; from July 2, 2026, "creating fine-tuning jobs is no longer
+available to organizations that have not run inference on a fine-tuned model in the past 60 days"; and
+by January 6, 2027, "active existing customers will no longer be able to create new fine-tuning jobs on
+this date." Existing fine-tuned models are not being pulled: "inference on fine-tuned models will
+continue to be available until the base models are deprecated." The stated reason is a shift toward
+higher-touch alternatives: OpenAI describes assisted fine-tuning for teams that need "support setting up
+efficient training data pipelines" and a separate custom-trained-models track for organizations with
+larger amounts of proprietary data, both replacing what used to be a self-serve API call. For a team
+deciding whether fine-tuning is even reachable without a vendor relationship, this matters directly: the
+self-serve door on a frontier closed model is narrowing, while the open-weight ecosystem, and the
+parameter-efficient techniques Chapter 7.2 covers next, remains the accessible path for a team that wants
+to run its own fine-tuning job without waiting on a vendor's assisted program.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Prompting (Ch. 5)', 'RAG (Ch. 6)', 'Vendor-assisted fine-tuning', 'Self-hosted PEFT (Ch. 7.2)']}
+  rows={[
+    {aspect: 'What it fixes', values: ['A behavior or format gap the model can already express, just not consistently yet', 'A knowledge gap: stale, missing, or unverifiable facts a frozen model cannot know', 'A recurring behavior or format gap at a scale that justifies a training relationship with a vendor', 'The same behavior or format gap, run on infrastructure the team controls directly'], decisive: true},
+    {aspect: 'Data and setup needed', values: ['None beyond examples written directly into the prompt', 'A retrieval pipeline and an indexed corpus (Ch. 6.1-6.4)', 'A curated training set, typically dozens to low hundreds of examples, plus a vendor onboarding process', 'The same curated training set, plus the team\'s own training compute and MLOps'], decisive: true},
+    {aspect: 'Update cycle when something changes', values: ['Edit the prompt, effective on the next request', 'Update the index; no retraining needed', 'A new training job through the vendor, subject to their access policy and turnaround', 'A new training job the team runs itself, on its own schedule'] },
+    {aspect: 'Access in 2026', values: ['Available to every API user, no gating', 'Available to every API user, no gating', 'Narrowing: OpenAI\'s self-serve platform is winding down in favor of assisted programs', 'Fully open: any team with an open-weight model and a GPU can start today'] },
+  ]}
+  caption="Prompting and RAG stay the default first moves regardless of vendor. What changed in 2026 is which fine-tuning path is actually reachable without a vendor relationship, not whether fine-tuning itself is still worth learning."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The decision path from a failing eval to the right fix"
+  mermaid={`
+flowchart TD
+  FAIL[Eval failure or observed gap, Ch. 5.6] --> DIAG{Knowledge gap or behavior gap?}
+  DIAG -->|Model doesn't know a fact| RAG[Retrieval-augmented generation, Phase 6]
+  DIAG -->|Model knows it, isn't behaving right| PROMPT[Revise prompt + few-shot examples, Phase 5]
+  PROMPT --> MEASURE{Gap closed against the eval set?}
+  MEASURE -->|Yes| DONE[Ship the prompt change]
+  MEASURE -->|No, gap persists at real volume/cost| SCOPE{"Is this one, narrow, well-scoped task?"}
+  SCOPE -->|No, task is broad or still shifting| PROMPT
+  SCOPE -->|Yes, 10+ curated examples available| ACCESS{Open-weight model available?}
+  ACCESS -->|Yes| PEFT[Self-hosted PEFT fine-tuning, Ch. 7.2]
+  ACCESS -->|No, closed model only| VENDOR[Vendor-assisted fine-tuning / custom models program]
+`}
+  components={[
+    {name: 'Eval failure', responsibility: 'The starting signal: a golden-dataset eval (Ch. 5.6) surfaces a real, measured gap, not an impression that the model "seems off."'},
+    {name: 'Knowledge-gap branch', responsibility: 'Routes straight to Phase 6\'s RAG pipeline; fine-tuning is not attempted for facts, per the form-not-facts principle.'},
+    {name: 'Behavior-gap branch', responsibility: 'Starts with prompt and few-shot revision, re-measured against the same eval set before anything else is tried.'},
+    {name: 'Scope and access checks', responsibility: 'Confirms the task is narrow enough and has enough curated examples (10+) before a training job is justified at all.'},
+    {name: 'Fine-tuning branch', responsibility: 'Splits by model access: self-hosted PEFT for open-weight models (Ch. 7.2), vendor-assisted programs where only a closed model is available.'},
+  ]}
+/>
+
+Most gaps a team investigates this way never reach the bottom of the tree. The point of running the
+diagnostic in order, knowledge-or-behavior first, then prompting, then scope and access, is that each
+step is cheaper than the one after it, and skipping straight to the bottom is how teams end up
+maintaining a fine-tuned model for a problem a five-minute prompt edit would have solved.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A trade-note summarizer that needed three prompt revisions, not a training run', problem: 'A team building a trade-note summarizer started collecting a labeled training set for fine-tuning the moment the model\'s output format was inconsistent, without first running a structured eval against a revised prompt to see how much of the inconsistency a tighter prompt alone would close.', solution: 'The fix that actually worked was the golden-dataset eval from this chapter, run against a revised prompt and few-shot examples, measured before anyone concluded a training run was necessary.', risk: 'Every day spent building a training pipeline for a gap that prompting could have closed is engineering time sunk into an artifact the team now has to retrain every time the desired format changes again.'},
+    {title: 'The policy citation that stayed the same after the policy didn\'t', problem: 'A compliance-answering assistant had the current text of a set of trading policies baked directly into its weights through a fine-tuning run. The following quarter, one of those policies was revised, and the assistant kept citing the superseded language with exactly the same fluency and confidence it had used before the revision, because nothing in a fine-tuned weight carries a version number.', solution: 'Retrain nothing into the weights that is expected to change: route policy text through the RAG index from Phase 6 instead, and limit fine-tuning to the assistant\'s citation format and tone, properties that stay valid regardless of which policy version is current.', risk: 'Weights carry no version number: a policy revision leaves a fine-tuned model no way to know it is now answering from an outdated source, exactly the failure RAG\'s continuously refreshable index exists to prevent.'},
+    {title: 'Converting analyst notes at trading-desk volume was worth a real fine-tune', problem: 'Converting unstructured analyst notes into one fixed structured schema was happening tens of thousands of times a day on a trading desk, and every one of those requests carried the token cost and latency overhead of a full few-shot prompt just to hold the schema in place.', solution: 'Curate roughly 80 note-to-schema pairs and fine-tune on the conversion task alone, matching the production prompt to the training prompt exactly, and leaving the financial facts inside each note to be read fresh from the note rather than absorbed during training.', risk: 'A behavior-only fine-tune stays safe as long as the training data teaches format, not facts; folding sample financial figures into the training set as if the model should "learn" them reopens the same fact-staleness problem fine-tuning cannot solve.'},
+    {title: 'A desk that had to re-plan its fine-tuning roadmap around a vendor\'s wind-down notice', problem: 'A trading desk\'s Q3 roadmap assumed uninterrupted access to its closed-model vendor\'s fine-tuning API, right as that vendor began narrowing self-serve access at the exact moment the desk needed to scale its usage up, not down.', solution: 'Put the open-weight, self-hosted PEFT path from Chapter 7.2 on the table alongside the vendor\'s assisted-fine-tuning offering, and stop treating today\'s self-serve access as a permanent feature of the roadmap rather than a term that can change.', risk: 'A roadmap that assumes indefinite vendor access can be derailed by a policy change that has nothing to do with the desk\'s own engineering execution, and by the time that\'s discovered, the scaling deadline is already close.'},
+  ]}
+  healthcare={[
+    {title: 'A discharge-summary format that three examples fixed without a single training run', problem: 'A discharge-summary generator kept omitting a required section header. The team\'s first instinct was to schedule weeks for fine-tuning on hundreds of correctly-formatted summaries, and nobody had yet tried adding a few correctly-formatted examples straight into the prompt to see how much of the omission that alone would fix.', solution: 'Three correctly-formatted examples went straight into the prompt, the omission rate dropped against the eval set, and fine-tuning never made it onto the calendar.', risk: 'Committing to a fine-tuning project before testing whether prompting alone closes the gap risks weeks of unnecessary work for a fix a few well-chosen examples could have delivered same-day.'},
+    {title: 'A drug-interaction table that kept getting cited a month after it changed', problem: 'A clinical triage assistant answered drug-interaction questions from a reference table it had memorized during a fine-tuning run. When a newly identified interaction was added to that table the following month, the assistant\'s answers did not change, and neither did anything about how it phrased them, since the update never reached the weights that were actually generating the response.', solution: 'Keep the interaction table in the RAG index from Phase 6, where an update takes effect the moment the index refreshes, and reserve any fine-tuning for the assistant\'s output structure, such as how it formats a flagged interaction for a clinician to scan quickly.', risk: 'A memorized drug-interaction fact carries no built-in staleness signal, a more dangerous failure mode than an outdated prompt, since nothing about the assistant\'s confident tone changes when the underlying fact stops being true.'},
+    {title: 'Clinical-note structuring, run thousands of times a day, was the exception that justified fine-tuning', problem: 'A hospital system needed intake notes reshaped into one fixed structured template at a volume of thousands per day, and the prompt carrying enough few-shot examples to hold that format reliably had grown long enough to noticeably slow down and add cost to every single request.', solution: 'Curate roughly 90 note-to-template pairs and fine-tune on the structuring task alone, keeping the production prompt aligned with what the model trained on, and continuing to pull the clinical facts inside each note from the note itself rather than from anything the training run might have absorbed.', risk: 'The main risk once a fine-tune like this is working is scope creep: pulling unrelated tasks onto the same fine-tuned model, instead of training one model per task, quietly degrades the narrow task it was actually built for.'},
+    {title: 'A refresh that couldn\'t happen the same day it used to', problem: 'An existing fine-tuned triage-formatting model was due for a routine refresh, and for the first time that refresh could not simply be submitted same-day: the vendor\'s updated availability rules now gated whether a new training job could even be started.', solution: 'Compare the cost of qualifying under the vendor\'s new assisted-fine-tuning rules against hosting the refresh internally on an open-weight model, and weigh healthcare\'s own data-governance requirements into that comparison rather than defaulting to whichever path used to be the default.', risk: 'Healthcare teams with strict data-handling requirements are the ones least able to absorb a surprise: assuming a vendor\'s fine-tuning access stays exactly as immediate as it was at rollout is a planning gap that shows up at the worst possible moment, mid-refresh.'},
+  ]}
+  telecom={[
+    {title: 'A ticket-summarizer whose "inconsistent tone" turned out to be a two-line prompt fix', problem: 'A support-ticket summarizer\'s tone varied noticeably between tickets, and a fine-tuning project got scoped to correct it before anyone had checked whether the prompt had ever actually specified a target tone in the first place.', solution: 'It hadn\'t. Adding two lines to the prompt specifying the target tone closed most of the gap, and the fine-tuning project that had already been scoped got shelved.', risk: 'Assuming a visible inconsistency requires model retraining, without first checking whether the prompt ever asked for consistency in the first place, is the single most avoidable path to an unnecessary fine-tuning project.'},
+    {title: 'Routing answers that kept describing a network already rewired', problem: 'An on-call incident assistant had a snapshot of the network topology folded into its weights during a fine-tuning run. Routine infrastructure work rewired part of that network within weeks, and every routing question the assistant answered afterward drew on the topology as it existed the day of training, with no mechanism available to notice the map underneath it had changed.', solution: 'Route topology data through the RAG index from Phase 6 instead of the training set, so a routine infrastructure change is reflected on the next index refresh, and limit any fine-tuning to the assistant\'s incident-report format, a property untouched by any single topology change.', risk: 'An assistant drawing on a memorized topology cannot flag that the map underneath it has changed, and that silence is exactly the failure mode an on-call engineer can least afford during an active incident.'},
+    {title: 'Incident severity classification, run at intake volume, was fine-tuning\'s actual use case', problem: 'A telecom operator classified incoming incident reports into one fixed severity taxonomy constantly enough that the few-shot examples needed to hold classification accuracy were adding real latency to intake, at exactly the moment during an incident when speed mattered most.', solution: 'Curate roughly 100 incident-to-severity examples and fine-tune on the classification task alone, keeping the production prompt identical to the training prompt, and reading incident specifics straight from each report rather than from anything absorbed during training.', risk: 'This kind of classification fine-tune only ages well as long as the severity taxonomy itself stays fixed. A taxonomy change means retraining the classifier, a cost this narrow, high-volume use case needs to budget for from the start.'},
+    {title: 'A NOC tooling budget that outlived the access model it was built on', problem: 'A carrier\'s NOC tooling budget had been set assuming an indefinite supply of on-demand closed-model fine-tuning jobs, and partway through the year the vendor\'s phased wind-down started limiting exactly that supply, well before the budget cycle it was built against had run its course.', solution: 'Rebuild the NOC tooling plan around two live options rather than one assumed one: a self-hosted PEFT fine-tune on an open-weight model the carrier controls outright, or the vendor\'s assisted-fine-tuning track, priced and compared honestly against each other.', risk: 'Treating a vendor\'s current access policy as a fixed part of the platform, rather than a term that can be revised, is a risk that stays invisible right up until the policy actually changes and a budget built on the old terms no longer holds.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the "form, not facts" thesis, and what experiment demonstrated it?', answer: 'Fine-tuning reliably teaches a model style, format, and narrow behaviors, but not new facts. Anyscale\'s engineering team demonstrated this by fine-tuning a model on Shakespeare with every "Romeo" replaced by "Bob": the model never learned the substitution, because next-token prediction loss on a small training set does not rewrite the model\'s internal knowledge the way retraining or retrieval can.'},
+    {question: 'Why does OpenAI\'s own guidance recommend trying prompting before fine-tuning, and what kind of benefit does fine-tuning actually offer over prompting?', answer: 'OpenAI states that prompt engineering "may be all you need" for many use cases, and every stated benefit of fine-tuning over prompting, shorter prompts at scale, handling more examples than fit in a context window, training on proprietary data, or using a smaller cheaper model, is a scaling or cost argument that only applies once a prompt has already grown long or a task is already running at real volume, not a reason to skip prompting on day one.'},
+    {question: 'What concrete data and scope thresholds does this chapter give for deciding whether a fine-tuning project is justified?', answer: 'At minimum, "there should be at least 10 examples," with 50 to 100 recommended as a practical target once a task is well-scoped. Each fine-tuned model should be built for one task only, and the production prompt template should match the one used during training, since a mismatch between the two erodes much of what the fine-tune was supposed to buy.'},
+    {question: 'What changed about self-serve fine-tuning access in 2026, and why does it matter for this decision framework?', answer: 'OpenAI is winding down its self-serve fine-tuning platform in phases through January 2027, pushing closed-model fine-tuning toward higher-touch assisted programs rather than an on-demand API call. This matters because it changes which fine-tuning path is actually reachable without a vendor relationship: the open-weight, self-hosted parameter-efficient techniques covered starting in Chapter 7.2 remain fully self-serve regardless of any single vendor\'s access policy.'},
+    {question: 'In the decision-path diagram, why does the "knowledge gap or behavior gap" question come before any check on data volume or model access?', answer: 'Data volume and model access only matter once fine-tuning is already the right category of fix. Asking whether the model is missing a fact or misbehaving on a task it already knows determines whether the right fix is RAG or fine-tuning in the first place; running the scope and access checks before answering that question risks scoping a fine-tuning project for a problem fine-tuning was never going to solve.'},
+  ]}
+/>
