@@ -1,0 +1,298 @@
+---
+title: "Alignment Techniques Deep Dive: Instruction Tuning, RLHF, RLAIF, DPO"
+sidebar_label: "7.3 Alignment: RLHF, RLAIF, DPO"
+sidebar_position: 3
+phase: 7
+chapter: "7.3"
+lms_presentation: "7.3-Alignment-Techniques-Deep-Dive-Slides.pptx"
+prerequisites: ["7.2"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 7.2 covered how to fine-tune efficiently. This chapter covers a specific kind of fine-tuning:
+teaching a model to behave the way people actually want, not just to predict the next token accurately.
+OpenAI's InstructGPT paper named the gap directly: "making language models bigger does not inherently
+make them better at following a user's intent," and its result is the reason alignment fine-tuning
+matters at all: "outputs from the 1.3B parameter InstructGPT model are preferred to outputs from the
+175B GPT-3, despite having 100x fewer parameters." That result came from a two-stage recipe, supervised
+fine-tuning on human demonstrations followed by reinforcement learning from human feedback (RLHF), where
+a reward model trained on human preference rankings guides further training. RLHF works, but it needs a
+continuous supply of human preference labels, which is expensive and slow to scale. Anthropic's
+Constitutional AI showed a fix: replace the human preference labels with a model's own preference
+judgments, calling the result "RL from AI Feedback (RLAIF)." A dedicated comparison study went further
+and found this is not a compromise: "RLAIF can achieve performance on-par with using human feedback,
+offering a potential solution to the scalability limitations of RLHF," and, in some conditions, it "can
+outperform a supervised fine-tuned baseline even when the AI labeler is the same size as the policy."
+Direct Preference Optimization (DPO) then removed an entire stage of machinery from the pipeline: instead
+of training a separate reward model and running reinforcement learning against it, DPO reframes preference
+data as "a simple classification loss," reporting that fine-tuning with DPO "exceeds PPO-based RLHF in
+ability to control sentiment of generations, and matches or improves response quality in summarization and
+single-turn dialogue while being substantially simpler to implement and train." This chapter covers all
+four techniques, in the order they actually build on each other.
+
+## High-Level Explanation
+
+A freshly pretrained model is a fluent but undirected writer: it can continue almost any text convincingly,
+but nothing in its training taught it to follow an instruction, refuse a harmful request, or prefer a
+helpful answer over a technically-plausible but useless one. Instruction tuning is the first correction: a
+short, supervised stage that shows the model many examples of instruction paired with a good response,
+teaching it the basic shape of "answer the question you were actually asked." RLHF is the second, deeper
+correction, and it works less like a lesson and more like ongoing coaching: instead of just showing more
+examples, it has human reviewers compare pairs of the model's own outputs, trains a separate reward model
+to predict which one they will prefer, and then uses that reward model to push the underlying model toward
+outputs people actually rate higher. RLAIF keeps that same coaching structure but replaces the human
+reviewer with a capable AI model itself, trading some of RLHF's grounding in direct human judgment for the
+ability to generate preference labels at a scale no human review team could sustain. DPO keeps the
+preference data, comparisons of a better response against a worse one, but throws out the coaching
+apparatus entirely: no separate reward model, no reinforcement learning loop, just a loss function applied
+directly to the pairs.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-3-alignment-pipeline-overview.svg').default}
+    alt="A four-stage progression: instruction tuning shows the model demonstrations of good responses in a supervised stage; RLHF trains a reward model on human preference comparisons and uses reinforcement learning against it; RLAIF replaces the human preference labels with AI-generated ones while keeping the same reward-model-plus-RL structure; DPO removes the reward model and RL loop entirely, applying a classification loss directly to preference pairs."
+  />
+  <figcaption>Each technique keeps something from the one before it and removes or replaces one piece of machinery, not four unrelated ways to align a model.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Instruction tuning is the supervised foundation every later stage builds on, and the InstructGPT result
+is what proved the whole direction was worth pursuing.** Ouyang et al.'s InstructGPT paper opens with the
+core problem: "making language models bigger does not inherently make them better at following a user's
+intent." Their fix started with a supervised stage: "we collect a dataset of labeler demonstrations of the
+desired model behavior, which we use to fine-tune GPT-3 using supervised learning," before a further
+reinforcement-learning stage refined it. The headline result reframed what "better" even means for a
+language model: "in human evaluations on our prompt distribution, outputs from the 1.3B parameter
+InstructGPT model are preferred to outputs from the 175B GPT-3, despite having 100x fewer parameters."
+Raw parameter count was never the bottleneck; alignment to what a user actually wanted was, and a
+dramatically smaller, aligned model beat a much larger, unaligned one on exactly that measure. InstructGPT
+also reported the fix did not come at a quality tax: "InstructGPT models show improvements in truthfulness
+and reductions in toxic output generation while having minimal performance regressions on public NLP
+datasets."
+
+**RLHF is the reinforcement-learning stage that took InstructGPT past plain instruction tuning, and it
+works by training a reward model to stand in for a human judgment call the underlying model can then be
+optimized against.** After the supervised stage, InstructGPT's recipe collects comparison data: "we then
+collect a dataset of rankings of model outputs, which we use to further fine-tune this supervised model
+using reinforcement learning from human feedback." A reward model learns to predict which of two candidate
+responses human labelers would rank higher, and the policy model is then updated with reinforcement
+learning, typically PPO, to produce outputs the reward model scores well. This is more expensive and more
+operationally complex than instruction tuning alone: it requires an ongoing supply of human comparison
+judgments, a separately trained and maintained reward model, and a reinforcement-learning training loop
+that is meaningfully harder to stabilize than supervised fine-tuning. The payoff is real, InstructGPT's
+100x-fewer-parameters result depended on this stage, not the supervised stage alone, but the human-labeling
+requirement is exactly the bottleneck the next two techniques each attack from a different angle.
+
+**RLAIF keeps RLHF's reward-model-plus-reinforcement-learning structure but swaps who supplies the
+preference judgments, and the evidence says the swap does not cost as much quality as it might seem to.**
+Anthropic's Constitutional AI paper describes a two-stage process where the second stage explicitly
+replaces human preference labels: "in the RL phase, we sample from the finetuned model, use a model to
+evaluate which of the two samples is better, and then train a preference model from this dataset of AI
+preferences. We then train with RL using the preference model as the reward signal, i.e. we use 'RL from
+AI Feedback' (RLAIF)." A dedicated later study comparing the two approaches directly found the substitution
+holds up: "RLAIF can achieve performance on-par with using human feedback, offering a potential solution to
+the scalability limitations of RLHF," with "comparable performance to RLHF" across summarization, helpful
+dialogue, and harmless dialogue tasks. One finding is genuinely counterintuitive: "RLAIF can outperform a
+supervised fine-tuned baseline even when the AI labeler is the same size as the policy, or even the exact
+same checkpoint as the initial policy," meaning a model can meaningfully improve on itself using its own
+preference judgments as the training signal, not just borrow judgment from a larger, more capable model.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-3-rlhf-vs-rlaif-labeler-swap.svg').default}
+    alt="Two parallel pipelines sharing the same reward-model-plus-reinforcement-learning structure. RLHF's preference labels come from human reviewers comparing pairs of model outputs. RLAIF's preference labels come from an AI model performing the same comparison, feeding into the same reward model and reinforcement learning stage. A note states RLAIF achieves performance on-par with RLHF."
+  />
+  <figcaption>RLAIF is not a different pipeline from RLHF; it is the same pipeline with an AI model standing in for the human reviewer at the labeling step.</figcaption>
+</figure>
+
+**DPO does not swap the labeler, it removes the reward model and the reinforcement-learning loop
+entirely, collapsing preference optimization into a single supervised loss.** Rafailov et al.'s core
+insight is captured in the paper's own title: the language model being trained is "secretly a reward
+model" already, so a separate one is not structurally necessary. Their method reframes the preference
+optimization problem mathematically, "allowing us to solve the standard RLHF problem with only a simple
+classification loss," which directly removes the operational overhead RLHF and RLAIF both still carry:
+DPO works "eliminating the need for sampling from the LM during fine-tuning or performing significant
+hyperparameter tuning." The reported results are not just a simplicity win: "fine-tuning with DPO exceeds
+PPO-based RLHF in ability to control sentiment of generations, and matches or improves response quality in
+summarization and single-turn dialogue while being substantially simpler to implement and train." DPO
+still needs the same kind of preference data RLHF and RLAIF need, pairs of a chosen and a rejected
+response, human-labeled or AI-labeled either way; what it removes is everything downstream of that data:
+the reward model, the RL loop, and the instability that comes with training one model against another
+model's live-updating judgments.
+
+## Hands-On: Compute a DPO Loss by Hand
+
+DPO's core claim is that alignment reduces to "a simple classification loss." The fastest way to see that
+is to compute one directly, without any reward model or RL loop in sight.
+
+**Step 1: Start from a preference pair.** A DPO training example is nothing more than a prompt, a chosen
+(preferred) response, and a rejected response.
+
+```python
+prompt = "Summarize the quarterly report in one sentence."
+chosen = "Revenue grew 8% year over year, driven by the enterprise segment."
+rejected = "The report has numbers in it and some of them went up this quarter, I think."
+```
+
+**Step 2: Get log-probabilities for each response under both the model being trained (the policy) and a
+frozen copy of the starting checkpoint (the reference model).** DPO compares how much each model's
+preference for the chosen response over the rejected one has shifted, not the raw probabilities alone.
+
+```python
+import copy
+import torch
+import torch.nn.functional as F
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_name = "distilgpt2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+policy_model = AutoModelForCausalLM.from_pretrained(model_name)      # this is what training updates
+reference_model = copy.deepcopy(policy_model).eval()                 # a frozen snapshot, never updated
+for param in reference_model.parameters():
+    param.requires_grad_(False)
+
+def sequence_logprob(model, tokenizer, prompt, response, track_grad):
+    # Tokenize the prompt and response separately, then concatenate token IDs.
+    # Tokenizing "prompt + response" as one string is not safe: byte-level BPE
+    # can tokenize differently right at the seam than it would tokenize the
+    # prompt alone, which would silently misalign prompt_len against the
+    # actual token boundary.
+    prompt_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    response_ids = tokenizer(response, return_tensors="pt").input_ids
+    input_ids = torch.cat([prompt_ids, response_ids], dim=1)
+    prompt_len = prompt_ids.shape[1]
+    with torch.set_grad_enabled(track_grad):
+        logits = model(input_ids).logits
+    log_probs = F.log_softmax(logits, dim=-1)
+    token_log_probs = log_probs[0, prompt_len - 1:-1].gather(
+        1, input_ids[0, prompt_len:].unsqueeze(-1)
+    )
+    return token_log_probs.sum()
+
+policy_chosen_logp = sequence_logprob(policy_model, tokenizer, prompt, chosen, track_grad=True)
+policy_rejected_logp = sequence_logprob(policy_model, tokenizer, prompt, rejected, track_grad=True)
+ref_chosen_logp = sequence_logprob(reference_model, tokenizer, prompt, chosen, track_grad=False)
+ref_rejected_logp = sequence_logprob(reference_model, tokenizer, prompt, rejected, track_grad=False)
+```
+
+**Step 3: Compute the DPO loss.** This is the entire training objective, no reward model, no PPO, no
+sampled rollouts.
+
+```python
+beta = 0.1  # controls how far the policy is allowed to drift from the reference model
+
+def dpo_loss(policy_chosen_logp, policy_rejected_logp, ref_chosen_logp, ref_rejected_logp, beta):
+    policy_logratio = policy_chosen_logp - policy_rejected_logp
+    ref_logratio = ref_chosen_logp - ref_rejected_logp
+    logits = beta * (policy_logratio - ref_logratio)
+    loss = -F.logsigmoid(logits)
+    return loss
+
+loss = dpo_loss(policy_chosen_logp, policy_rejected_logp, ref_chosen_logp, ref_rejected_logp, beta)
+loss.backward()
+# a standard optimizer.step() from here is a complete DPO training step
+```
+
+**Step 4: See what the loss is actually rewarding.** The loss shrinks exactly when the policy model
+increases its relative preference for `chosen` over `rejected` compared to what the frozen reference model
+already had, and grows when the policy drifts the other way. There is no reward model scoring anything,
+and no generation happens during this step at all: `sequence_logprob` only ever scores text that was
+already written down as part of the preference pair.
+
+```python
+print(f"policy prefers chosen by: {(policy_chosen_logp - policy_rejected_logp).item():.3f} log-prob units")
+print(f"reference preferred chosen by: {(ref_chosen_logp - ref_rejected_logp).item():.3f} log-prob units")
+print(f"DPO loss: {loss.item():.4f}")
+```
+
+In a real training run, this loss is computed over a batch of thousands of preference pairs and backpropagated
+like any other supervised loss, which is the entire mechanical basis for calling DPO "substantially simpler
+to implement and train" than RLHF or RLAIF.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Instruction tuning (SFT)', 'RLHF', 'RLAIF', 'DPO']}
+  rows={[
+    {aspect: 'What supervises training', values: ['Human-written demonstrations of good responses', 'A reward model trained on human preference comparisons', 'A reward model trained on AI-generated preference comparisons', 'Preference pairs directly, via a classification loss'], decisive: true},
+    {aspect: 'Extra machinery needed', values: ['None beyond standard supervised fine-tuning', 'A separately trained reward model + an RL loop (typically PPO)', 'Same reward model + RL loop as RLHF, with an AI labeler', 'None: no reward model, no RL loop, no sampling during training'], decisive: true},
+    {aspect: 'Labeling cost at scale', values: ['One-time demonstration writing', 'Ongoing human comparison labeling', 'AI-generated, far more scalable than human labeling', 'Same preference-pair data RLHF/RLAIF need, human- or AI-labeled'] },
+    {aspect: 'Reported outcome vs. alternatives', values: ['Necessary foundation; alone it does not reach RLHF-level alignment', '1.3B InstructGPT preferred over 175B GPT-3 (Ouyang et al.)', '"On-par" with RLHF, sometimes better, at AI-feedback scale (Lee et al.)', 'Exceeds PPO-based RLHF on sentiment control, matches/improves elsewhere (Rafailov et al.)'] },
+  ]}
+  caption="Each row down this table keeps the preference-comparison idea and removes one more piece of RLHF's original machinery, human labelers first, then the reward model and RL loop."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where instruction tuning, RLHF, RLAIF, and DPO fit in one pipeline"
+  mermaid={`
+flowchart TD
+  BASE[Pretrained base model] --> SFT[Instruction tuning: supervised fine-tune on demonstrations]
+  SFT --> PAIRS[Generate response pairs for comparison]
+  PAIRS --> HLABEL[Human preference labels]
+  PAIRS --> AILABEL[AI preference labels]
+  HLABEL --> RM[Train reward model]
+  AILABEL --> RM
+  RM --> RL[Reinforcement learning, e.g. PPO, against the reward model]
+  RL --> ALIGNED1[Aligned model: RLHF or RLAIF path]
+  HLABEL --> DPOLOSS[DPO: classification loss directly on pairs]
+  AILABEL --> DPOLOSS
+  DPOLOSS --> ALIGNED2[Aligned model: DPO path, no reward model or RL loop]
+`}
+  components={[
+    {name: 'Instruction tuning', responsibility: 'The supervised starting point every later stage assumes; produces the SFT model that generates comparison pairs.'},
+    {name: 'Human vs. AI preference labels', responsibility: 'RLHF sources comparisons from human reviewers; RLAIF sources the same kind of comparison from an AI model, feeding the identical downstream structure.'},
+    {name: 'Reward model + RL loop', responsibility: 'Shared by RLHF and RLAIF: a model trained to predict preference, then optimized against with reinforcement learning.'},
+    {name: 'DPO classification loss', responsibility: 'Consumes the same preference pairs, human- or AI-labeled, but skips the reward model and RL loop entirely.'},
+  ]}
+/>
+
+The two paths on the right converge on the same kind of outcome, a model whose outputs people (or an AI
+judge) prefer, but they get there through meaningfully different amounts of training infrastructure: RLHF
+and RLAIF both carry a reward model and an RL loop; DPO carries neither.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A trade-summary assistant that instruction tuning alone left half-aligned', problem: 'The demonstration set a team used to instruction-tune a trade-summary assistant showed only strong examples, clear, well-formatted summaries, nothing to reject. The model came away hitting the right structure every time, yet reviewers kept catching speculative phrasing slipping into otherwise solid summaries, a habit nothing in the training data had explicitly ruled out.', solution: 'Rather than expanding the demonstration set, the team layered a DPO stage on top of the existing instruction-tuned model: reviewers ranked precise, sourced summaries above hedged ones, and that comparison data trained the model directly, without standing up a full reward-model-and-RL pipeline for one narrow behavior.', risk: 'Positive-only demonstrations teach a model what good output looks like but say nothing about what to avoid; closing that gap took an explicit worse alternative to compare against, which is exactly what a preference stage supplies and instruction tuning alone cannot.'},
+    {title: 'A compliance-review pipeline where human preference labeling became the bottleneck', problem: 'A compliance team\'s RLHF pipeline for a review-flagging assistant was reward-model-ready and eager to iterate, but every improvement cycle stalled on the same constraint: human reviewers could only produce so many fresh preference comparisons per day, far below what the team wanted to feed the reward model.', solution: 'The fix left the reward-model-and-RL architecture untouched and replaced only the labeler: an AI model took over the side-by-side comparisons a human reviewer used to make, and the pipeline kept running the same RLHF machinery on RLAIF-generated preference data.', risk: 'When iteration speed is capped by how fast people can label, not by anything about the model, that cap becomes the real bottleneck long before the reward model runs out of useful signal to learn from.'},
+    {title: 'A desk that swapped its RLHF pipeline for DPO and kept the same preference data', problem: 'A trading desk had already sunk real effort into collecting human preference comparisons for an RLHF pipeline, but the reward-model-training and PPO stages kept consuming more engineering attention than the desk had planned for, with runs occasionally diverging and needing a restart from scratch.', solution: 'The desk kept every comparison it had already paid to collect and simply pointed DPO at it instead of RLHF, dropping the reward-model and RL-loop stages without touching the underlying labeling investment.', risk: 'RLHF\'s reward-model-plus-RL structure is genuine operational overhead, not just extra conceptual steps, so a team sitting on preference data but not yet committed to RL infrastructure can route around building it rather than fight to stabilize it.'},
+    {title: 'A model whose 1.3B aligned version replaced a 175B unaligned one in production', problem: 'A large, unaligned base model was running a customer-facing summarization workload, kept in production mainly because its outputs beat a smaller model\'s, at a proportionally steeper inference cost per request that nobody had recently re-examined.', solution: 'Following the InstructGPT precedent that a 1.3B aligned model can beat a 175B unaligned one, the team ran instruction tuning followed by a preference stage on a much smaller base model and let evaluators compare the two directly.', risk: 'Treating parameter count as the thing that determines output quality, rather than alignment to what users want, can leave a team paying a large model\'s inference bill for output quality a smaller, properly aligned model would have matched or beaten.'},
+  ]}
+  healthcare={[
+    {title: 'A discharge-note assistant where instruction tuning taught format but not judgment', problem: 'Every example in the demonstration set used to instruction-tune a discharge-note generator was a well-formed note, so the model learned structure quickly, but clinical reviewers kept flagging notes that folded in a clinically irrelevant detail right alongside the details that actually mattered.', solution: 'Clinical reviewers ranked notes that stayed relevant above notes that padded in extra detail, and that ranking data went straight into a DPO stage, rather than trying to solve a judgment problem by adding more positive examples to the demonstration set.', risk: 'A training set built entirely from good notes can teach format without ever teaching restraint, since nothing in a positive-only example signals what should have been left out.'},
+    {title: 'A hospital system that could not scale human review fast enough for its RLHF pipeline', problem: 'Clinician time was the scarce resource behind a hospital\'s triage-assistant alignment pipeline, and every training cycle ran only as fast as clinicians could generate fresh preference comparisons, well behind the pace the rest of the pipeline could otherwise support.', solution: 'The system split its labeling work by risk: routine comparisons, formatting and completeness, went to an AI labeler under RLAIF, while comparisons that actually required clinical judgment stayed with clinicians.', risk: 'Sending every comparison through clinician review, including the ones that do not need a clinician\'s judgment, spends the hospital\'s scarcest resource on work an AI labeler could have handled just as reliably.'},
+    {title: 'A clinical documentation team that moved from RLHF to DPO to stabilize training', problem: 'A reward model at the center of a clinical documentation team\'s RLHF pipeline kept drifting out of step with what reviewers actually preferred, forcing repeated retrain-and-restart cycles far more often than the underlying clinician preferences themselves were changing.', solution: 'Switching to DPO let the team apply the classification loss directly to the same clinician-labeled comparisons it already had, removing the reward model, and with it the one component that could drift, from the pipeline entirely.', risk: 'A reward model is an extra piece of machinery that can silently fall out of sync with the data it was trained on, and every retrain cycle that mismatch forces is engineering time not spent improving actual alignment behavior.'},
+    {title: 'A small aligned model that matched a much larger unaligned one on real triage notes', problem: 'A department kept a large, general-purpose model in production for triage-note summarization because a smaller model\'s raw output had seemed less usable, though nobody had tested whether an alignment stage, rather than size, was the actual gap.', solution: 'Instruction tuning followed by a preference-optimization stage on a substantially smaller base model let the department test that assumption directly, comparing the newly aligned small model\'s output against the large model\'s on real triage notes.', risk: 'Running a large model in production without testing whether a smaller, aligned model reaches the same bar is an ongoing inference-cost decision made without the evidence needed to justify it.'},
+  ]}
+  telecom={[
+    {title: 'An incident-summary generator where instruction tuning left tone inconsistent under pressure', problem: 'An incident-summary generator instruction-tuned on calm, well-organized example summaries handled ordinary conditions fine, but a live major-incident drill exposed a failure mode the demonstration set had never shown: summaries that buried the most severity-relevant detail under less urgent context.', solution: 'A DPO stage trained directly on comparisons that led with the severity-relevant detail versus comparisons that buried it, targeting the specific failure the drill had surfaced rather than expanding the original demonstration set.', risk: 'A demonstration set drawn entirely from calm conditions has no way to teach ordering under pressure, since purely positive examples never show what a worse ordering would have looked like.'},
+    {title: 'A NOC that scaled its preference-labeling pipeline with RLAIF during a busy incident season', problem: 'A NOC\'s human-labeled RLHF pipeline for its incident assistant fell behind during a particularly active incident season: the volume of preference comparisons the team wanted to generate outpaced what human review could sustain, leaving the reward model training on a thinner, staler comparison set than usual.', solution: 'For the duration of the high-volume period, the team routed preference labeling through RLAIF, letting an AI labeler keep the comparison pipeline fed at a pace human review could not match, while the reward-model-and-RL structure underneath stayed exactly as it was.', risk: 'A reward model trained on a stale or thin comparison set can quietly fall behind what the policy model actually needs, and RLAIF\'s scalability is what kept that gap from opening during the season it mattered most.'},
+    {title: 'A carrier that dropped its reward model entirely and kept its preference data', problem: 'A carrier\'s on-call-assistant alignment pipeline had built up a large set of human preference comparisons over time, but the reward-model-training and PPO stages had become the bulk of the team\'s ongoing maintenance work, disproportionate to how often the underlying preferences actually shifted.', solution: 'Pointing DPO directly at the accumulated comparison dataset let the carrier keep every judgment it had collected while eliminating the reward-model and RL-loop maintenance that had been consuming the team\'s time.', risk: 'A reward model and RL loop cost ongoing engineering effort no matter how stable the preferences underneath them are, and a team holding a large, underused preference dataset is paying that cost without getting proportional benefit from it.'},
+    {title: 'A smaller aligned model that let a carrier retire an oversized inference bill', problem: 'A carrier kept a very large general-purpose model in production for incident summarization because the smaller models it had tried in the past produced less consistently usable output, without ever isolating whether alignment, rather than sheer size, was the real gap.', solution: 'Running the same instruction-tuning-plus-preference-optimization recipe on a much smaller base model, and comparing its output against the large model\'s on real incident data, let the carrier test size against alignment directly instead of assuming.', risk: 'An inference bill sized around a large, unaligned model is an ongoing cost the carrier is paying without evidence that scale, rather than alignment, was ever the variable that mattered.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What did the InstructGPT result actually show, and why does it matter for how "alignment" is defined in this chapter?', answer: 'InstructGPT showed that a 1.3B-parameter model fine-tuned with instruction tuning and RLHF was preferred by human evaluators over the 175B-parameter, unaligned GPT-3, despite having 100x fewer parameters. This established that alignment to user intent, not raw parameter count, is what determines whether a model\'s outputs are actually useful, which is the premise the rest of the chapter\'s techniques build on.'},
+    {question: 'What does RLHF add on top of instruction tuning, and what does that addition cost operationally?', answer: 'RLHF adds a reward model trained on human preference comparisons, then uses reinforcement learning (typically PPO) to optimize the policy model against that reward model. This costs an ongoing supply of human comparison labels, a separately trained and maintained reward model, and a reinforcement-learning training loop that is harder to stabilize than supervised fine-tuning alone.'},
+    {question: 'What does RLAIF change relative to RLHF, and what did the dedicated comparison study find?', answer: 'RLAIF keeps RLHF\'s reward-model-plus-reinforcement-learning structure but replaces human preference labels with AI-generated ones. A dedicated study found RLAIF "can achieve performance on-par with using human feedback," and in some cases can even outperform a supervised baseline using an AI labeler the same size as, or the same checkpoint as, the policy being trained.'},
+    {question: 'What specifically does DPO remove that RLHF and RLAIF both still require, and what is left?', answer: 'DPO removes the separate reward model and the reinforcement-learning loop entirely, along with the need to sample from the model during fine-tuning. What remains is the same kind of preference-pair data RLHF and RLAIF use, applied directly through a classification loss, which the paper reports is "substantially simpler to implement and train" while matching or exceeding PPO-based RLHF on several reported tasks.'},
+    {question: 'In the Hands-On DPO loss calculation, what two quantities does the loss actually compare, and why is a reference model needed at all?', answer: 'The loss compares how much the policy model prefers the chosen response over the rejected one (in log-probability terms) against how much the frozen reference model already preferred it before any DPO training. The reference model is needed because DPO measures the change in relative preference caused by training, not the policy\'s raw preference in isolation, which is what keeps the loss well-behaved without an explicit RL loop.'},
+  ]}
+/>
