@@ -1,0 +1,513 @@
+---
+title: "What Is an \"Agent\"? From Classical AI Agents to LLM Agents"
+sidebar_label: "8.1 What Is an Agent?"
+sidebar_position: 1
+phase: 8
+chapter: "8.1"
+lms_presentation: "8.1-What-Is-an-Agent-Slides.pptx"
+prerequisites: ["5.1", "5.7"]
+tags: ["agents", "PEAS", "rationality", "classical-ai", "multi-agent-systems", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+An agent, in the sense this site uses the word from here on, is anything that perceives its
+environment through sensors and acts on that environment through actuators in pursuit of a goal,
+a definition that predates large language models by decades. Russell and Norvig's classical
+formulation asks four questions of any such system, bundled into an acronym they call PEAS
+(Performance measure, Environment, Actuators, Sensors), and calls a system "rational" if it
+selects, at every step, whatever action its percept history and built-in knowledge say will best
+serve that performance measure. Wooldridge and Jennings, writing about multi-agent systems in
+1995, added a second, complementary cluster of properties, autonomy, social ability, reactivity,
+and pro-activeness, long before anyone was building agents on top of a language model. What an
+LLM changes is not this loop or these properties: every LLM-based agent still perceives, decides,
+and acts, and still has to answer the same PEAS questions a thermostat or a chess program has to
+answer. What an LLM changes is what sits inside the decide step: a hand-coded rule engine or
+symbolic planner gets replaced with a general-purpose reasoning engine that takes natural language
+in and reasons, in natural language, about what to do next.
+
+## High-Level Explanation
+
+Strip away every implementation detail and an agent is a small idea: something sits inside an
+environment, takes in information about that environment through some kind of sensor, decides
+what to do with that information, and then changes the environment through some kind of
+actuator. A thermostat is an agent under this definition. Its sensor is a thermometer, its
+environment is a room, its decision is a single comparison against a setpoint, and its actuator
+is a switch that turns a heater or air conditioner on or off. A self-driving car is also an
+agent under this same definition. Its sensors are cameras, radar, and lidar instead of a
+thermometer, its decision is unimaginably more complex than a single comparison, and its
+actuators are the steering wheel, accelerator, and brake instead of a switch, but the shape of
+the loop, perceive, decide, act, perceive again, is identical to the thermostat's.
+
+Before large language models, the decide step in that loop was built by hand. A programmer wrote
+condition-action rules, a symbolic planner, or a hand-tuned utility function, and the agent's
+intelligence was exactly as broad as the cases that hand-written logic covered: ask it to handle
+a situation nobody anticipated when writing the rules, and it either fails or falls back to a
+default. An LLM agent keeps the exact same loop, perceive, decide, act, but replaces that
+hand-written decision logic with a large language model reasoning in natural language about what
+to do next. The diagram below puts both versions of the loop side by side: same four stages, same
+kind of environment on the outside, different machinery inside the decide box.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-1-classical-vs-llm-agent-loop.svg').default}
+    alt="Two side-by-side perceive-decide-act loops. In the classical loop, decide is a hand-coded rule engine or symbolic planner. In the LLM loop, decide is a large language model reasoning in natural language. Environment, perceive/sensors, and act/actuators are the same shape on both sides; only what sits inside decide changes, and the loop repeats every timestep on both sides."
+  />
+  <figcaption>The loop is not the new part. What can go inside the decide box is.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### The Classical Definition: PEAS and Rationality
+
+Before asking whether some system counts as an agent at all, Russell and Norvig's *Artificial
+Intelligence: A Modern Approach* asks a narrower, more practical question first: what, exactly,
+is this agent supposed to be good at, and in what setting? Their answer is a four-part
+specification for describing a task environment, PEAS: Performance measure, Environment,
+Actuators, Sensors. Skipping any one of the four leaves the specification incomplete, because
+each answers a question the others cannot. The performance measure answers "good according to
+what standard," the environment answers "acting inside what world," actuators answer "capable of
+what changes to that world," and sensors answer "aware of what parts of that world in the first
+place." For the textbook's own running example, an automated taxi driver, those four questions
+get concrete answers: performance measure, "safe, fast, legal, comfortable trip, maximize
+profits"; environment, "roads, other traffic, pedestrians, customers"; actuators, "steering
+wheel, accelerator, brake, signal, horn"; sensors, "cameras, sonar, speedometer, GPS, odometer,
+engine sensors, keyboard." Notice that nothing about that specification mentions how the taxi
+driver decides what to do. PEAS describes the job, not the machinery hired to do it, which is
+exactly why the same four-part specification still applies unchanged once an LLM takes over the
+decision step.
+
+With the task environment specified, Russell and Norvig define what makes an agent good at it:
+rationality. Their definition ties "good" to the specification directly rather than to some
+absolute, environment-independent notion of intelligence: "an ideal rational agent should do
+whatever action is expected to maximize its performance measure, on the basis of the evidence
+provided by the percept sequence and whatever built-in knowledge the agent has." Three details in
+that sentence matter more than they first appear to. First, rationality is judged against the
+performance measure a designer chose, not against some universal standard of correctness, so a
+perfectly rational taxi driver optimized purely for speed and a perfectly rational taxi driver
+optimized for a smooth ride can make different, individually rational, choices at the same
+intersection. Second, the definition says percept *sequence*, not percept: a rational agent's
+decision can depend on everything it has perceived so far, not only on what it perceives right
+now, which is what separates an agent that can learn a road has become unusually icy from one
+that reacts to each moment in isolation. Third, "expected to maximize" is doing real work: a
+rational agent is not required to guess correctly every time, only to make the choice that its
+evidence and knowledge say is the best bet available, which is why a rational agent can still be
+unlucky without having been irrational.
+
+One more distinction is easy to miss and worth making explicit: the performance measure is
+external to the agent, chosen by whoever designed or deployed it, not something the agent infers
+on its own. A taxi driver agent does not decide for itself that speed matters more than comfort;
+a designer decided that and encoded it into the performance measure before the agent ever
+perceived anything. This matters because it means "rational" is not a property an agent has in
+isolation. The same underlying decision procedure can be rational under one performance measure
+and irrational under another, so any claim that a system "behaves rationally" is incomplete until
+it also specifies what it is rational with respect to. That requirement does not go away once an
+LLM is doing the reasoning inside decide; if anything it gets harder to satisfy, because a
+natural-language goal description is a looser specification of a performance measure than a
+numeric objective function is, and looseness in the specification becomes looseness in what
+counts as the right answer.
+
+### The Classical Agent-Architecture Taxonomy
+
+PEAS and rationality describe what an agent is supposed to achieve. They say nothing about how
+its decide step is actually built, and classical AI settled on a small number of answers to that
+second question, each one a strictly more capable, and strictly more expensive to build, way of
+turning percepts into actions.
+
+A simple reflex agent decides using only the current percept, matched directly against a table
+of condition-action rules: "if car-in-front-is-braking then initiate-braking" is Russell and
+Norvig's own example of exactly that kind of rule. This is the cheapest possible decide step to
+build, and it is also the most limited one. The textbook is direct about the ceiling on what a
+purely reflex-based design can do: "the simple reflex agent described before will work only if
+the correct decision can be made on the basis of the current percept," and more broadly, "their
+range of applicability is very narrow." A simple reflex agent has no way to distinguish two
+identical-looking situations that actually call for different actions because of something that
+happened earlier and is no longer visible, and it has no way to plan more than one step ahead.
+
+A model-based reflex agent fixes exactly that blind spot by adding internal state: it keeps a
+running model of whatever parts of the world it cannot currently see, updated as new percepts
+arrive, so its decision can depend on a belief about the world rather than only on the current
+snapshot of it. A self-driving car that remembers a cyclist is somewhere just past the last curve
+it can no longer see, and slows down accordingly, is applying exactly this fix. The rule table
+does not change in kind, condition still maps to action, but "condition" now includes internal
+state a simple reflex agent would not have had access to at all.
+
+A goal-based agent takes a further step and asks the decision to be justified by an explicit
+target rather than by a rule that fired: "the agent needs some sort of goal information, which
+describes situations that are desirable." Instead of a fixed condition-action table, a goal-based
+agent can search or plan over possible action sequences and pick one that is predicted to reach
+the goal, which is what makes it able to handle situations its designer never anticipated in
+detail, as long as the designer specified the right goal.
+
+A utility-based agent generalizes "goal" into something with more resolution than reached or not
+reached: a utility function. "Utility is therefore a function that maps a state onto a real
+number, which describes the associated degree of happiness." A goal is binary, either a state
+satisfies it or it does not, but real decisions are usually not binary: a taxi driver who reaches
+the destination safely, quickly, and legally has done better than one who reached it safely but
+slowly and illegally, even though both technically achieved the goal of "arrive." A utility
+function lets an agent rank every reachable state against every other one and pick the highest,
+which is what makes trade-offs among competing objectives possible in the first place.
+
+A learning agent is not a fifth item alongside the other four so much as a different dimension
+entirely: any of the four architectures above can be built by hand once and frozen, or built to
+improve itself from experience. Classical treatments of this decompose a learning agent into four
+conceptual pieces working together: a performance element, which is whichever of the four
+architectures above is actually choosing actions; a critic, which judges how well the agent is
+doing against some external standard of performance; a learning element, which uses that
+judgment to propose improvements to the performance element; and a problem generator, which
+occasionally suggests exploratory actions purely to gather information that could improve future
+decisions, even at some short-term cost to performance. None of these five categories, reflex,
+model-based reflex, goal-based, utility-based, learning, depend on how the decide step's internal
+logic is implemented. That independence is exactly what makes them a useful lens for an LLM
+agent, which turns out to usually be a goal-based or utility-based agent whose planning happens
+in natural language instead of in a search tree, still recognizable inside this same taxonomy.
+
+It is also worth being clear that these five categories are not five mutually exclusive boxes a
+real system has to pick exactly one from. They describe increasing sophistication along roughly
+one axis, and most systems worth building combine more than one: a goal-based agent almost always
+needs some model-based internal state to know whether it has made progress toward its goal, and a
+learning agent is, by definition, some other architecture, reflex, goal-based, or utility-based,
+wrapped in a performance element, critic, learning element, and problem generator rather than a
+sixth kind of decision logic competing with the first four. An LLM agent's decide step typically
+recreates several of these layers at once inside a single reasoning process: it tracks state the
+way a model-based reflex agent does, it plans toward a stated objective the way a goal-based agent
+does, and it can weigh competing considerations the way a utility-based agent does, all without
+a designer having to wire those capabilities together as separate modules. That collapsing of
+several classical architectures into one general-purpose reasoning process, not the appearance of
+some sixth architecture the taxonomy never anticipated, is what changes.
+
+### Multi-Agent Systems Before LLMs
+
+PEAS and the architecture taxonomy describe a single agent acting alone. Long before anyone
+called a piece of software an "LLM agent," a separate line of classical AI research asked what
+it takes for many agents to be worth calling agents at all, in a setting where they might
+cooperate, compete, or simply have to coexist. Wooldridge and Jennings's 1995 survey gives what
+they call a "weak notion of agency," a hardware or software system defined by four properties:
+"autonomy: agents operate without the direct intervention of humans or others, and have some kind
+of control over their actions and internal state"; "social ability: agents interact with other
+agents (and possibly humans) via some kind of agent-communication language"; "reactivity: agents
+perceive their environment, ..., and respond in a timely fashion to changes that occur in it";
+and "pro-activeness: agents do not simply act in response to their environment, they are able to
+exhibit goal-directed behaviour by taking the initiative."
+
+Read those four properties next to the PEAS-and-rationality picture from the first sub-section
+and the overlap is immediate: reactivity is perceive-then-act under a new name, and
+pro-activeness is goal-directedness under a new name. What Wooldridge and Jennings's definition
+adds on top is social ability, the idea that an agent worth the name in a multi-agent setting has
+to be able to communicate with other agents, not merely coexist with them in a shared
+environment. That single addition anticipates a surprising amount of what gets presented as novel
+about today's LLM-based multi-agent systems: a team of LLM agents passing messages to negotiate a
+plan, delegate a sub-task, or hand off a partially completed piece of work is autonomy, social
+ability, reactivity, and pro-activeness applied to agents that happen to be built on a language
+model instead of hand-coded logic. This chapter stops at the definition; Phase 11 is where
+multi-agent orchestration, agent-communication protocols, and coordination strategies for LLM
+agents specifically get the deep treatment this one-paragraph comparison cannot give them.
+
+The anticipation goes beyond the four headline properties, too. The multi-agent-systems
+literature Wooldridge and Jennings were surveying had already built concrete
+agent-communication languages, KQML being the best-known example, that standardized message
+types such as asking another agent to perform an action, telling it a fact, or subscribing to
+updates about a changing piece of state. A modern LLM agent framework that lets one agent call a
+tool another agent exposes, or hands a partially finished task to a second agent with instructions
+attached, is filling the same functional role, a standardized way to ask, tell, and delegate,
+just expressed in natural language and JSON-shaped tool calls instead of a formally specified
+message syntax. The same era of research also produced belief-desire-intention (BDI)
+architectures, which modeled an agent's reasoning as maintaining beliefs about the world,
+desires it would like to satisfy, and intentions it has actually committed to acting on. That
+three-part structure, belief, desire, intention, is a strikingly close match for what an LLM
+agent's context window, stated goal, and current plan are doing functionally, decades before any
+of this existed as engineering practice. None of this is offered to claim multi-agent LLM
+frameworks are nothing new; the engineering of getting a language model to reliably act inside
+these roles is real and substantial, and later phases treat it as such. The claim here is
+narrower and more specific: the conceptual vocabulary, autonomy, social ability, reactivity,
+pro-activeness, agent-communication, belief-desire-intention, existed and was already
+well-developed before there was a language model capable of filling any of those roles, and a
+learner who already has this vocabulary from classical AI is not starting from zero when Phase
+11 introduces its LLM-specific version.
+
+### What an LLM Actually Adds
+
+Everything covered so far, PEAS, rationality, the five-way architecture taxonomy, and
+Wooldridge and Jennings's four properties, was fully worked out before a large language model
+existed. So what does an LLM actually change? Not the loop, and not the requirement to specify a
+task environment. What changes is the interface to, and the implementation of, the decide step.
+
+A classical goal-based or utility-based agent needs its designer to write, by hand, whatever
+logic turns a percept into a candidate action: a search algorithm over a symbolic state space, a
+hand-tuned utility function, a planner that reasons over a formally specified set of operators.
+Wang et al.'s 2023 survey of LLM-based autonomous agents frames the shift plainly: "through the
+acquisition of vast amounts of web knowledge, large language models (LLMs) have shown potential
+in human-level intelligence, leading to a surge in research on LLM-based autonomous agents." The
+practical consequence for the decide step is that natural language becomes a universal interface
+for perception, reasoning, and action all at once. A percept can be described in a sentence
+instead of encoded into a rigid symbolic representation a planner requires. Reasoning about what
+to do next can happen as free-form generated text instead of as a search over a hand-specified
+state space. An action can be specified as a sentence, or as a structured call described in
+natural language, instead of as one of a fixed, enumerated set of operators a symbolic planner
+was compiled to understand. None of this makes an LLM agent's decide step unconstrained: it is
+still bounded by whatever the LLM was trained on and by whatever scaffolding a system builds
+around it, but the boundary moved from "whatever the designer explicitly coded" to "whatever the
+model can express and reason about in language," which is a categorically larger space.
+
+A concrete comparison makes the size of that boundary shift easier to see. Take a task like
+"look up this week's on-call engineer and send them a summary of the failed deployment." Built
+as a classical goal-based agent, this requires a designer to define, in advance, a formal
+representation of the relevant world state (an on-call schedule, a deployment log, an email
+system) and a fixed set of operators the planner is allowed to compose (look-up-schedule,
+read-log, compose-message, send-message), each with explicit preconditions and effects a
+planner can reason over symbolically. Change the task even slightly, look up the on-call
+engineer for a different team, or send a Slack message instead of an email, and the operator
+set, or at least its parameters, has to be extended by hand before the agent can attempt it at
+all. Built as an LLM agent, the same task can be given to the decide step as a sentence, and a
+model that has general knowledge of what an on-call schedule and a deployment log typically look
+like can reason about the steps needed without a designer having pre-enumerated an
+on-call-lookup operator specifically. The variation, a different team, a different messaging
+tool, does not require new code in the decide step at all, only a different natural-language
+description of what tools are available, because the general-purpose reasoning happens inside
+the model rather than inside hand-written planning logic. This is what "natural language as a
+universal interface" cashes out to concretely: the same decide mechanism transfers across tasks a
+classical planner's operator set would have needed to be rewritten for.
+
+That transfer ability is not free, and naming its cost is part of what "actually adds" has to
+mean here, not just what it makes newly possible. A classical planner that successfully finds a
+plan comes with a guarantee a designer can reason about in advance: given its formally specified
+operators and preconditions, the plan it returns is provably valid with respect to that
+specification, and if no valid plan exists, a sound planner can, in principle, say so. An LLM
+reasoning in natural language inside the decide step comes with no comparable guarantee. It can
+produce a plausible-sounding sequence of steps that is subtly wrong, it can be confidently
+mistaken about a precondition it never explicitly checked, and there is no formal proof standing
+behind its output the way there is behind a sound planner's. The generality that lets the same
+LLM decide step handle the on-call task and countless others without new code is the same
+generality that removes the closed, checkable structure a classical planner's narrower scope
+made possible. Later chapters on tool use, memory, and evaluation are largely about managing
+that trade-off, catching the cases where a flexible-but-unverified decide step gets something wrong
+that a narrow-but-provably-correct one never would have attempted in the first place.
+
+### What Doesn't Change
+
+It is worth being precise about what the previous sub-section did not claim, because it is easy
+to overstate what an LLM adds until "agent" starts to sound like a brand-new category of system
+rather than a new answer to an old question. An LLM-based agent is still, underneath, a
+perceive-decide-act loop, and it still has to answer the same PEAS questions any other agent
+does: what is it being measured against, what environment does it act in, what actuators can it
+actually use, and what can its sensors actually see? Swapping a symbolic planner for an LLM in
+the decide box does not remove the need to specify a performance measure; it just means the
+performance measure now has to be applied to, or approximated for, a system whose reasoning is
+harder to fully inspect than a rule table's. It does not remove the need to define the
+environment and the action space; agent frameworks built on LLMs spend real engineering effort on
+exactly this, deciding which actuators, called tools starting in Chapter 8.2, an LLM agent is
+allowed to invoke. And it does not change Russell and Norvig's own definition of rationality: an
+LLM agent is rational to exactly the degree that it selects, given its percept sequence and
+whatever knowledge it has, the action that is expected to maximize its performance measure,
+which is the same standard a thermostat or a chess-playing symbolic agent is held to. The rest of
+Phase 8 is about what genuinely is new, how an LLM's perception, reasoning, memory, action, and
+tool use are actually built (8.2), what the decide-and-act cycle looks like in practice (8.3),
+and how to tell an agent apart from a workflow, an assistant, or a chatbot that only looks like
+one (8.8). None of that new material replaces the loop this chapter just walked through. It fills
+in the decide box this chapter deliberately left generic.
+
+Three specific engineering decisions make this concrete rather than abstract. First, the
+performance measure still has to be operationalized, and for an LLM agent that usually means a
+task success rate on a held-out set of scenarios, a human rating, or another model acting as a
+judge, rather than the closed-form numeric objective a classical utility-based agent could
+optimize directly, but the underlying requirement, an external standard the agent's behavior is
+actually measured against, has not gone away, only the measurement technique has changed. Second,
+sensors still have to be designed, not assumed: what actually goes into an LLM agent's context
+window on a given turn, which files, which prior messages, which retrieved documents, is a
+deliberate choice with the same consequences a classical agent's sensor selection had. A
+classical agent that lacks a sensor for some relevant feature of the world simply cannot condition
+its decision on that feature; an LLM agent whose context window omits a relevant piece of
+information is in exactly the same position, no matter how capable the underlying model is,
+because it is reasoning over the percept it was actually given, not over the true state of the
+world. Third, actuators still have to be explicitly scoped, and for an LLM agent this is where
+safety enters the picture directly: deciding which tools an agent is allowed to call is a
+narrower version of the same PEAS question a designer answers for any agent, and getting it wrong
+in the LLM case has the same shape of consequence a classical agent's actuator with an unintended
+side effect always had, an agent doing real, hard-to-reverse things in its environment because
+its allowed action space was specified more broadly than its designer meant to permit. None of
+these three decisions, operationalizing the performance measure, designing what the agent
+perceives, scoping what it can act on, is optional or automatic just because an LLM is doing the
+reasoning in between.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Classical symbolic/reflex agent', 'LLM agent (with a loop)', 'A single LLM call, no loop']}
+  rows={[
+    {aspect: 'Decide step is built from', values: ['Hand-coded rules, a symbolic planner, or a hand-tuned utility function', 'An LLM reasoning in natural language, often across multiple steps', 'An LLM reasoning in natural language, but only once'], decisive: true},
+    {aspect: 'Has a percept sequence it acts on', values: ['Yes: current percept plus, in model-based designs, tracked internal state', 'Yes: the loop re-perceives after every action and can act on what it learns', 'No: it sees one prompt and produces one response, then stops'], decisive: true},
+    {aspect: 'Is it an agent under PEAS and rationality', values: ['Yes: fully specifiable via PEAS and judged by Russell and Norvig\'s rationality standard', 'Yes: same PEAS specification and rationality standard apply, with an LLM inside decide', 'No: with no loop and no actuators acting back on an environment, there is nothing for PEAS to describe'] },
+    {aspect: 'Handles a situation its designer never anticipated', values: ['Only as well as the hand-coded rules, search space, or utility function happen to generalize', 'Often: the LLM can reason about novel situations in language without new code being written', 'Only within that one response; it cannot observe the result and try again'] },
+    {aspect: 'Where Wooldridge and Jennings\'s properties apply', values: ['Autonomy and reactivity typically present; social ability only if explicitly engineered (e.g. a blackboard system)', 'All four properties are typically engineered in on purpose: autonomy, reactivity, pro-activeness, and social ability toward other agents or tools', 'Reactivity to the one prompt only; no autonomy over multiple steps, no pro-activeness, no ongoing social ability'] },
+  ]}
+  caption="The dividing line that matters most is the loop itself: a classical agent and an LLM agent both have one and are both agents under Russell and Norvig's definition; a single LLM call, however capable the model behind it, is not."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The generic agent loop, annotated with where a classical vs. an LLM decide step sits"
+  mermaid={`
+flowchart TD
+  ENV[Environment: room, road, chat, codebase, or another system]
+  SENS[Sensors: turn raw environment state into a percept]
+  PERC[Percept / percept sequence: what the agent has observed, up to now]
+  DEC{Decide}
+  RULE[Classical path: hand-coded rules, a symbolic planner, or a utility function over a search space]
+  LLM[LLM path: a language model reasoning in natural language over the percept sequence and a goal]
+  ACT[Action: whatever the chosen decide-path selected]
+  ACTU[Actuators: turn the action into a real change]
+
+  ENV --> SENS --> PERC --> DEC
+  DEC -->|classical agent| RULE --> ACT
+  DEC -->|LLM agent| LLM --> ACT
+  ACT --> ACTU --> ENV
+`}
+  components={[
+    {name: 'Sensors', responsibility: 'Convert raw environment state into a percept the decide step can use; identical job whether decide is classical or LLM-based.'},
+    {name: 'Percept / percept sequence', responsibility: 'What the agent has perceived, current and historical; rationality (Russell and Norvig) is judged against this, not against the current percept alone.'},
+    {name: 'Decide (classical path)', responsibility: 'A simple reflex, model-based reflex, goal-based, utility-based, or learning architecture, implemented as hand-written logic, a search procedure, or a symbolic planner.'},
+    {name: 'Decide (LLM path)', responsibility: 'The same decision responsibility, implemented instead as an LLM reasoning in natural language over the percept sequence and a stated goal.'},
+    {name: 'Actuators', responsibility: 'Turn a chosen action into an actual change to the environment; identical job whether decide is classical or LLM-based.'},
+  ]}
+/>
+
+The diagram deliberately draws the classical path and the LLM path as two branches of the same
+decide step, not as two different loops, because that is the chapter's central claim: an LLM
+agent is a substitution inside one box of an architecture classical AI had already fully
+specified, not a new architecture.
+
+## Hands-On: The Same Reflex Agent, Two Different Deciders
+
+The fastest way to see that the perceive-decide-act loop really is identical underneath a
+classical agent and an LLM agent is to build the exact same reflex agent twice, once with
+hand-coded rules and once with an LLM standing in for the rule table, and run both through the
+same environment harness.
+
+**Step 1: Build the environment and the shared perceive-decide-act harness.** The environment is
+a room: heating or cooling moves its temperature by a fixed amount, and whenever the agent is
+idle, the room drifts toward the outside temperature instead, the way a real room passively
+loses or gains heat. The harness below does not know or care what kind of `decide` function it
+is given; it only knows the PEAS-shaped contract: perceive a percept, call decide, apply the
+resulting action as an actuator command.
+
+```python
+TARGET_TEMP = 21.0  # degrees C, the agent's performance measure is staying close to this
+BAND = 0.5          # idle whenever the room is within +/- this of TARGET_TEMP
+
+class Room:
+    """The environment. Heating and cooling apply a fixed effect regardless of the current
+    temperature. Idle applies no direct effect, only passive drift toward outside_temp."""
+    def __init__(self, start_temp=17.0, outside_temp=10.0):
+        self.temp = start_temp
+        self.outside_temp = outside_temp
+
+    def perceive(self):
+        # Sensors: a real thermometer reading, in generic AIMA terms.
+        return {"temp": round(self.temp, 2)}
+
+    def step(self, action):
+        # Actuators: "heat", "cool", or "idle" changes the room's next temperature.
+        if action == "heat":
+            self.temp += 1.5
+        elif action == "cool":
+            self.temp -= 1.5
+        else:
+            self.temp += (self.outside_temp - self.temp) * 0.05
+
+def run_agent(decide_fn, ticks=8):
+    room = Room()
+    history = []
+    for t in range(ticks):
+        percept = room.perceive()          # perceive
+        action = decide_fn(percept)        # decide
+        room.step(action)                  # act
+        history.append((t, percept["temp"], action))
+    return history
+```
+
+**Step 2: The classical decide step, a simple reflex agent.** This is a condition-action rule
+table, the same kind Russell and Norvig's braking-car example uses, just applied to a thermostat
+instead of a car.
+
+```python
+def classical_decide(percept):
+    temp = percept["temp"]
+    if temp < TARGET_TEMP - BAND:
+        return "heat"
+    elif temp > TARGET_TEMP + BAND:
+        return "cool"
+    else:
+        return "idle"
+```
+
+Run just this half on its own and the pattern is a working thermostat: `heat, heat, heat, idle,
+idle, heat, cool, heat`, climbing from 17.0 toward the target band, then cycling in and out of it
+as passive drift pulls the room back down and the rule table corrects it again. That trace is
+worth seeing before adding the LLM version, since it is exactly the behavior the LLM version
+needs to reproduce using a different decide mechanism.
+
+**Step 3: The LLM decide step.** The environment, the percept, and the harness are all untouched
+from Step 1 and Step 2. The only thing that changes is what is inside `decide`: instead of an
+`if`/`elif` rule table, the percept is turned into a short natural-language description, an
+instruction-tuned model reasons over it, and its text output is parsed back into the same
+three-way action space the classical version uses. `flan-t5-small` is small enough to run on a
+CPU with no API key and no GPU, and, unlike a raw pretrained model that only continues text, it
+is instruction-tuned: trained specifically to follow a short natural-language instruction, which
+is what makes it a reasonable choice for a decide step that needs to reliably land on one of
+three actions. This step needs `pip install transformers torch` and, the first time it runs,
+internet access to download the model from Hugging Face (a few hundred megabytes). The classical
+half above has neither dependency: it runs standalone with a stock Python install.
+
+```python
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+model_name = "google/flan-t5-small"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+
+def llm_decide(percept):
+    temp = percept["temp"]
+    prompt = (
+        f"The room temperature is {temp} degrees Celsius. The target is {TARGET_TEMP} degrees. "
+        "Reply with exactly one word: HEAT if the room is too cold, COOL if the room is too hot, "
+        "or IDLE if it is close enough to the target."
+    )
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    output_ids = model.generate(input_ids, max_new_tokens=4)
+    text = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip().upper()
+    if "HEAT" in text:
+        return "heat"
+    elif "COOL" in text:
+        return "cool"
+    else:
+        return "idle"
+```
+
+**Step 4: Run both agents through the identical harness and compare.** Nothing about `run_agent`
+changes between the two calls below; only the `decide_fn` argument does, which is the point.
+
+```python
+classical_history = run_agent(classical_decide)
+llm_history = run_agent(llm_decide)
+
+print(f"{'tick':<5}{'classical temp':<16}{'classical action':<18}{'LLM temp':<12}{'LLM action':<10}")
+for (t, c_temp, c_act), (_, l_temp, l_act) in zip(classical_history, llm_history):
+    print(f"{t:<5}{c_temp:<16}{c_act:<18}{l_temp:<12}{l_act:<10}")
+```
+
+Both agents perceive the same shape of percept, get called through the same `decide` slot in the
+same harness, and act on the same three-action space, heat, cool, idle. The classical version
+decides with a three-way rule table, two threshold comparisons. The LLM version decides by
+having a language model read a sentence describing the percept and reply in language, then
+mapping that reply back onto the same action space. If `llm_decide` occasionally answers
+something the parser cannot confidently map to `heat`, `cool`, or `idle`, that is not a bug in
+the harness, it is a live illustration of a cost this chapter's Comparison table only stated
+abstractly: an LLM decide step trades the
+predictability of a hand-coded rule table for the ability to reason in language, and a real
+agent framework has to design for that trade-off rather than assume it away.
