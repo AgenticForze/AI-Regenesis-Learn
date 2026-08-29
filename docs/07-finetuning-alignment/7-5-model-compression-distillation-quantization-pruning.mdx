@@ -1,0 +1,267 @@
+---
+title: "Model Compression: Distillation, Quantization, Pruning"
+sidebar_label: "7.5 Model Compression: Distillation, Quantization, Pruning"
+sidebar_position: 5
+phase: 7
+chapter: "7.5"
+lms_presentation: "7.5-Model-Compression-Slides.pptx"
+prerequisites: ["7.4"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+The last two chapters covered giving a model new behavior and new knowledge. This chapter covers making
+a model smaller and cheaper to run, without giving up much of either. Three techniques do most of the
+work, and they attack different parts of the problem. Distillation trains a small model to reproduce a
+large one's behavior: Hinton et al. built on Caruana et al.'s earlier demonstration that it was
+possible to "compress the knowledge in an ensemble into a single model which is much easier to deploy,"
+developing that idea further with their own distillation technique, and a concrete case study,
+DistilBERT, showed what that can look like in practice, a model built to "reduce the size of a BERT
+model by 40%, while retaining 97% of its language understanding capabilities and being 60% faster."
+Quantization leaves the model's architecture untouched and instead represents its weights with fewer
+bits: GPTQ reported it "can quantize GPT models with 175 billion parameters in approximately four GPU
+hours, reducing the bitwidth down to 3 or 4 bits per weight, with negligible accuracy degradation," a
+reduction dramatic enough that it can "execute an 175 billion-parameter model inside a single GPU for
+generative inference." Pruning removes weights outright: SparseGPT showed that "large-scale generative
+pretrained transformer (GPT) family models can be pruned to at least 50% sparsity in one-shot, without
+any retraining, at minimal loss of accuracy." None of these three techniques compete with the others;
+production systems commonly stack all three, distilling a large model down, quantizing the result, and
+pruning what is left.
+
+## High-Level Explanation
+
+Each of these three techniques shrinks a model along a different axis, and it helps to picture what
+literally changes in each case. Distillation changes the model itself: a smaller student network,
+usually with fewer layers or a narrower hidden dimension, is trained to match a larger teacher network's
+behavior rather than trained from scratch on raw labels alone. It happens during training, and it
+produces a genuinely different, smaller architecture. Quantization changes only how each weight is
+stored: instead of a 32-bit or 16-bit floating-point number, a weight is represented with 8, 4, or even
+fewer bits, shrinking memory and often speeding up computation, without touching the number of weights
+or the model's architecture at all. It is typically applied after training is complete, sometimes in
+minutes to hours rather than a full training run. Pruning changes how many weights exist: individual
+weights, or entire structured blocks of them, are removed because they contribute little to the model's
+output, leaving a sparser network that needs less computation and less memory to run. Because these
+three techniques touch different things, architecture, numeric representation, and weight count, they
+compose: a distilled model can be quantized, and a quantized model can be pruned, each pass compounding
+the savings of the one before it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-5-three-levers-overview.svg').default}
+    alt="Three model compression techniques shown as separate levers on the same trained model: distillation trains a smaller student architecture to mimic a larger teacher; quantization represents the same weights with fewer bits without changing the architecture; pruning removes individual weights or structured blocks, leaving a sparser network. A note states the three techniques compose."
+  />
+  <figcaption>Distillation changes the architecture, quantization changes how each weight is stored, and pruning changes how many weights exist, which is why the three compose rather than compete.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Distillation trains a smaller model on a larger one's outputs, not just on the original labels, and
+the idea is older than the current wave of large language models.** Hinton et al. opened with the
+motivating problem: "a very simple way to improve the performance of almost any machine learning
+algorithm is to train many different models on the same data and then to average their predictions," but
+"making predictions using a whole ensemble of models is cumbersome and may be too computationally
+expensive to allow deployment to a large number of users, especially if the individual models are large
+neural nets." Caruana and collaborators had already shown it was possible to "compress the knowledge in
+an ensemble into a single model which is much easier to deploy," and Hinton et al. developed that
+approach further with their own distillation technique, training a small student model on the large
+teacher's softened output probabilities
+rather than on raw hard labels alone, since those probabilities carry information about which wrong
+answers the teacher considered plausible, not just which answer was correct. The paper reported
+"surprising results on MNIST" and a real production win, improving "the acoustic model of a heavily used
+commercial system by distilling the knowledge in an ensemble of models into a single model." DistilBERT
+is the concrete case that made this approach mainstream for transformer language models: distilled during
+pretraining itself rather than only at the fine-tuning stage, it managed to "reduce the size of a BERT
+model by 40%, while retaining 97% of its language understanding capabilities and being 60% faster,"
+figures specific enough to make the tradeoff plain, a meaningful chunk of size and latency traded for a
+small, bounded amount of capability.
+
+**Quantization leaves the number of weights and the architecture untouched and instead shrinks how much
+storage each weight consumes, and modern post-training methods can do this to a full-scale model in
+hours rather than requiring a training run.** GPTQ is a representative case: it "can quantize GPT models
+with 175 billion parameters in approximately four GPU hours, reducing the bitwidth down to 3 or 4 bits
+per weight, with negligible accuracy degradation." The practical payoff is not just a smaller file on
+disk. Lower-bit weights mean less data to move during inference, and GPTQ reported "end-to-end inference
+speedups over FP16, of around 3.25x when using high-end GPUs (NVIDIA A100) and 4.5x when using more
+cost-effective ones (NVIDIA A6000)." Taken to its conclusion, the compression can change what hardware a
+model needs at all: GPTQ's quantization was precise enough to "execute an 175 billion-parameter model
+inside a single GPU for generative inference," a model that would otherwise need to be split across
+several. Because quantization does not change the architecture or retrain the model, it is usually the
+cheapest of the three techniques to apply, and it is common to see it layered on top of a model that has
+already been distilled or pruned.
+
+**Pruning removes weights outright rather than shrinking how they are stored, and recent work showed
+this can be done to language models at scale without the retraining pruning has traditionally required.**
+SparseGPT's headline result: "large-scale generative pretrained transformer (GPT) family models can be
+pruned to at least 50% sparsity in one-shot, without any retraining, at minimal loss of accuracy." On the
+largest models tested, OPT-175B and BLOOM-176B, the method reached "60% unstructured sparsity with
+negligible increase in perplexity," meaning more than half the weights in those models could be zeroed
+out and ignored at inference time with only a small quality cost. The method is not limited to
+unstructured sparsity either: it "generalizes to semi-structured (2:4 and 4:8) patterns, and is
+compatible with weight quantization approaches," meaning the sparsity pattern can be shaped to match what
+specific inference hardware actually accelerates, and pruning and quantization can be applied to the same
+model together rather than as competing choices.
+
+## Hands-On: Quantize a Model to INT8 and Check What It Costs
+
+The clearest way to see quantization's tradeoff is to run it: shrink a model's weights to 8-bit integers,
+measure how much smaller it gets, and check whether it still answers the same way it did before.
+
+**Step 1: Load a model built from real `nn.Linear` layers.** DistilBERT, not a GPT-2-style model, is
+used deliberately here: GPT-2's attention and feed-forward projections use a different internal layer
+type (`Conv1D`) that PyTorch's dynamic quantization does not target, so quantizing a GPT-2-style model
+this way would silently compress almost nothing. DistilBERT's layers are ordinary `nn.Linear`, so dynamic
+quantization applies broadly across the model.
+
+```python
+import io
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+model_name = "distilbert-base-uncased"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+fp32_model = AutoModelForMaskedLM.from_pretrained(model_name)
+fp32_model.eval()
+
+def model_size_mb(model):
+    buffer = io.BytesIO()
+    torch.save(model.state_dict(), buffer)
+    return buffer.tell() / (1024 ** 2)
+
+fp32_size = model_size_mb(fp32_model)
+print(f"fp32 model size: {fp32_size:.1f} MB")
+```
+
+**Step 2: Apply dynamic quantization to every `nn.Linear` layer and measure the new size.** This is a
+CPU-oriented, weights-only quantization technique built into PyTorch, simpler than the calibration-based,
+GPU-focused approach GPTQ uses, but it demonstrates the same underlying idea: fewer bits per weight, same
+architecture.
+
+```python
+quantized_model = torch.quantization.quantize_dynamic(
+    fp32_model, {torch.nn.Linear}, dtype=torch.qint8
+)
+quantized_model.eval()
+
+quantized_size = model_size_mb(quantized_model)
+print(f"int8 model size: {quantized_size:.1f} MB")
+print(f"size reduction: {(1 - quantized_size / fp32_size) * 100:.1f}%")
+```
+
+**Step 3: Check whether the quantized model still predicts the same words.** A masked-language-modeling
+task, predicting the word hidden behind `[MASK]`, gives a simple before-and-after comparison: if
+quantization preserved the model's behavior, the top prediction should usually match.
+
+```python
+test_sentences = [
+    "The capital of France is [MASK].",
+    "Water is made of hydrogen and [MASK].",
+    "The opposite of hot is [MASK].",
+]
+
+def top1_predictions(model, tokenizer, sentences):
+    predictions = []
+    with torch.no_grad():
+        for sentence in sentences:
+            inputs = tokenizer(sentence, return_tensors="pt")
+            mask_index = (inputs.input_ids == tokenizer.mask_token_id).nonzero(as_tuple=True)[1]
+            logits = model(**inputs).logits
+            top_token_id = logits[0, mask_index, :].argmax(dim=-1)
+            predictions.append(tokenizer.decode(top_token_id))
+    return predictions
+
+fp32_predictions = top1_predictions(fp32_model, tokenizer, test_sentences)
+quantized_predictions = top1_predictions(quantized_model, tokenizer, test_sentences)
+
+for sentence, fp32_pred, q_pred in zip(test_sentences, fp32_predictions, quantized_predictions):
+    match = "same" if fp32_pred.strip() == q_pred.strip() else "different"
+    print(f"{sentence}\n  fp32: {fp32_pred!r}  int8: {q_pred!r}  ({match})")
+```
+
+**Step 4: Read the tradeoff.** The size printed in Step 2 typically drops substantially, since the
+linear layers that dominate a transformer's parameter count now store 8-bit integers instead of 32-bit
+floats, while Step 3's predictions typically agree across most or all of the test sentences, exactly the
+shape of tradeoff GPTQ reported at a much larger scale: meaningfully smaller, at a small and bounded cost
+to behavior.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Distillation', 'Quantization', 'Pruning']}
+  rows={[
+    {aspect: 'What changes', values: ['The architecture itself: a smaller student model', "How each weight is stored: fewer bits per weight", 'How many weights exist: some are removed entirely'], decisive: true},
+    {aspect: 'When it happens', values: ['During training: student learns from teacher outputs', 'Usually after training, on an already-trained model', 'Can be one-shot after training (SparseGPT) or during'], decisive: true},
+    {aspect: 'Reported result', values: ['40% smaller, 97% capability retained, 60% faster (DistilBERT)', '3-4 bits per weight, negligible accuracy loss (GPTQ)', 'At least 50% sparsity, one-shot, no retraining (SparseGPT)'] },
+    {aspect: 'Combines with the others?', values: ['Yes: a distilled model can still be quantized and pruned', 'Yes: SparseGPT reports compatibility with quantization', 'Yes: pruning and quantization are commonly stacked'] },
+  ]}
+  caption="Each technique touches a different part of the model, which is why production systems commonly apply more than one of the three together."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="How distillation, quantization, and pruning compose into one compressed model"
+  mermaid={`
+flowchart TD
+  TEACHER[Large trained teacher model] --> DISTILL[Distillation: train a smaller student on teacher outputs]
+  DISTILL --> STUDENT[Smaller student model, same task capability band]
+  STUDENT --> QUANT[Quantization: represent weights with fewer bits]
+  QUANT --> PRUNE[Pruning: remove low-importance weights]
+  PRUNE --> DEPLOY[Compressed model: smaller, faster, cheaper to serve]
+  TEACHER --> QUANT2[Quantization applied directly, no distillation]
+  QUANT2 --> PRUNE2[Pruning applied directly]
+  PRUNE2 --> DEPLOY
+`}
+  components={[
+    {name: 'Distillation', responsibility: 'Trains a smaller architecture to reproduce a larger model\'s behavior; the only one of the three that changes which model is actually running.'},
+    {name: 'Quantization', responsibility: 'Reduces the bit-width used to store each weight, typically applied after training with minimal or no retraining.'},
+    {name: 'Pruning', responsibility: 'Removes individual weights or structured blocks of them, reducing both memory footprint and the computation needed at inference.'},
+    {name: 'Compressed deployed model', responsibility: 'The output of applying one, two, or all three techniques together, sized and shaped for the hardware it will actually run on.'},
+  ]}
+/>
+
+None of these stages require all three techniques to run. A team can distill only, quantize only, prune
+only, or chain any combination, and the order matters less than making sure each stage's savings are
+measured against the model it actually started from, not against the original, uncompressed teacher.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A fraud-scoring model too slow for real-time transactions until distillation fixed it', problem: 'A large fraud-scoring model produced accurate risk scores but took long enough per transaction that the payments team could not run it inline at checkout, forcing scores to be computed after the fact instead of before a transaction cleared.', solution: 'The fix did not touch the fraud labels at all. Training a smaller model to reproduce the large model\'s score distribution, not just its final yes-or-no label, gave the payments team a version fast enough to run inline, tracking the original\'s judgment closely on the cases where it mattered most.', risk: 'A model accurate enough to trust is not automatically fast enough to use where it is needed; distillation exists specifically for the gap between those two requirements.'},
+    {title: 'A 175B-parameter research model that would not fit on the desk\'s available hardware', problem: 'The desk had licensed access to a very large language model for market research synthesis, but the GPU infrastructure available for inference could not hold the full-precision weights without splitting the model across more machines than the team had budgeted for.', solution: 'Rather than provision more GPUs, the team quantized the weights down to 4 bits apiece. That alone brought the model within what the desk already had racked, at an accuracy cost the team judged negligible for the task.', risk: 'Sizing inference hardware around a model\'s original 16-bit footprint, when quantizing to 4 bits can shrink that footprint by roughly four times over, risks provisioning machines the workload was never going to need.'},
+    {title: 'A compliance-scanning model with a wide margin the team decided to spend on speed', problem: 'A compliance-scanning model was measurably more accurate than the threshold the team actually needed to hit, and that surplus accuracy was coming at the cost of inference latency nobody had a use for.', solution: 'The team ran one-shot pruning against that surplus directly: no retraining, roughly half the weights gone, and the accuracy given up was accuracy nobody downstream had actually been using.', risk: 'A model performing well above its actual requirement is carrying cost, in latency and compute, that pruning can recover, and leaving that margin unspent is a decision, even if nobody framed it as one.'},
+    {title: 'A document-classification pipeline stacking all three techniques for a hard latency budget', problem: 'A document-classification pipeline had a strict per-document latency budget that neither the original large model, nor any single compression technique applied on its own, could reliably meet at the volume the pipeline needed to sustain.', solution: 'No single technique got the pipeline there alone, so the team ran all three in sequence: distill, then quantize the student, then prune what remained. Only the combination cleared the latency budget, and it cleared it with room to spare.', risk: 'Reaching for one compression technique when the requirement demands the savings of two or three stacked together leaves a team assuming a ceiling that a combined approach would have cleared.'},
+  ]}
+  healthcare={[
+    {title: 'A discharge-summary assistant that finally ran fast enough for bedside use', problem: 'A discharge-summary assistant built on a large model produced high-quality drafts, but its response time was too slow for clinicians to use it during a bedside workflow, where a multi-second delay broke the interaction entirely.', solution: 'Distillation was the fix, but not the obvious version of it: instead of training a small model on example summaries from scratch, the team trained it to match the large model\'s own draft-by-draft output, which closed most of the latency gap and left summary quality close enough that clinicians stopped noticing a difference.', risk: 'Quality scores from an offline benchmark say nothing about whether a clinician will actually wait for a response, and a model that passes the benchmark can still fail the workflow it was meant to serve.'},
+    {title: 'Why a hospital rollout stalled at sites with older inference hardware, and what fixed it', problem: 'A hospital network wanted the same imaging-triage model running everywhere, but several sites were operating inference hardware that predated the model\'s memory requirements, and swapping that hardware out at every one of those sites was not something the rollout budget covered.', solution: 'Quantizing the model\'s weights to 4 bits brought its memory footprint under what even the oldest sites could handle, so the rollout went ahead on schedule instead of being rescoped around a hardware refresh.', risk: 'A plan that assumes every site has comparable hardware only survives until it meets the site that doesn\'t, and quantizing to fit the weakest link is usually faster than upgrading it.'},
+    {title: 'A radiology-report model where pruning recovered a margin nobody was using', problem: 'A radiology-report generation model consistently scored well above the quality bar the department had set for it, and that unused margin was costing inference time on every report without buying the department anything it needed.', solution: 'Rather than leave that margin alone, the department pruned the model in a single pass, no retraining required, cutting roughly half its weights and converting the unused accuracy into lower latency per report.', risk: 'Treating every point of a model\'s accuracy as sacred, including the points sitting well above what the task actually needs, is how a department ends up paying indefinitely for headroom it never spends.'},
+    {title: 'A clinical-note pipeline where distillation, quantization, and pruning together met a hard cost ceiling', problem: 'A hospital system\'s clinical-note pipeline had a per-note compute cost ceiling set by budget, and the original large model exceeded that ceiling even after either quantization or pruning was tried on its own.', solution: 'Distillation came first, shrinking the architecture itself; quantization and pruning followed, each cutting further into what was left. Only once all three had run did the pipeline\'s per-note cost actually clear the ceiling the budget had set.', risk: 'A cost ceiling that survives one compression technique but not the model as a whole often needs more than one technique, and testing techniques individually rather than in combination can miss a solution that only works stacked.'},
+  ]}
+  telecom={[
+    {title: 'A network-alert summarizer distilled down to fit inside the NOC\'s response-time budget', problem: 'A large model produced strong network-alert summaries, but its response time regularly exceeded the response-time budget the NOC needed during live incidents, when summaries had to appear well before an operator finished reading the raw alert.', solution: 'Rather than retrain a small model on labeled summaries alone, the team had it learn directly from the large model\'s own outputs, which brought response time inside the NOC\'s budget without asking summary quality to give up much ground.', risk: 'A summarizer can score well on quality all day in an offline test and still miss the point, if nobody checked how long it takes to appear relative to the incident it is describing.'},
+    {title: 'An edge rollout that outran its own hardware budget, until quantization closed the gap', problem: 'A carrier wanted anomaly detection running locally at each cell site rather than centralized, but the compute already sitting at those sites had never been sized for a model this large, and a hardware upgrade across every site was not going to happen on the rollout\'s timeline.', solution: 'Cutting the model down to a lower bit-width was the faster lever to pull. It fit inside the compute already at each site, so the rollout kept its original timeline instead of waiting on new hardware to arrive everywhere.', risk: 'A rollout plan sized around a model\'s full-precision footprint, when the hardware at the edge was never going to support that footprint, is a plan that stalls until something gives, and quantization is usually the cheaper thing to give.'},
+    {title: 'A capacity-forecasting model pruned once its accuracy margin outgrew its requirement', problem: 'A capacity-forecasting model had, over several improvement cycles, ended up performing well beyond the accuracy the planning team actually used, and every one of those forecasts was still costing the same inference time and compute as before.', solution: 'The planning team pruned it in one shot, no retraining, no phased rollout: about half its weights gone, with the compute those weights used to cost redirected toward the same forecasting cadence at a lower price per forecast.', risk: 'An accuracy margin nobody is using does not sit idle for free. It costs inference time on every run until something, usually pruning, goes and reclaims it.'},
+    {title: 'An incident-response pipeline where three compression stages together beat a compute quota no single one could', problem: 'A carrier\'s incident-response pipeline operated under a fixed compute quota, and the original model exceeded that quota, as did the model after quantization alone and the model after pruning alone, each falling short by a different margin.', solution: 'The carrier tried each technique alone first, and each fell short by a different margin. Chaining all three, distillation into quantization into pruning, closed the remaining gap and brought the pipeline inside quota.', risk: 'Testing compression techniques one at a time against a fixed quota can wrongly conclude the quota is unreachable, when the three techniques stacked together clear a bar none of them clears individually.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What does distillation actually change about a model, and how is that different from what quantization changes?', answer: 'Distillation changes the architecture itself: a smaller student model is trained to reproduce a larger teacher model\'s behavior, typically learning from the teacher\'s output distributions rather than raw labels alone. Quantization leaves the architecture and the number of weights untouched and instead changes how each existing weight is stored, using fewer bits per weight.'},
+    {question: 'What specific tradeoff did DistilBERT report, and why are those specific numbers useful?', answer: 'DistilBERT reported a 40% size reduction, 97% retention of language understanding capability, and 60% faster inference compared to BERT. The specific numbers matter because they make the tradeoff concrete and comparable: a team can judge whether that particular size-for-capability exchange fits its own requirements, rather than reasoning about compression only in the abstract.'},
+    {question: 'What did SparseGPT show about pruning that was notable relative to how pruning had traditionally been done?', answer: 'SparseGPT showed that large-scale GPT-family models could be pruned to at least 50% sparsity in one shot, without any retraining, at minimal accuracy loss, and reached 60% unstructured sparsity with negligible perplexity increase on the largest models tested. This mattered because pruning had traditionally required a retraining or fine-tuning cycle to recover accuracy after removing weights.'},
+    {question: 'Why does the Hands-On exercise use DistilBERT rather than a GPT-2-style model for the quantization demo?', answer: 'GPT-2-style models implement their attention and feed-forward projections using a Conv1D layer type rather than PyTorch\'s standard nn.Linear, and PyTorch\'s dynamic quantization only targets specified module types such as nn.Linear. Quantizing a GPT-2-style model this way would leave nearly all of its weights untouched, while DistilBERT\'s layers are ordinary nn.Linear, so the quantization actually applies broadly across the model.'},
+    {question: 'Why do production systems commonly apply distillation, quantization, and pruning together rather than choosing just one?', answer: 'Each technique changes a different part of the model: distillation changes the architecture, quantization changes how weights are stored, and pruning changes how many weights exist. Because they act on different dimensions, their savings compound rather than compete, so a pipeline with a compute or latency requirement that no single technique can meet alone can often meet it once the techniques are stacked.'},
+  ]}
+/>

@@ -20,9 +20,9 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [7.2 Full Fine-Tuning vs. Parameter-Efficient Fine-Tuning, Compared](./7-2-full-fine-tuning-vs-peft-compared.mdx)
 - [7.3 Alignment Techniques Deep Dive: Instruction Tuning, RLHF, RLAIF, DPO](./7-3-alignment-techniques-deep-dive.mdx)
 - [7.4 Domain Adaptation & Continual Pretraining](./7-4-domain-adaptation-continual-pretraining.mdx)
+- [7.5 Model Compression: Distillation, Quantization, Pruning](./7-5-model-compression-distillation-quantization-pruning.mdx)
 
 ## Planned chapters
 
-- 7.5 Model Compression: Distillation, Quantization, Pruning
 - 7.6 Evaluating & Benchmarking Fine-Tuned Models
 - 7.7 Deployment Considerations for Custom Models
