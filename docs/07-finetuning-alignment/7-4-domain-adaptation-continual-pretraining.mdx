@@ -1,0 +1,304 @@
+---
+title: "Domain Adaptation & Continual Pretraining"
+sidebar_label: "7.4 Domain Adaptation & Continual Pretraining"
+sidebar_position: 4
+phase: 7
+chapter: "7.4"
+lms_presentation: "7.4-Domain-Adaptation-Continual-Pretraining-Slides.pptx"
+prerequisites: ["7.3"]
+tags: []
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+import UseCaseGrid from '@site/src/components/UseCaseGrid';
+import CheckYourUnderstanding from '@site/src/components/CheckYourUnderstanding';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR
+
+Chapter 7.3 covered teaching a model to behave the way people want. This chapter covers a different
+kind of adaptation: giving a model knowledge it did not have, whether that means a specialized
+vocabulary and writing style (domain adaptation) or simply keeping a model current as the world moves
+on (continual pretraining). Gururangan et al. showed that "a second phase of pretraining in-domain
+(domain-adaptive pretraining) leads to performance gains, under both high- and low-resource settings,"
+and that "adapting to the task's unlabeled data (task-adaptive pretraining) improves performance even
+after domain-adaptive pretraining." Any further training carries a cost, though: catastrophic
+forgetting. Kirkpatrick et al. found that "it has been widely thought that catastrophic forgetting is
+an inevitable feature of connectionist models," and a 2023 study of large language models specifically
+found something genuinely counterintuitive: "as the model scale increases, the severity of forgetting
+intensifies." Two well-established levers push back against that. Kirkpatrick's Elastic Weight
+Consolidation works by "selectively slowing down learning on the weights important for" earlier tasks.
+More recent continual-pretraining research found a simpler recipe also works: "a simple and scalable
+combination of learning rate (LR) re-warming, LR re-decaying, and replay of previous data is sufficient
+to match the performance of fully re-training from scratch on all available data." This chapter covers
+when to reach for domain adaptation instead of full continual pretraining, why forgetting happens, and
+how to structure a training run that keeps it in check.
+
+## High-Level Explanation
+
+Getting new knowledge into a model sits on a spectrum, and where a team lands on it depends on how much
+knowledge needs to change and how permanent that change should be. At one end, retrieval and prompting
+(Chapters 5.8, 6.1) add facts at inference time without touching a single weight: fast, reversible,
+cheap. Fine-tuning (Chapters 7.1, 7.2) changes weights, but on a narrow, labeled task. Domain-adaptive
+pretraining (DAPT) is a step further still: instead of a labeled task, it continues the model's original
+self-supervised objective, next-token prediction, on unlabeled text from a target domain, teaching the
+model that domain's vocabulary and style without teaching it any specific task. Task-adaptive
+pretraining (TAPT) narrows that same idea to the unlabeled text of the task itself. Full continual
+pretraining goes furthest: it repeats this process over a model's entire lifetime, folding in new data
+as the world changes, so the model's knowledge does not freeze at its original training cutoff. Each
+step further along this spectrum reaches deeper into what the model actually knows, and each step
+further along it also carries more risk of the model quietly losing what it already knew.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-4-adaptation-spectrum.svg').default}
+    alt="A spectrum from retrieval and prompting, which add facts at inference time without changing weights, through task fine-tuning, domain-adaptive pretraining, task-adaptive pretraining, to full continual pretraining, which repeatedly updates the entire model over its lifetime. Risk of catastrophic forgetting increases moving right along the spectrum."
+  />
+  <figcaption>Each step further along the spectrum reaches deeper into the model's knowledge, and each step further along also carries more forgetting risk.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+**Domain-adaptive and task-adaptive pretraining extend the original pretraining objective onto new
+text, no labels required, and Gururangan et al. showed the gains from doing this are real and stack.**
+Their study spanned "four domains (biomedical and computer science publications, news, and reviews) and
+eight classification tasks," and found that this "second phase of pretraining in-domain
+(domain-adaptive pretraining) leads to performance gains, under both high- and low-resource settings."
+Critically, DAPT and TAPT are not substitutes for each other: "adapting to the task's unlabeled data
+(task-adaptive pretraining) improves performance even after domain-adaptive pretraining," meaning a
+team that has already run DAPT still has more to gain from narrowing further to TAPT. Where domain data
+is scarce or unavailable, the paper found a workable fallback: "adapting to a task corpus augmented
+using simple data selection strategies is an effective alternative." The overall conclusion was
+consistent across every setting tested: "we consistently find that multi-phase adaptive pretraining
+offers large gains in task performance."
+
+**Every one of these further training passes risks catastrophic forgetting, and the mechanism behind it
+has been understood since long before large language models existed.** Kirkpatrick et al. opened their
+paper on Elastic Weight Consolidation (EWC) with the core problem: "it has been widely thought that
+catastrophic forgetting is an inevitable feature of connectionist models," because a network trained
+sequentially on a new task will overwrite the weights an earlier task depended on. EWC's fix is to make
+some weights harder to change than others: the method works "by selectively slowing down learning on
+the weights important for" tasks the model has already learned, identifying which weights matter using
+each weight's estimated importance to prior performance, then penalizing further changes to the most
+important ones during later training. This is not just a small-model, small-task result. A 2023 study
+of large language models under continual instruction tuning reported something genuinely
+counterintuitive: "the experiments reveal that catastrophic forgetting is generally observed in LLMs
+ranging from 1b to 7b parameters," and, more surprisingly, "as the model scale increases, the severity
+of forgetting intensifies," which the authors attribute to larger models having "much significant
+initial performance" that later training has more room to erode. The same study found the choice of
+architecture and preparation matters too: a decoder-only model retained more of its prior knowledge
+than a comparable encoder-decoder model, and models that had already been through general instruction
+tuning forgot less during later, narrower fine-tuning than models that had not.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/7-4-ewc-weight-importance.svg').default}
+    alt="A diagram showing Elastic Weight Consolidation: weights estimated as important to a previous task are penalized against large changes during new-task training, shown as a subset of weights with a stronger constraint applied, while less important weights train freely."
+  />
+  <figcaption>EWC does not freeze the whole model; it identifies which weights mattered for earlier tasks and slows learning specifically on those.</figcaption>
+</figure>
+
+**Continual pretraining, repeatedly updating a model's full knowledge base over its lifetime rather
+than adapting it once to one domain, needs a recipe that avoids both catastrophic forgetting and the
+cost of retraining from scratch every time.** Ibrahim et al. tested this directly and found a
+comparatively simple approach was enough: "a simple and scalable combination of learning rate (LR)
+re-warming, LR re-decaying, and replay of previous data is sufficient to match the performance of fully
+re-training from scratch on all available data." Each piece addresses a specific failure mode.
+Re-warming the learning rate when new data arrives lets the model actually absorb it, since a learning
+rate that has already decayed toward zero from the original training run barely moves the weights at
+all. Re-decaying it afterward stabilizes training on the combined old-and-new distribution the same way
+the original pretraining run stabilized on its own data. Replay, mixing a sampled fraction of the
+original pretraining data back in alongside the new data, directly counters forgetting by continuing to
+show the model examples of what it already knew, rather than training on new data exclusively. The team
+also found the standard cosine learning rate schedule itself was part of the problem at update time,
+since it assumes a fixed, known token budget set in advance, and proposed "alternatives to the cosine
+learning rate schedule that help circumvent forgetting induced by LR re-warming and that are not bound
+to a fixed token budget," making the approach usable for a model that will be updated again and again
+rather than trained once and left alone.
+
+## Hands-On: Measure Catastrophic Forgetting with a Replay Buffer
+
+The clearest way to see catastrophic forgetting is to measure it directly: fine-tune a model on a narrow
+domain, then check how much worse it got at something it used to do well, with and without replaying a
+slice of the original data.
+
+**Step 1: Set up a base model and two text sources.** One is the narrow domain being adapted to; the
+other is a small general-purpose sample used only to measure forgetting, never trained on directly in
+the no-replay condition.
+
+```python
+import copy
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+torch.manual_seed(0)  # keeps the two fine-tuning runs comparable across repeated executions
+
+model_name = "distilgpt2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token
+base_model = AutoModelForCausalLM.from_pretrained(model_name)
+
+domain_texts = [
+    "The claimant's policy excludes coverage for pre-existing conditions disclosed at binding.",
+    "Under the indemnity clause, the insurer's liability is capped at the sum insured on the schedule.",
+    "Subrogation rights transfer to the insurer upon settlement of the claim in full.",
+]
+general_texts = [
+    "The cat sat by the window and watched the rain fall on the quiet street.",
+    "She packed her bag for the trip and double-checked the tickets one more time.",
+    "The bakery down the road sells fresh bread every morning before the rush.",
+]
+```
+
+**Step 2: Write a perplexity function to measure how well a model predicts held-out general text.**
+Rising perplexity on `general_texts` after fine-tuning is the forgetting signal this experiment is built
+to catch.
+
+```python
+def average_perplexity(model, tokenizer, texts):
+    model.eval()
+    losses = []
+    with torch.no_grad():
+        for text in texts:
+            input_ids = tokenizer(text, return_tensors="pt").input_ids
+            loss = model(input_ids, labels=input_ids).loss
+            losses.append(loss.item())
+    mean_loss = sum(losses) / len(losses)
+    return torch.exp(torch.tensor(mean_loss)).item()
+
+baseline_ppl = average_perplexity(base_model, tokenizer, general_texts)
+print(f"baseline perplexity on general text: {baseline_ppl:.2f}")
+```
+
+**Step 3: Fine-tune one copy on domain text only, no replay.** This is the condition expected to forget
+the most.
+
+```python
+def fine_tune(model, tokenizer, texts, steps=30, lr=5e-5):
+    model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    for step in range(steps):
+        text = texts[step % len(texts)]
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        loss = model(input_ids, labels=input_ids).loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    return model
+
+no_replay_model = copy.deepcopy(base_model)
+no_replay_model = fine_tune(no_replay_model, tokenizer, domain_texts, steps=30)
+no_replay_ppl = average_perplexity(no_replay_model, tokenizer, general_texts)
+print(f"perplexity after fine-tuning, no replay: {no_replay_ppl:.2f}")
+```
+
+**Step 4: Fine-tune a second copy the same way, but mix a replayed slice of general text into every few
+steps.** Nothing else about training changes, only whether the model keeps seeing a sample of what it
+already knew.
+
+```python
+def fine_tune_with_replay(model, tokenizer, domain_texts, replay_texts, steps=30, lr=5e-5, replay_every=3):
+    model.train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    for step in range(steps):
+        use_replay = (step % replay_every == 0)
+        text = replay_texts[step % len(replay_texts)] if use_replay else domain_texts[step % len(domain_texts)]
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        loss = model(input_ids, labels=input_ids).loss
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    return model
+
+replay_model = copy.deepcopy(base_model)
+replay_model = fine_tune_with_replay(replay_model, tokenizer, domain_texts, general_texts, steps=30, replay_every=3)
+replay_ppl = average_perplexity(replay_model, tokenizer, general_texts)
+print(f"perplexity after fine-tuning, with replay: {replay_ppl:.2f}")
+
+print(f"forgetting without replay: {no_replay_ppl - baseline_ppl:+.2f} perplexity")
+print(f"forgetting with replay:    {replay_ppl - baseline_ppl:+.2f} perplexity")
+```
+
+With this toy setup, only three domain sentences and thirty steps, the effect is exaggerated compared to
+a real training run, but the direction is the same one Ibrahim et al. reported at production scale: the
+no-replay model's perplexity on `general_texts` rises noticeably, while the replay model's rises by
+much less, because it never stopped seeing examples of the distribution it started with.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Task fine-tuning', 'DAPT', 'TAPT', 'Full continual pretraining']}
+  rows={[
+    {aspect: 'What it trains on', values: ['Labeled examples for one task', 'Unlabeled text from a target domain', "Unlabeled text from the task's own corpus", 'New data across the model\'s whole scope, on an ongoing basis'], decisive: true},
+    {aspect: 'Training objective', values: ['Task-specific loss (classification, generation, etc.)', 'Same self-supervised objective as original pretraining', 'Same self-supervised objective as original pretraining', 'Same self-supervised objective as original pretraining'], decisive: true},
+    {aspect: 'Forgetting risk', values: ['Low to moderate, scoped to the fine-tuned behavior', 'Moderate, scoped to general capability outside the domain', 'Moderate, similar to DAPT but even more narrowly scoped', 'Highest: repeated updates across the model\'s full knowledge base'] },
+    {aspect: 'Typical mitigation', values: ['Small learning rate, few epochs, held-out eval', 'Mix in general pretraining data alongside domain data', 'Usually run after DAPT, on a smaller, narrower corpus', 'LR re-warm/re-decay plus replay of prior pretraining data (Ibrahim et al.)'] },
+  ]}
+  caption="Moving right across this table reaches deeper into what a model knows, and each step also raises the stakes of doing it without a forgetting mitigation in place."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="Where domain adaptation and continual pretraining fit relative to fine-tuning"
+  mermaid={`
+flowchart TD
+  BASE[Pretrained base model] --> DECIDE{Is the gap domain knowledge or a specific behavior?}
+  DECIDE -->|Behavior| FT[Task fine-tuning: Chapter 7.1/7.2]
+  DECIDE -->|Domain knowledge| DAPT[Domain-adaptive pretraining: unlabeled domain text]
+  DAPT --> TAPT[Task-adaptive pretraining: unlabeled task text]
+  TAPT --> FT
+  BASE --> CADENCE{Does the model need ongoing updates over time?}
+  CADENCE -->|Yes| REPLAY[Continual pretraining: LR re-warm, LR re-decay, replay of prior data]
+  REPLAY --> UPDATED[Updated base model]
+  UPDATED --> CADENCE
+`}
+  components={[
+    {name: 'Domain-adaptive pretraining', responsibility: 'Continues the original self-supervised objective on unlabeled in-domain text before any task-specific fine-tuning happens.'},
+    {name: 'Task-adaptive pretraining', responsibility: 'Narrows that same self-supervised continuation to the task\'s own unlabeled corpus, stacking on top of DAPT.'},
+    {name: 'Continual pretraining loop', responsibility: 'Repeatedly updates the entire base model over time using LR re-warming, LR re-decaying, and replay to avoid both forgetting and full retraining.'},
+    {name: 'Task fine-tuning', responsibility: 'The labeled, task-specific stage from Chapters 7.1 and 7.2, which DAPT and TAPT feed into rather than replace.'},
+  ]}
+/>
+
+Domain adaptation and continual pretraining are not alternatives to task fine-tuning, they are stages
+that can precede it. A model that has been through DAPT and TAPT still goes through the same fine-tuning
+step covered in Chapter 7.2; it just starts that step already fluent in the domain instead of learning
+the domain and the task at the same time.
+
+## Industry Use Cases
+
+<UseCaseGrid
+  finance={[
+    {title: 'A filings-analysis model that stopped misreading routine boilerplate', problem: 'General-purpose fine-tuning on labeled question-answer pairs about SEC filings kept hitting a ceiling: the model handled the substantive analysis reasonably well but consistently misparsed dense boilerplate sections, since nothing in its original pretraining had emphasized that specific register of legal-financial writing.', solution: 'A domain-adaptive pretraining pass over a large, unlabeled corpus of filings, run ahead of the labeled fine-tuning stage, immersed the model in that register at scale, and the labeled step that followed converged faster and generalized better to filings the labeled set had never covered.', risk: 'Skipping straight to labeled fine-tuning on a domain a model has never seen in bulk asks the labeled examples to teach vocabulary and task at once, which asks more of a small labeled set than it can usually deliver.'},
+    {title: 'A trading-note assistant sharpened further by task-adaptive pretraining', problem: 'After domain-adaptive pretraining on general market commentary, a trading-note assistant still underperformed on the desk\'s own note format specifically, since the broader market-commentary corpus used for DAPT was not a close match for the desk\'s particular structure and shorthand.', solution: 'Task-adaptive pretraining on the desk\'s own unlabeled historical notes, layered on top of the DAPT checkpoint, closed the remaining gap by exposing the model directly to the exact format and shorthand it would later be fine-tuned to produce.', risk: 'Assuming DAPT alone is enough once a model has seen the general domain overlooks how much further a task\'s own specific format can still differ from that broader domain.'},
+    {title: 'A compliance model that forgot its general reasoning after three rounds of narrow fine-tuning', problem: 'Three successive rounds of fine-tuning, each on a different narrow compliance sub-task, left a model measurably worse at the general reasoning benchmarks it had passed comfortably before the first round, with no single round looking risky in isolation.', solution: 'Reviewing the training history against the Luo et al. finding that forgetting compounds with repeated narrow updates, the team added a replay slice of general instruction data to every subsequent fine-tuning round rather than treating each round as independent.', risk: 'A model can pass evaluation after each individual fine-tuning round and still be cumulatively worse than it started, since no single round\'s evaluation set was built to catch the slow accumulation of forgetting across rounds.'},
+    {title: 'A market-intelligence model whose retraining bill kept climbing until continual pretraining replaced it', problem: 'Every quarter, a market-intelligence model needed fresh data folded in, and the team\'s original plan, retraining from scratch on the full accumulated dataset each time, was becoming more expensive every cycle simply because the dataset itself kept growing.', solution: 'Adopting the LR re-warm, LR re-decay, and replay recipe from Ibrahim et al. let the team update the existing checkpoint each quarter on only the new data plus a replayed sample of the old, matching full-retrain performance at a fraction of the compute.', risk: 'A quarterly full retrain on an ever-growing dataset gets more expensive every cycle by construction, while a continual-pretraining update\'s cost stays roughly flat across cycles.'},
+  ]}
+  healthcare={[
+    {title: 'A clinical-note summarizer that finally handled abbreviation-dense text', problem: 'A clinical-note summarizer fine-tuned on a modest set of labeled example summaries kept expanding common clinical abbreviations incorrectly, guessing at meanings a general-purpose pretraining corpus had rarely, if ever, shown it in a medical context.', solution: 'Running domain-adaptive pretraining on a large body of unlabeled clinical notes first meant the model encountered those abbreviations, in context, thousands of times before the labeled summarization stage ever began, so that stage only had to teach summarization rather than summarization and vocabulary together.', risk: 'A labeled fine-tuning set sized for teaching a task, not a vocabulary, will underperform on text full of domain-specific shorthand the model has not seen enough of during pretraining.'},
+    {title: 'Why a hospital\'s DAPT checkpoint still wrote triage notes like discharge summaries', problem: 'A model that had already been through domain-adaptive pretraining on general clinical text still produced triage notes that read like discharge summaries, since the broad DAPT corpus spanned many note types and none of them alone dominated enough to shape triage-specific structure.', solution: 'The department followed DAPT with a further pretraining pass restricted to its own unlabeled triage-note archive, letting the checkpoint absorb triage structure specifically before the labeled fine-tuning stage began.', risk: 'A corpus broad enough to represent an entire clinical domain rarely concentrates on any one note type long enough to teach that type\'s structure by itself.'},
+    {title: 'A diagnostic-support model that lost ground on rare conditions after repeated updates', problem: 'A diagnostic-support model, fine-tuned repeatedly over several months as new guideline updates arrived, was quietly getting worse at recognizing rare conditions it had handled well at launch, a decline nobody noticed because each update\'s evaluation focused on the specific guideline it addressed.', solution: 'Adding a held-out evaluation set covering the model\'s original rare-condition performance, checked after every update, caught the decline early enough for the team to add replay of earlier training examples and stop the erosion.', risk: 'Evaluating only the behavior a given update was meant to change, and never the behavior it was not meant to touch, can let genuine regressions accumulate for months before anyone notices.'},
+    {title: 'Why a hospital\'s guideline-tracking model was stale for weeks after every revision, until it wasn\'t', problem: 'Clinical guidelines the hospital\'s support model relied on were revised on an irregular schedule, and each revision previously meant retraining the model from scratch on the full accumulated guideline history, a process that took long enough to leave the model stale for weeks after each update.', solution: 'Switching to continual pretraining, folding each revision in with LR re-warming, LR re-decaying, and a replayed sample of prior training, cut that turnaround from weeks to days, since only the new guideline text needed processing rather than the full accumulated history.', risk: 'A model whose update process takes weeks is stale by construction for a meaningful fraction of every revision cycle, regardless of how good the underlying training approach is once it finally runs.'},
+  ]}
+  telecom={[
+    {title: 'An incident-triage assistant undone by dense network-engineering shorthand, until DAPT', problem: 'Labeled fine-tuning on a set of past incident resolutions taught an incident-triage assistant reasonable resolution logic, but the assistant kept stumbling on dense network-engineering shorthand scattered through incident logs, a gap too specialized for the labeled examples alone to close.', solution: 'Continuing pretraining on a large, unlabeled archive of incident logs and engineering documentation let the model absorb that shorthand on its own terms, before the labeled fine-tuning stage narrowed in on resolution logic specifically.', risk: 'A labeled set sized to teach resolution logic is not sized to also teach an entire domain\'s jargon, and stretching it to do both usually shortchanges one or the other.'},
+    {title: 'One carrier\'s idiosyncratic log format, and what task-adaptive pretraining did about it', problem: 'Even after domain-adaptive pretraining on network-engineering text broadly, a model kept stumbling on one particular carrier\'s idiosyncratic log format, a format too small a slice of the broader domain corpus to have shaped the model much on its own.', solution: 'A further pretraining pass restricted to that carrier\'s own historical logs, run on top of the DAPT checkpoint, taught the model the exact format before labeled fine-tuning took over.', risk: 'General domain fluency and one team\'s particular formatting conventions are not the same achievement, and a broad corpus rarely supplies enough of the second.'},
+    {title: 'A capacity-planning model whose regional updates quietly cost it the bigger picture', problem: 'One region at a time, a capacity-planning model was fine-tuned on that region\'s recent traffic data, and across the sequence of updates it gradually lost accuracy on the general cross-region patterns it had modeled well before any regional update began, since each update looked safe when judged only against its own region.', solution: 'The fix was procedural, not architectural: every regional fine-tuning round going forward also trained on a small replayed sample of the original general traffic data, instead of treating each region\'s update as a closed, independent job.', risk: 'Judging a regional update only by its own region\'s test set is exactly the blind spot that lets broad regression build up unnoticed across a long sequence of updates.'},
+    {title: 'What replaced a carrier\'s ever-growing full-retrain cycle for tracking network topology', problem: 'As infrastructure changed, a network-health model needed new topology and equipment data folded in on a rolling basis, and the team\'s standing approach, retraining from scratch against the full historical dataset each time, consumed more compute with every cycle purely because that history kept growing.', solution: 'Continual pretraining took over instead: each cycle updated the existing model on just the new topology data plus a replayed sample of the old, using the LR re-warm and re-decay schedule from Ibrahim et al. to keep training stable.', risk: 'Compute cost that scales with a growing historical dataset, rather than with how much genuinely new information a cycle contains, is a cost structure a team pays for no real benefit.'},
+  ]}
+/>
+
+## Check Your Understanding
+
+<CheckYourUnderstanding
+  questions={[
+    {question: 'What is the difference between domain-adaptive pretraining (DAPT) and task-adaptive pretraining (TAPT), and does running one make the other unnecessary?', answer: 'DAPT continues the model\'s original self-supervised objective on unlabeled text from a broad target domain; TAPT narrows that same continuation to the unlabeled text of the specific task itself. Gururangan et al. found they are not substitutes: task-adaptive pretraining improves performance even after domain-adaptive pretraining has already been run, so the two stack rather than replace each other.'},
+    {question: 'What did the 2023 study of catastrophic forgetting in large language models find about model scale, and why is that finding counterintuitive?', answer: 'The study found that catastrophic forgetting is generally observed in LLMs from 1B to 7B parameters, and that as model scale increases within that range, the severity of forgetting intensifies. This is counterintuitive because larger models are often assumed to be more robust; the authors attribute it to larger models having much stronger initial performance, which leaves more room for later training to erode.'},
+    {question: 'How does Elastic Weight Consolidation (EWC) prevent catastrophic forgetting, mechanically?', answer: 'EWC estimates which weights were most important to a previously learned task, then penalizes further changes to those specific weights during training on a new task, effectively slowing down learning on the weights that matter most for what the model already knows while leaving less important weights free to change.'},
+    {question: 'What three components make up the continual pretraining recipe from Ibrahim et al., and what does each one address?', answer: 'The recipe combines learning rate (LR) re-warming, which lets the model actually absorb new data after the learning rate had already decayed toward zero; LR re-decaying, which stabilizes training on the combined old-and-new data distribution; and replay of previous pretraining data, which directly counters forgetting by continuing to show the model what it already knew.'},
+    {question: 'In the Hands-On exercise, what specifically was different between the no-replay and replay fine-tuning runs, and what did that difference produce?', answer: 'Both runs fine-tuned the same base model on the same narrow domain text for the same number of steps; the only difference was that the replay run periodically substituted a step of general-text training in place of a domain-text step. That difference produced a smaller rise in perplexity on held-out general text for the replay run, showing that even a small amount of replay measurably reduces forgetting.'},
+  ]}
+/>
