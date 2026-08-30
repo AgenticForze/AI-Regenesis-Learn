@@ -1,0 +1,399 @@
+---
+title: "Anatomy of an LLM Agent: Perception, Reasoning, Memory, Action, Tools"
+sidebar_label: "8.2 Anatomy of an LLM Agent"
+sidebar_position: 2
+phase: 8
+chapter: "8.2"
+lms_presentation: "8.2-Anatomy-of-an-LLM-Agent-Slides.pptx"
+prerequisites: ["8.1"]
+tags: ["agents", "perception", "reasoning", "memory", "tools", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.1 left the LLM agent's decide step deliberately generic, a single box a language model
+sits inside. That box is not one thing. It is five: perception, which turns raw environment state
+into context; reasoning, the LLM itself, planning over that context; memory, state that has to
+survive past a single context window; action, turning a reasoned decision into a specific chosen
+call; and tools, the actual mechanism that executes the call and produces an effect in the world.
+Perception and action are not new, they are Chapter 8.1's sensors and actuators wearing new
+names. Reasoning, memory, and tools are where an LLM genuinely changes what an agent's internals
+can look like. This chapter maps all five, at the level of what each one is and how they fit
+together, and deliberately stops before the deep treatment each one gets on its own: memory
+systems compared in 8.5, tool use and function calling in 8.4, reasoning and planning strategies
+in 8.7, and the loop that ties them together turn after turn in 8.3.
+
+## High-Level Explanation
+
+Picture a single turn of an LLM agent handling one request. Something happens in the
+environment, a user asks a question, a scheduled job fires, a file changes, and the agent has to
+turn that into a response. Perception is the step that takes whatever just happened and turns it
+into something a language model can read: a block of text, a formatted message, an image if the
+model is multimodal. Reasoning is the language model itself, working over that context, plus
+whatever it can pull from memory, to decide what ought to happen next. Memory is what makes that
+decision better informed than perception alone would allow: a fact from three turns ago, a
+summary of a long conversation, a note saved in an earlier session. Action is the step that turns
+reasoning's decision, which might be nothing more than a sentence of generated text, into
+something specific and executable: call this function with these arguments, or write this
+response back to the user. Tools are what action actually calls: a search API, a calculator, a
+database query, a file write, anything the agent can reach beyond generating more text.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-2-anatomy-of-an-llm-agent.svg').default}
+    alt="A horizontal chain: Environment feeds Perception, which turns raw state into context for Reasoning (the LLM). Reasoning reads from and writes to Memory, and hands its decision to Action, which calls Tools to actually change the Environment, closing the loop. A note states that Perception and Action are the classical sensors and actuators from Chapter 8.1 doing the same job, while Reasoning, Memory, and Tools are what an LLM lets you build differently inside that same loop."
+  />
+  <figcaption>Chapter 8.1's decide box, opened up. Perception feeds Reasoning, Reasoning reads and writes Memory, and Action calls Tools to close the loop.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Perception: What Goes Into an LLM Agent's Context
+
+An LLM has exactly one channel for perceiving anything: whatever text (and, for a multimodal
+model, image or audio) is inside its context window on a given call. Perception is the
+engineering work of deciding what belongs in that window and getting it there, the direct
+LLM-agent equivalent of Chapter 8.1's sensors, which turned raw environment state into a percept
+a classical agent's decide step could use. For a coding agent, perception might mean reading the
+relevant files out of a repository and formatting them as text. For a customer-support agent, it
+might mean pulling the current ticket, the customer's account history, and a handful of similar
+past tickets retrieved from a knowledge base, the retrieval machinery Phase 6 covers in depth. For
+a chat assistant, it is usually as simple as the latest user message plus recent conversation
+history. In every case, the underlying constraint is the same one Chapter 8.1 named for sensors
+generally: an agent cannot condition its decision on something that never made it into its
+percept. An LLM agent whose context window omits the one file that actually contains the bug, or
+the one prior message that actually stated the user's real constraint, is not failing to reason
+well; it is reasoning perfectly well over an incomplete percept, which looks identical from the
+outside but has a completely different fix. Because a context window is finite, unlike a
+classical agent's sensor array which can simply have more sensors, perception for an LLM agent is
+also inherently a selection problem: deciding what to leave out is as much a part of the job as
+deciding what to include, and getting that selection wrong in either direction, too little
+context or too much irrelevant context crowding out what matters, degrades reasoning for
+different reasons but degrades it either way.
+
+In practice, perception for a non-trivial LLM agent is rarely one step; it is a small assembly
+pipeline that runs before reasoning ever sees anything. A system prompt establishing the agent's
+role and constraints, retrieved documents relevant to the current request, the recent turns of
+conversation history, and the results of any tool calls made earlier in the same task all have to
+be gathered and formatted into one coherent context, typically in that rough order, general
+instructions first, specific and recent information last, because where something sits in the
+context window is not free of consequence. Placing the single most relevant fact at the very
+start of a long, undifferentiated block of text and expecting it to carry the same weight it
+would if it were the last thing reasoning read before responding is a common way an otherwise
+correct perception pipeline still produces a worse decision than the assembled context should
+have supported. None of this changes what perception's job is, turning environment state into
+context, but it does mean that job does not end at "put the relevant text in the window." How
+that text is ordered, chunked, and refreshed as a task runs long is itself an engineering
+concern, one Phase 5's architecture-pattern material and Phase 6's retrieval material both feed
+into directly.
+
+### Reasoning: The LLM as the Decide Step's Engine
+
+Once perception has assembled a context, reasoning is what happens next: the language model
+processes that context and produces an output that reasoning-consuming steps downstream, action
+in particular, can turn into something to do. Chapter 8.1 already established the core claim
+this sub-section refines rather than repeats: an LLM replaces a hand-coded rule engine, symbolic
+planner, or utility function as the thing occupying decide, reasoning in natural language instead
+of executing formally specified logic. What is new to say here is that reasoning is not
+necessarily a single forward pass producing a final answer. Wei et al.'s influential framing put
+it plainly: prompting a model to produce "a series of intermediate reasoning steps"
+significantly improves its ability to handle problems a single, unexplained answer tends to get
+wrong. Generating those intermediate steps, sometimes called a chain of thought, is one
+technique among several for structuring what happens inside reasoning, and this chapter's job is
+only to establish that reasoning is a distinct anatomical piece with its own internal choices to
+make, not to catalog those techniques. Chain-of-thought prompting specifically, along with ReAct,
+Reflexion, and other planning and reasoning strategies, get the deep, comparative treatment they
+deserve in Chapter 8.7; this chapter stops at naming reasoning as the component those strategies
+each compete to fill.
+
+Two things about reasoning's output are worth making explicit here because the next two
+sub-sections depend on them. First, reasoning's output is not automatically the same shape every
+time: sometimes it is a final answer meant for a user, sometimes it is a statement of intent that
+still needs translating into a concrete call, an idea that action, the next sub-section, exists
+specifically to handle. A reasoning step that produces "I should check whether this order has
+already shipped" has decided something, but it has not yet done anything; the sentence itself is
+not a database query. Second, reasoning is not limited to what fits in a single generation call.
+An agent can prompt the model once, read the result, feed that result back in as new context, and
+prompt it again, iterating until reasoning judges the task complete or a limit is reached. Each
+of those individual calls is still reasoning in the sense this chapter means it, the LLM working
+over context to decide what happens next, but stringing several of them together with
+perception, action, and tool results interleaved between them is what Chapter 8.3 calls the agent
+loop, and is also most of what separates a simple single-pass reasoning step from the more
+elaborate strategies, self-consistency, tree-of-thought search, reflection on a prior attempt,
+that Chapter 8.7 covers on their own terms.
+
+### Memory: Short-Term Context vs. Long-Term Storage
+
+A context window is memory, in the loosest sense: whatever is inside it right now is available to
+reasoning. But a context window is also bounded, in both size and lifetime; once a conversation
+or task moves past what fits, or a new session starts entirely, anything not otherwise preserved
+is gone. That gives a clean two-level way to think about memory for an LLM agent: short-term
+memory is whatever currently fits in the context window, fast to use because reasoning can read
+it directly, but limited in size and gone once the window is cleared or the session ends;
+long-term memory is external storage, a database, a file, a vector store, unlimited in practical
+size and durable across sessions, but requiring a deliberate retrieval step to bring anything
+back into the context window before reasoning can use it. That retrieval step is exactly where
+memory and perception meet: pulling a relevant fact out of long-term storage and placing it into
+the context window is, from reasoning's point of view, indistinguishable from perceiving it
+directly from the environment for the first time.
+
+Long-term memory can take more than one architectural shape. Packer et al.'s MemGPT is one
+example, "drawing inspiration from hierarchical memory systems in traditional operating systems"
+to page information between the context window and a larger external store. Park et al.'s
+Generative Agents is another, maintaining "a comprehensive record of the agent's experience" that
+gets retrieved and "recursively synthesized into higher- and higher-level reflections that guide
+behavior." Both are instances of the same underlying idea, an external store paired with a
+retrieval mechanism, not the only two that exist, and how the field's various approaches compare
+on storage, write policy, and retrieval strategy is Chapter 8.5's subject in full. The point to
+take from this chapter is narrower: short-term and long-term memory solve genuinely different
+problems, size-bounded immediate access versus unbounded durable storage, and a real agent
+typically needs both, not one or the other.
+
+The simplest possible memory implementation for an LLM agent is to keep appending every message
+to the conversation history and pass the whole thing back in as context on every turn. This
+works, briefly, and it is where most LLM agent designs start, but it degrades in two specific,
+predictable ways as a task runs long: the context eventually exceeds the model's window entirely,
+and, well before that hard limit, the growing history increasingly buries whatever is actually
+relevant to the current step under everything that came before it, the same "position in context
+matters" problem perception ran into, now compounding turn over turn. Reaching for structured
+long-term memory is what a designer does specifically to stop paying that compounding cost:
+instead of the entire history riding along in every context window whether or not it is still
+relevant, only what a retrieval step judges relevant to the current turn gets paid for in context
+space. That retrieval step is not free either, it costs a search over the long-term store and a
+judgment call about what counts as relevant, but it is a cost that stays roughly constant as a
+task grows longer, where the naive full-history approach's cost keeps climbing. Which retrieval
+strategy is worth using in which situation, and how the major architectures stack up against each
+other on that question, is exactly what Chapter 8.5 is for.
+
+### Action: From a Decision to an Actual Effect
+
+Reasoning produces an output. Action is the step that turns that output into something specific
+enough to actually execute: not "the model generated some text about checking the weather," but
+"call the weather API with this city name." This gap matters because reasoning's raw output is,
+by default, just more natural language, and natural language is not, by itself, a valid function
+call, a database write, or an API request. Action is the translation layer that closes that gap,
+typically by constraining or parsing reasoning's output into a specific, structured request: a
+function name and a set of arguments, a formatted command, a specific piece of text destined for
+a specific destination. This is the direct LLM-agent counterpart to Chapter 8.1's actuators, and
+the same design responsibility Chapter 8.1 flagged for actuators generally, deciding what an
+agent is allowed to do, lands squarely on action: an agent's action step is exactly where a
+designer decides which of reasoning's stated intentions are actually permitted to become real
+effects, and which need a check, a confirmation, or an outright block before they do. Skipping
+that check, calling whatever action reasoning names without any validation in between, is a
+common and consequential way for an LLM agent to end up doing something its designer never meant
+to permit, mirroring Chapter 8.1's warning that an actuator specified more broadly than intended
+carries the same shape of risk regardless of whether a classical planner or an LLM sits inside
+decide.
+
+A concrete case makes the translation gap easier to see. Reasoning might produce something like
+"the customer wants a refund and the order qualifies, I should process it." That sentence is a
+decision, but action still has real work left to do before anything happens: extract the order
+identifier, confirm a refund amount, select the specific refund-processing call, and package
+those into the arguments that call actually requires. Depending on what reasoning was allowed to
+produce, action's job ranges from nearly trivial, if the model was constrained to emit a
+structured format in the first place, to genuinely error-prone, if it has to parse meaning back
+out of open-ended prose that was never guaranteed to mention an order identifier at all. That
+range is exactly why action is often the point where a designer inserts something beyond
+straight-through translation: a validation check that the extracted amount is within an allowed
+range, a rule that some actions require a second confirmation before they run, or, for
+high-stakes actions specifically, a human approval step in the loop before action is allowed to
+proceed to a tool call at all. Chapter 10.6 covers human-in-the-loop patterns like that one in
+depth; the point to take here is narrower: action is a natural, and often necessary, place to put
+a check, precisely because it is the last step before a decision stops being reversible words and
+starts being an effect.
+
+### Tools: Giving an Agent Actuators It Doesn't Have by Default
+
+By itself, everything an LLM can do is generate text. Tools are how an agent gets actuators an
+LLM does not have natively: a callable function, wired up so that action can invoke it and get a
+real result back, whether that result is a calculator's answer, a search engine's results, or a
+confirmation that a file was written. Schick et al.'s Toolformer work frames the goal this way,
+training "a model to decide which APIs to call, when to call them, what arguments to pass, and
+how to best incorporate the results," so that, in their words, language models "can teach
+themselves to use external tools via simple APIs and achieve the best of both worlds...": a
+model's general reasoning ability combined with a tool's precision at the one narrow thing it does well,
+arithmetic a calculator gets exactly right every time, current information a search API can
+retrieve that no static model weights contain. A tool, in this sense, is nothing more exotic than
+a function with a name, a description, and a defined set of arguments, exposed to the agent so
+that action has something concrete to call once reasoning has decided a tool is needed. The
+mechanics of exposing tools reliably, function-calling APIs, how a model is told what tools exist
+and what arguments they expect, how a tool's result gets back into context for the next round of
+reasoning, are Chapter 8.4's full subject. What matters here is the anatomical claim: tools are
+what turn action's chosen call into an effect outside the model itself, the same role Chapter
+8.1's actuators played for a classical agent, now populated with whatever specific functions a
+designer decided to wire up.
+
+A tool, at minimum, needs three things to be usable at all: a name reasoning can refer to, a
+description telling reasoning what the tool does and when to reach for it, and a schema for the
+arguments it expects, so that action has something well-defined to fill in rather than guessing
+at a call's shape from scratch each time. That description is doing real work: reasoning decides
+whether and when to use a tool based substantially on how well the tool's description matches
+what the current situation calls for, which makes writing that description an actual design task,
+not incidental documentation. There is also a structural difference worth naming between a tool
+and a classical actuator that Chapter 8.1 did not need to dwell on: a classical actuator, a
+motor, a switch, often just acts, with no particular obligation to report back in a form the
+decide step consumes. A tool almost always returns something, a search result, a confirmation, an
+error, and that return value typically becomes the next turn's perception: the agent calls a
+tool, gets a result back, and reasons over that result exactly the way it would reason over
+anything else that just entered its context. Tools, in other words, do not only extend what an
+agent can do; a tool's return value is frequently how an agent perceives the effect its own last
+action had, closing a loop within the loop that Chapter 8.3 covers structurally.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Classical implementation (Chapter 8.1)', 'LLM-based implementation', 'What is genuinely different']}
+  rows={[
+    {aspect: 'Perception', values: ['Hand-coded sensors reading fixed fields of world state', 'Context assembly: formatting text (and images, for multimodal models) into the context window', 'The channel is unified: anything expressible in language can be perceived through the same mechanism, no new sensor code required'], decisive: true},
+    {aspect: 'Reasoning', values: ['A rule engine, symbolic planner, or utility function evaluated in code', 'The LLM itself, optionally structured into multiple reasoning steps', 'Reasoning happens in natural language and generalizes to unanticipated cases, at the cost of the formal guarantees Chapter 8.1 discussed'], decisive: true},
+    {aspect: 'Memory', values: ['Internal state variables a model-based reflex agent explicitly tracks', 'A context window (short-term) plus, often, an external store (long-term) that is explicitly written to and retrieved from', 'Long-term memory can hold far more than any hand-maintained state variable, but needs a deliberate retrieval step to reach reasoning at all'] },
+    {aspect: 'Action', values: ['Directly executing whatever the rule table or planner selected', 'Translating reasoning\'s natural-language output into a specific, structured call', 'A validation layer becomes necessary, since reasoning\'s raw output is not inherently a safe or well-formed command the way a planner\'s chosen operator was'] },
+    {aspect: 'Tools', values: ['Actuators wired directly into the agent\'s code for a fixed set of possible actions', 'Callable functions the agent can select from and invoke through action', 'The set of things an agent can do is extensible by adding a new tool definition, not by rewriting the agent\'s core decision logic'] },
+  ]}
+  caption="Perception and action carry over from Chapter 8.1 nearly unchanged in role. Reasoning, memory, and tools are where an LLM agent's internals genuinely stop resembling a classical agent's, which is exactly why each gets its own dedicated later chapter."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The five components of an LLM agent, wired into one turn"
+  mermaid={`
+flowchart TD
+  ENV[Environment: the world the agent acts in]
+  PERC[Perception: turns raw environment state into context]
+  MEM[Memory: reads and writes state that outlives one turn]
+  REASON[Reasoning: the LLM plans over the assembled context]
+  ACT[Action: turns the chosen decision into a specific call]
+  TOOLS[Tools: executes the call, produces a real effect]
+
+  ENV --> PERC --> REASON
+  MEM <--> REASON
+  REASON --> ACT --> TOOLS --> ENV
+`}
+  components={[
+    {name: 'Perception', responsibility: 'Selects and formats whatever environment state is relevant into the context window; the only channel reasoning can perceive through.'},
+    {name: 'Memory', responsibility: 'Short-term (the context window itself) and, often, long-term (external storage) state that reasoning reads from and writes to across turns.'},
+    {name: 'Reasoning', responsibility: 'The LLM itself, working over assembled context plus retrieved memory to decide what should happen next.'},
+    {name: 'Action', responsibility: 'Translates reasoning\'s natural-language decision into a specific, validated, executable call.'},
+    {name: 'Tools', responsibility: 'The callable functions action actually invokes; what gives the agent effects beyond generating text.'},
+  ]}
+/>
+
+Memory is drawn feeding reasoning directly rather than sitting on the perception-to-action chain,
+because it is read from and written to on demand, not perceived fresh from the environment every
+turn the way the rest of the chain is. That is also why the diagram keeps memory off to the side:
+it is a resource reasoning consults, not a stage every turn has to pass through in sequence.
+
+## Hands-On: A Minimal Agent With All Five Parts Visible
+
+The fastest way to see perception, reasoning, memory, action, and tools as five separate,
+nameable pieces instead of one undifferentiated "the agent does stuff" is to build a tiny agent
+that keeps each piece in its own function, and trace a request through all five. This agent
+manages a small list of notes: it can save something to memory, or recall something from it,
+deciding which by reasoning over the request.
+
+**Step 1: Memory and the two tools that touch it.** Memory here is nothing more than a list that
+outlives any single call, exactly the "state that outlives one turn" the chapter has been
+describing throughout. `save_note` and `recall_notes` are the tools, the only two ways anything
+is allowed to read or write that memory.
+
+```python
+notes = []  # Memory: a tiny long-term store that outlives any single turn
+
+def save_note(text):  # Tool
+    notes.append(text)
+    return f"Saved: {text}"
+
+STOPWORDS = {"what", "do", "you", "have", "about", "on", "the", "a", "an", "is", "are",
+             "of", "to", "anything", "any"}
+
+def recall_notes(query):  # Tool
+    keywords = [w.strip("?.,!") for w in query.lower().split() if w.strip("?.,!") not in STOPWORDS]
+    hits = [n for n in notes if any(k in n.lower() for k in keywords)]
+    return "; ".join(hits) if hits else "Nothing saved yet matching that."
+```
+
+**Step 2: Perception.** Perception's whole job in this toy agent is to take the raw user text and
+turn it into the percept the rest of the pipeline expects, a single dictionary with the field
+reasoning and action will read.
+
+```python
+def perceive(user_text):
+    return {"text": user_text}
+```
+
+**Step 3: Reasoning.** Reasoning's only job here is a single decision: is this message asking to
+save information, or recall it? That is a two-way classification, the same kind of task Chapter
+8.1's thermostat Hands-On asked `flan-t5-small` to make among three actions, so the same model and
+the same pattern apply.
+
+```python
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+model_name = "google/flan-t5-small"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+
+def reason(percept):
+    text = percept["text"]
+    prompt = (
+        f'Message: "{text}"\n'
+        "Is this message asking to save (store) information, or to recall (look up) "
+        "information that was saved earlier? Reply with exactly one word: SAVE or RECALL."
+    )
+    input_ids = tokenizer(prompt, return_tensors="pt").input_ids
+    output_ids = model.generate(input_ids, max_new_tokens=4)
+    intent = tokenizer.decode(output_ids[0], skip_special_tokens=True).strip().upper()
+    return "SAVE" if "SAVE" in intent else "RECALL"
+```
+
+**Step 4: Action.** Action takes reasoning's one-word decision and turns it into an actual tool
+call, including the small piece of translation a raw SAVE decision needs: stripping a leading
+phrase like "remember that" so what gets saved is the content, not the instruction to save it.
+
+```python
+def act(intent, percept):
+    text = percept["text"]
+    if intent == "SAVE":
+        payload = text
+        for prefix in ("remember that ", "remember ", "note that ", "save that "):
+            if payload.lower().startswith(prefix):
+                payload = payload[len(prefix):]
+                break
+        return save_note(payload)
+    else:
+        return recall_notes(text)
+```
+
+**Step 5: Wire the turn together and run it.** Nothing here does anything on its own; `run_turn`
+is only the sequence perceive, reason, act, the exact five-part chain this chapter has been
+describing, made runnable.
+
+```python
+def run_turn(user_text):
+    percept = perceive(user_text)
+    intent = reason(percept)
+    return act(intent, percept)
+
+print(run_turn("remember that the meeting is at 3pm"))
+print(run_turn("note that the client prefers email over calls"))
+print(run_turn("what do you have about the meeting"))
+print(run_turn("anything about golf"))
+```
+
+Running this needs `pip install transformers torch` and, the first time, internet access to
+download `flan-t5-small` from Hugging Face. The deterministic parts, `save_note`, `recall_notes`,
+`perceive`, and `act`, were verified directly this way: two saves followed by two recalls return
+`the meeting is at 3pm` and `the client prefers email over calls` respectively, and a query about
+something never saved correctly returns `Nothing saved yet matching that.` rather than, say,
+dumping every note regardless of relevance, which is what a naive keyword-match implementation
+does if it silently falls back to returning everything on a miss. If `reason` occasionally
+misclassifies a message, that is the same honest trade-off Chapter 8.1's thermostat demo made
+visible: a real agent narrows this gap with better prompting, structured output constraints, or a
+proper function-calling API, all Chapter 8.4 territory, not by hoping a small model never makes a
+mistake.
