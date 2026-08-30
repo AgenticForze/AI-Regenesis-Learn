@@ -1,0 +1,536 @@
+---
+title: "The Agent Loop: Plan, Act, Observe, Reflect (ReAct and Beyond)"
+sidebar_label: "8.3 The Agent Loop"
+sidebar_position: 3
+phase: 8
+chapter: "8.3"
+lms_presentation: "8.3-The-Agent-Loop-Slides.pptx"
+prerequisites: ["8.2"]
+tags: ["agents", "react", "reflexion", "planning", "agent-loop", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.2 opened a single decide step into five parts, but it described each part as
+though it ran once per task. Most real tasks cannot be finished that way: the right
+second step usually depends on what the first step's result actually turned out to be,
+not on what was predicted before anything happened. The agent loop is the mechanism that
+runs perception, reasoning, action, and tool-calling more than once, in a cycle, feeding
+each iteration's result into the next iteration's reasoning, until the task is done or
+something says stop. Four names anchor one turn of that cycle: plan, reasoning deciding
+the next move from everything observed so far; act, turning that decision into a specific
+tool call; observe, folding the result back into context; and reflect, a deliberate step,
+used after a failed or unproductive attempt, of judging what went wrong before trying
+again rather than repeating the same move unchanged. Two research results ground this in
+evidence rather than intuition: ReAct, which showed that interleaving reasoning with
+actions measurably beats keeping them separate, and Reflexion, which showed that revising
+based on explicit feedback measurably beats retrying blindly. Both are also this
+chapter's evidence for an uncomfortable fact: the loop does not know when to stop on its
+own, and a real system has to decide that deliberately or it never will.
+
+## High-Level Explanation
+
+Picture the note-taking agent from Chapter 8.2, but handed a question it cannot answer in
+one perceive-reason-act pass: something that needs two facts gathered in sequence, where
+the second fact cannot even be looked up until the first one is known. A single pass
+through perception, reasoning, action, and tools produces exactly one tool call and one
+result, and nothing in a single pass knows whether that result is enough to finish the
+task. The agent loop is what happens next: the result becomes a new perception, reasoning
+runs again over the now-larger context, and the cycle repeats until reasoning judges the
+task complete or an outside limit says to stop. One turn of that cycle has four labeled
+stages. Plan is the reasoning step, deciding what to do next given the whole trajectory
+observed so far, not just the original question. Act turns that decision into a specific,
+executable tool call. Observe takes whatever the tool returned and folds it into the
+context the next Plan step will see. Reflect is not part of every turn; it is a
+deliberate check, used specifically after an attempt has failed or fallen short, that
+asks what went wrong before the loop tries again, rather than repeating an unproductive
+move on the assumption that trying the same thing will eventually work.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-3-the-agent-loop.svg').default}
+    alt="A four-stage cycle: Plan decides the next action from the whole trajectory so far, Act turns that decision into a tool call, and Observe folds the result back into the trajectory. A check after Observe either loops back to Plan for another iteration, exits to Done on success, or, after a failed attempt, routes through Reflect before a fresh attempt begins back at Plan. A note explains that Plan, Act, and Observe form ReAct's inner cycle within one attempt, while Reflect is a separate outer cycle in Reflexion's sense that judges a whole finished attempt, and that nothing in the loop stops on its own."
+  />
+  <figcaption>Plan, Act, and Observe repeat within a single attempt. Reflect is a separate, outer cycle that only engages after a whole attempt is judged to have fallen short.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Why a Single Reasoning Pass Doesn't Scale to Multi-Step Tasks
+
+Chapter 8.2 described reasoning as something that "can prompt the model once, read the
+result, feed that result back in as new context, and prompt it again, iterating until
+reasoning judges the task complete or a limit is reached," naming that iteration as this
+chapter's subject without describing it. The gap that iteration closes is concrete: a
+single reasoning pass has to commit to an entire course of action using only what it
+already knows, before anything it decides to do has actually happened yet. For a task
+genuinely completable in one step, answer from what is already sitting in context, that
+commitment costs nothing. For a task where step two's correct action depends on the
+result of step one, a single pass cannot get there no matter how capable the underlying
+model is, not because its reasoning is weak but because the information step two needs
+does not exist yet at the moment step one's decision has to be made.
+
+One credible-looking fix is to ask the model to produce an entire multi-step plan
+upfront, rather than deciding one step at a time. Wang et al.'s Plan-and-Solve prompting
+does exactly this for multi-step reasoning problems: their method "consists of two
+components: first, devising a plan to divide the entire task into smaller subtasks, and
+then carrying out the subtasks according to the plan." This is a genuine improvement over
+committing to a single final answer in one shot, and for a problem where every subtask's
+inputs are knowable in advance directly from the original question, a math word problem
+that decomposes cleanly into arithmetic steps, for instance, it is often enough on its
+own. But it inherits the same structural limit at one remove, rather than escaping it.
+The plan itself is generated before any subtask has actually been carried out, so if
+carrying out subtask one reveals something that changes what subtask two should be, a
+search that returns an unexpected result, an API call that fails, a fact that contradicts
+an assumption the plan was built on, Plan-and-Solve has no built-in mechanism for
+revising the plan in light of it. The plan can be executed exactly as written and still
+be wrong, because faithfulness to a plan and correctness given what actually happened on
+the way are simply not the same property.
+
+The agent loop's answer is not to plan more carefully upfront but to shrink how much has
+to be decided correctly before anything happens at all: instead of committing to a full
+multi-step plan, or even to one full answer, reasoning commits only to the single next
+action, that action executes, and only then does reasoning decide what comes after.
+Action and tools, in Chapter 8.2's sense, happen inside every iteration of the loop, not
+once at the tail end of one long reasoning pass; what changes from one iteration to the
+next is that reasoning's input keeps growing to include everything the loop has already
+tried and everything it has found out as a result. This does cost something Plan-and-Solve
+does not pay: more total model calls for the same task, and no guarantee in advance of
+exactly how many will be needed before the task is done. What it buys in return is that
+step two's decision gets made only once step one's actual result exists to make it with,
+which for a task where later steps genuinely depend on earlier results is the difference
+between a task being merely attempted and a task being solvable at all.
+
+### ReAct: Interleaving Reasoning Traces and Actions
+
+Yao et al.'s ReAct paper gives this idea its clearest name and its founding evidence. Its
+core move is stated directly: the paper explores "the use of LLMs to generate both
+reasoning traces and task-specific actions in an interleaved manner, allowing for greater
+synergy between the two: reasoning traces help the model induce, track, and update action
+plans as well as handle exceptions, while actions allow it to interface with external
+sources, such as knowledge bases or environments, to gather additional information."
+Two distinct failure modes motivate why interleaving specifically, rather than leaning on
+either capability alone, matters here. Reasoning with no way to check anything against
+the world, generating a chain of thought with no interleaved actions, can commit early to
+a wrong assumption and then reason confidently onward to a wrong answer, with nothing
+external ever available to contradict it along the way. Acting with no interleaved
+reasoning to interpret results has the opposite problem: a fixed sequence of tool calls
+has no way to decide what a given result actually implies for what to do next, or to
+notice that a result does not mean what a hand-written script assumed it would mean.
+Interleaving the two lets each catch what the other misses. A reasoning trace states what
+is being inferred and why; an action tests part of that inference against a real source;
+and the next reasoning trace has to account for what the action actually returned, not
+for what it was expected to return.
+
+The paper's own experiments quantify what this buys, and the numbers are worth reading
+closely rather than taking on faith. On question answering and fact verification, the
+paper reports that "ReAct overcomes issues of hallucination and error propagation
+prevalent in chain-of-thought reasoning by interacting with a simple Wikipedia API, and
+generates human-like task-solving trajectories that are more interpretable than baselines
+without reasoning traces." On two interactive decision-making benchmarks the
+gap widens considerably: "on two interactive decision making benchmarks (ALFWorld and
+WebShop), ReAct outperforms imitation and reinforcement learning methods by an absolute
+success rate of 34% and 10% respectively, while being prompted with only one or two
+in-context examples." That second result deserves particular attention: a method using
+nothing but a handful of worked examples inside a prompt outperformed methods trained
+specifically for those two tasks. ALFWorld (navigating a simulated household to complete
+a instruction) and WebShop (shopping on a simulated storefront to match a specification)
+are exactly the class of task where step two's right action depends on what step one's
+action actually revealed about the environment, the class a single reasoning pass or a
+fixed upfront plan handles poorly by construction.
+
+ReAct also makes the loop's mechanics concrete rather than abstract, because the paper
+defines an explicit, small action space for its knowledge-intensive reasoning tasks:
+three actions in total, of which the paper describes the third as "finish[answer], which
+would finish the current task with answer." That one design choice is worth unpacking
+into two separate points. First, it demonstrates that reasoning's decisions have to be
+constrained to a fixed, executable vocabulary of actions to be reliably actionable at
+all, the same design responsibility Chapter 8.2 assigned to the action step in general,
+made concrete here as choosing among exactly search, lookup, or finish rather than
+parsing open-ended, unconstrained intent out of prose. Second, finish is not a special
+mechanism bolted on separately from the rest of the loop; it is one more action living in
+the same action space as search and lookup, selected by the same reasoning process on the
+same basis as any other action. That has a direct consequence: the loop terminates
+because reasoning decided the task was done, not because some external supervisor
+inspected the answer and signed off on it. Whether that is sufficient on its own, or
+whether a real system also needs a check on the model's own finish decision, is exactly
+where the last sub-section below picks back up.
+
+### Observation: How the Environment Talks Back
+
+Chapter 8.2 already established that "a tool almost always returns something... and that
+return value typically becomes the next turn's perception." The agent loop is where that
+fact stops being an incidental detail and becomes the entire mechanism by which the loop
+can go anywhere reasoning did not already anticipate at the start. Observation is the
+step, made formal, of taking whatever a tool call returned, a search result, an error
+message, a confirmation, a changed value, and folding it into the context the next Plan
+step will see, using the same context-assembly discipline Chapter 8.2's Perception
+sub-section described: deciding what belongs in the window and roughly where, not simply
+appending everything indiscriminately as it arrives.
+
+Two properties of observation are easy to understate on a first pass through this
+material. First, an observation is not guaranteed to say what reasoning expected it to
+say, and the loop's entire value depends on reasoning actually reading it rather than
+proceeding as though its prior expectation had been quietly confirmed. A search that
+comes back "no result found" is exactly as much an observation as one that returns the
+right fact, and a loop that does not distinguish the two, that treats every observation
+as though it necessarily moved the task forward, degrades into repeating the same failing
+action indefinitely, which is functionally identical to having no loop at all except for
+the wasted iterations. Second, what accumulates across iterations is not only the most
+recent observation but the entire trajectory of thought, action, and observation triples
+gathered so far, because a later step frequently needs a fact from several iterations
+back, not only the last one. This is memory in Chapter 8.2's sense, short-term and scoped
+to the current task, but here it takes a specific, recognizable shape: an ordered
+trace of exactly what was tried and what came back. That shape is also what makes a
+completed agent run auditable after the fact, since the trace is a literal record of the
+reasoning that produced the final answer rather than a reconstruction of it after the
+fact.
+
+That auditability carries a direct, practical cost, though, and it is exactly why
+observation is a place a real system has to make a deliberate engineering decision rather
+than defaulting to "keep everything forever." A long-running loop's trajectory grows by
+one triple every iteration, and Chapter 8.2's context-window constraint applies to it
+precisely as it applies to conversation history: an unbounded trajectory eventually
+exceeds the window outright, and well before that hard limit, an oversized trajectory
+buries the one or two observations that actually matter for the current decision under
+everything else the loop has already tried, the identical "position in context matters"
+problem perception and memory both ran into in Chapter 8.2, now recurring once per loop
+iteration rather than once per conversation turn. A production agent loop typically
+manages this the same way Chapter 8.2's Memory sub-section described managing long
+conversation history: summarizing or dropping older, no-longer-relevant trajectory steps,
+or moving them out into external long-term memory, rather than letting a raw trajectory
+grow without bound for the entire lifetime of one task.
+
+### Reflection and Self-Correction: Learning From a Failed Attempt
+
+Everything described so far is a loop that reacts to what it observes, but reacting is
+not the same thing as improving. A loop can interleave reasoning and action faithfully,
+exactly as ReAct describes, and still repeat a mediocre strategy every single time it
+fails, if nothing inside the loop is specifically responsible for asking why an attempt
+fell short in the first place. Shinn et al.'s Reflexion names that missing piece directly
+and gives it a concrete mechanism, framed explicitly as an alternative to retraining a
+model on its own failures: rather than "updating weights," which needs "extensive
+training samples and expensive model fine-tuning," Reflexion agents "verbally reflect on
+task feedback signals, then maintain their own reflective text in an episodic memory
+buffer to induce better decision-making in subsequent trials."
+
+Two things about that framing matter for understanding where reflection actually sits
+relative to the loop already described in this chapter. The first is architectural.
+Reflexion names three separate components rather than folding everything into one:
+"an Actor... which generates text and actions," "an Evaluator model... that scores the
+outputs produced by [the Actor]," and "a Self-Reflection model... which generates verbal
+reinforcement cues to assist the Actor in self-improvement." The Actor is, functionally,
+the reasoning-and-acting loop this chapter has already described in full. The Evaluator
+and the Self-Reflection model are additional steps layered on top of that loop, not
+something the base loop performs automatically as a side effect of merely observing
+results. A ReAct-style loop can run to completion, succeed or fail, with nothing in it
+ever explicitly asking "was that actually good, and if not, why," unless something like
+an Evaluator is deliberately added on top of it.
+
+The second point is about scope, and it is easy to conflate with the loop already
+described unless it is stated plainly. ReAct's loop revises its next action within a
+single attempt at a task: one continuous trajectory, running from start either to finish
+or to a step limit. Reflexion's reflection operates one level up from that. It revises
+strategy across separate attempts at the same task, where a full trajectory, or several,
+gets judged as a whole, a piece of reflective text is written summarizing what went
+wrong, and that text is carried forward into a new attempt that starts over from the
+beginning with the reflection available as context, not one that resumes partway through
+the old trajectory. This is not a difference of degree between two similar mechanisms; it
+is a genuinely different loop, nested around the first one, with correspondingly
+different memory requirements. The inner loop's trajectory can usually be discarded once
+an attempt ends one way or the other, but the reflective text specifically has to survive
+into the next attempt, which is, in Chapter 8.2's terms, exactly the kind of state a
+short-lived trajectory does not need to keep but a self-improving agent across multiple
+tries absolutely does.
+
+Reflexion's results make the case that this second, outer loop earns its added cost. On a
+coding benchmark, the framework achieves "a 91% pass@1 accuracy on the HumanEval coding
+benchmark, surpassing the previous state-of-the-art GPT-4 that achieves 80%," using the
+same underlying model throughout, improved not through better weights but by handing it
+its own past failures back as readable text before it tries again. That number is doing
+real argumentative work here: it is direct evidence that a specific, deliberately
+engineered mechanism, an explicit evaluator plus a written reflection carried forward
+into the next attempt, produces a measurable gain over simply letting a model retry a
+failed task from scratch with no memory of having failed it before, which is what happens
+by default whenever reflection is not deliberately built into the system.
+
+### Termination: Knowing When (and How) to Stop
+
+Nothing described above tells a loop when to stop, and a loop with no way to stop is not
+a hypothetical risk sitting off to one side; it is the default outcome of wiring
+perceive, reason, act, and observe into a cycle without also deciding, separately and
+deliberately, what ends it. Three distinct termination mechanisms are worth separating
+carefully, because each one fails in a different way when it is left out.
+
+The first is the model deciding for itself that the task is complete, which is exactly
+ReAct's finish action in practice: reasoning examines the accumulated trajectory and
+judges the task done, then emits an action that ends the episode rather than continuing
+it for another turn. This is the cheapest of the three mechanisms, since it costs nothing
+beyond what the loop is already doing on every turn, but it is only as reliable as the
+model's own judgment of completeness. A model that is overconfident finishes too early,
+with an incomplete or simply wrong answer it believes is correct; a model that is
+underconfident, or genuinely stuck, may never emit finish at all, no matter how long the
+loop is allowed to keep running.
+
+The second is an external limit imposed by whoever built the loop, entirely independent
+of what the model itself believes about its own progress: a fixed maximum number of
+iterations, after which the loop stops regardless of whether reasoning thinks the task is
+finished. ReAct's own experiments use exactly this kind of hard limit, and the paper is
+specific about the number chosen: "We set 7 and 5 steps for HotpotQA and FEVER
+respectively as we find more steps will not improve ReAct performance." A step limit on
+its own is a blunt instrument, though, because stopping a loop mid-trajectory still has to
+produce something rather than nothing, and the paper's design answers that question with
+a specific, named fallback rather than leaving it unresolved: "when ReAct fails to return
+an answer within given steps, back off to CoT-SC," switching to an entirely different
+method, reasoning by self-consistency, sampling several independent chains of thought and
+taking the majority answer among them, rather than simply giving up empty-handed. A step
+limit without a defined fallback behavior is not actually a complete termination
+mechanism on its own, since "the loop stopped running" and "the loop produced a usable
+result" are two different guarantees, and only the second one is what a caller of the
+loop actually needs from it.
+
+The third mechanism is an explicit success or failure check, separate both from the
+model's own finish decision and from a raw step count, of the kind Reflexion's Evaluator
+performs: scoring a completed attempt against some criterion, and allowing the outer loop
+to actually stop, or to move on rather than trying again, only once that score clears a
+threshold, or a separate trial limit is also reached in parallel. This is the most
+expensive of the three mechanisms, since it requires building and then trusting a
+separate judge of quality distinct from the reasoning that produced the answer in the
+first place, but it is also the only one of the three that can catch a case the model
+itself is confidently, incorrectly satisfied with, precisely because it does not rely on
+the same process that generated the answer to also be the process that checks it.
+
+A real system typically layers more than one of these three rather than picking exactly
+one and relying on it alone: a step limit as a hard backstop against ever running
+forever, the model's own finish action as the common-case way most successful runs
+actually end in practice, and, for tasks where being confidently wrong is costly enough
+to justify the added expense, an external evaluator that can override the loop's own
+judgment of when it is finished. Leaving out the step limit risks a loop that never
+stops. Leaving out any check on the model's own finish decision risks a loop that stops
+confidently at the wrong answer. Using a step limit with no defined fallback risks a loop
+that stops correctly on schedule but hands back nothing usable to whoever is waiting on
+it. The Hands-On below builds a small loop with exactly two of these three layers working
+together, the model's own decision to finish and a step-limit backstop with a clearly
+defined fallback, deliberately kept small enough to trace by hand from the first step to
+the last.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Plan-and-Solve (fixed upfront plan)', 'ReAct-style agent loop (revise every step)', 'Reflexion (revise across whole attempts)']}
+  rows={[
+    {aspect: 'When the next action gets decided', values: ['All subtasks planned once, before any subtask has actually run', 'Freshly, after every single observation, within one continuous attempt', 'Only between attempts, after a full trajectory has already been scored'], decisive: true},
+    {aspect: 'Can it use a result that only exists mid-task', values: ['No: the plan is fixed the moment it is generated', 'Yes: reacting to a mid-task result is the entire mechanism', 'Only at the start of the next attempt, never partway through the current one']},
+    {aspect: 'What actually stops it', values: ['Finishing the last subtask named in the original plan', "The model's own finish decision, a step limit, or both together", 'An evaluator judging an attempt good enough, or a trial limit being reached']},
+    {aspect: 'Where it is the right amount of machinery', values: ['Tasks fully decomposable from the question alone, with no surprises expected along the way', 'Tasks that must react to a real result before the next step can be chosen at all', 'Tasks worth retrying with hindsight, where running one full attempt is comparatively cheap']},
+  ]}
+  caption="Each row is a different answer to the same question: how much has to be decided correctly before anything happens, and how much can be revised once something actually does. Plan-and-Solve front-loads that decision; the agent loop defers it one step at a time; Reflexion defers a version of it across entire attempts."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="The agent loop, with its inner and outer cycles both shown"
+  mermaid={`
+flowchart TD
+  START[Task begins]
+  PLAN[Plan: reasoning decides the next action from the trajectory so far]
+  ACT[Act: turn the decision into a tool call]
+  OBS[Observe: the result becomes part of the trajectory]
+  CHECK{Finished, or step limit reached?}
+  REFLECT[Reflect: evaluate the completed attempt, write what to do differently]
+  DONE[Return the result]
+
+  START --> PLAN --> ACT --> OBS --> CHECK
+  CHECK -- not yet --> PLAN
+  CHECK -- succeeded --> DONE
+  CHECK -- failed --> REFLECT --> PLAN
+`}
+  components={[
+    {name: 'Plan', responsibility: 'Reasoning over the full trajectory so far to decide the single next action, not a whole remaining plan.'},
+    {name: 'Act', responsibility: 'Translates the decision into a specific, executable tool call, exactly as Chapter 8.2\'s action step does.'},
+    {name: 'Observe', responsibility: 'Folds the tool\'s actual result into the trajectory, becoming part of the next Plan step\'s context.'},
+    {name: 'Check', responsibility: 'The termination logic: has the model itself signaled done, or has a step limit been reached, and if so, did the attempt succeed?'},
+    {name: 'Reflect', responsibility: 'An outer-loop step, in Reflexion\'s sense, that only runs after a full attempt is judged to have failed, producing text a fresh attempt can use.'},
+  ]}
+/>
+
+The inner cycle, Plan, Act, Observe, and back to Plan, is ReAct's contribution: reasoning
+renewed after every single observation, entirely within one continuous attempt at the
+task. Reflect sits outside that cycle rather than inside it, engaging only once a whole
+attempt has already ended and been judged to have fallen short, which is why it routes
+back to a fresh Plan step rather than resuming the old trajectory partway through. Done is
+reachable only through the Check step, and never automatically, which is the diagram's
+way of stating this chapter's last point visually: nothing in the loop itself decides to
+stop without that decision being made explicit somewhere.
+
+## Hands-On: A Small Loop That Plans, Acts, Observes, Reflects, and Knows When to Stop
+
+The fastest way to see the difference between a single reasoning pass and a real agent
+loop is to build a task that a single pass genuinely cannot finish, a two-hop question
+where the second lookup depends on what the first lookup returns, and then trace exactly
+how many iterations it takes, and why. This agent has a tiny simulated knowledge base
+standing in for an external document store (Chapter 8.2's Tools), reasons deterministically
+about what to do next so every decision can be checked by hand, and includes a real step
+limit with a real fallback so the third example below can demonstrate honest failure
+rather than a contrived success.
+
+**Step 1: The environment and the two tools that reach into it.** `search` looks a term
+up in a small dictionary of facts; `finish` ends the loop with an answer. Both are exactly
+the shape of tool Chapter 8.2 described: callable, named, and returning something that
+becomes the next Observe step's input.
+
+```python
+KB = {
+    "eiffel tower": "The Eiffel Tower is a landmark located in Paris, France.",
+    "tokyo tower": "Tokyo Tower is a landmark located in Tokyo, Japan.",
+    "france": "France is a country. Its capital is Paris.",
+    "japan": "Japan is a country. Its capital is Tokyo.",
+}
+
+MAX_STEPS = 4
+STOPWORD_SUFFIXES = {"monument", "landmark", "site", "structure", "building"}
+
+def kb_search(query):  # Tool: search
+    key = query.lower().strip()
+    if key in KB:
+        return KB[key]
+    return f'No result found for "{query}".'
+
+def finish(answer):  # Tool: finish
+    return f"FINISH: {answer}"
+```
+
+**Step 2: Reading a fact back out of an observation.** These two small helpers are the
+Observe step's other half: an observation is just text, so something has to decide
+whether it contains a country name, a capital name, or neither.
+
+```python
+import re
+
+def extract_country(fact):
+    m = re.search(r"located in [A-Za-z ]+,\s*([A-Za-z ]+?)\.", fact)
+    return m.group(1).strip() if m else None
+
+def extract_capital(fact):
+    m = re.search(r"[Cc]apital is ([A-Za-z ]+?)\.", fact)
+    return m.group(1).strip() if m else None
+
+def simplify(phrase):
+    words = phrase.split()
+    if len(words) > 1 and words[-1].lower() in STOPWORD_SUFFIXES:
+        return " ".join(words[:-1])
+    return phrase
+```
+
+**Step 3: Plan.** This is the reasoning step, made deterministic on purpose so every
+decision in the trace below can be verified by hand rather than taken on faith. It looks
+at the whole trajectory so far, not just the last observation, exactly as the Deep-Dive's
+Observation sub-section described: check for a capital already found anywhere in the
+trajectory (finish), then for a country already found but not yet searched (search the
+country), then, if the last search failed, try simplifying the query once (reflect),
+and otherwise keep going until the step budget runs out.
+
+```python
+def reason(question, scratchpad):
+    if not scratchpad:
+        m = re.search(r"where the (.+?) is located", question, re.IGNORECASE)
+        landmark = m.group(1) if m else question
+        return {"thought": f'I need to find which country "{landmark}" is located in.',
+                "action": "search", "arg": landmark}
+
+    for entry in scratchpad:  # capital already found -> finish
+        capital = extract_capital(entry["observation"])
+        if capital:
+            return {"thought": f"The capital is {capital}. I can finish.",
+                    "action": "finish", "arg": capital}
+
+    for entry in scratchpad:  # country found but not yet searched -> search it
+        country = extract_country(entry["observation"])
+        if country and not any(e["arg"].lower() == country.lower() for e in scratchpad):
+            return {"thought": f'That landmark is in {country}. I need {country}\'s capital.',
+                    "action": "search", "arg": country}
+
+    last = scratchpad[-1]
+    if last["observation"].startswith("No result found") and not any(  # Reflect
+        e.get("reflected") for e in scratchpad
+    ):
+        simplified = simplify(last["arg"])
+        if simplified.lower() != last["arg"].lower():
+            return {"thought": f'That search found nothing. Simplifying "{last["arg"]}" to '
+                                f'"{simplified}" and retrying.',
+                    "action": "search", "arg": simplified, "reflected": True}
+
+    return {"thought": "No further leads from what has been observed so far.",
+            "action": "search", "arg": last["arg"]}
+```
+
+**Step 4: Act, and the loop that ties every stage together.** Act just dispatches to
+whichever tool Plan chose. `run_loop` is the cycle itself: Plan, Act, Observe, append to
+memory, check for finish, repeat, and, if the step budget runs out first, fall back to
+the most useful fact actually found rather than returning nothing.
+
+```python
+def act(action, arg):  # Action + Tools
+    if action == "search":
+        return kb_search(arg)
+    return finish(arg)
+
+def run_loop(question):
+    scratchpad = []  # Memory: the running trajectory of thought/action/observation triples
+    for step in range(1, MAX_STEPS + 1):
+        decision = reason(question, scratchpad)
+        observation = act(decision["action"], decision["arg"])
+        scratchpad.append({**decision, "observation": observation})
+        if decision["action"] == "finish":
+            return observation, step
+    best = None
+    for entry in reversed(scratchpad):  # Termination: step limit, with a defined fallback
+        if extract_capital(entry["observation"]) or extract_country(entry["observation"]):
+            best = entry["observation"]
+            break
+    if best:
+        return f"FINISH (fallback, step limit reached): best available fact: {best}", MAX_STEPS
+    return (f'FINISH (fallback, step limit reached): no relevant information was found; '
+            f'last attempt was search["{scratchpad[-1]["arg"]}"].'), MAX_STEPS
+```
+
+**Three runs, traced end to end.** Run 1 succeeds inside the budget on a clean two-hop
+question. Run 2 deliberately starts with a landmark name the knowledge base does not
+recognize exactly, forcing a genuine reflect-and-retry before it can succeed. Run 3 asks
+about something the knowledge base has no information on at all, forcing the loop through
+its full step budget to the fallback.
+
+```python
+print(run_loop("What is the capital of the country where the Eiffel Tower is located?"))
+print(run_loop("What is the capital of the country where the Tokyo Tower monument is located?"))
+print(run_loop("What is the capital of the country where the Statue of Liberty is located?"))
+```
+
+Running this exactly as written and printing each step produces three different
+termination paths. Run 1 finishes in 3 steps: search "Eiffel Tower" observes it is in
+France, search "France" observes its capital is Paris, then finish with "Paris", never
+touching the reflect branch because nothing ever failed. Run 2 needs all 4 steps: search
+"Tokyo Tower monument" fails outright, Plan's reflect branch simplifies that to "Tokyo
+Tower" and retries, which succeeds and reveals Japan, search "Japan" reveals its capital
+is Tokyo, and finish arrives on the fourth and final step, exactly at the budget's edge
+rather than comfortably inside it. Run 3 never finds anything at all: "Statue of Liberty"
+is not in the knowledge base under any spelling simplification the reflect step knows
+how to try, so all four steps repeat the same failing search, and the loop ends on the
+honest fallback message rather than fabricating a country and capital it never actually
+found. All three traces were run and their output checked line by line against this
+description; none of it is a projection of what the code should do.
+
+That third run is the point worth sitting with longest. A loop that always found an
+answer somehow would be indistinguishable, from the outside, from a loop that quietly
+made one up whenever it ran out of real leads. The visible difference between those two
+loops is entirely in how termination is built: this one's step-limit fallback explicitly
+checks whether anything usable was actually found before deciding what to report, and
+says so plainly when the answer is no, which is the same design responsibility Chapter
+8.2 assigned to a validation check inside the action step, now applied to the loop as a
+whole rather than to one call inside it.
