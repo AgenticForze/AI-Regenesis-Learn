@@ -1,0 +1,497 @@
+---
+title: "Tool Use and Function Calling: A Deep Dive"
+sidebar_label: "8.4 Tool Use & Function Calling"
+sidebar_position: 4
+phase: 8
+chapter: "8.4"
+lms_presentation: "8.4-Tool-Use-and-Function-Calling-Slides.pptx"
+prerequisites: ["8.2", "8.3"]
+tags: ["agents", "tool-use", "function-calling", "json-schema", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.2 said a tool needs a name, a description, and an argument schema. Chapter 8.3
+used tools as the thing Act calls and Observe reads from. Neither chapter asked how a
+model actually produces a call in the first place, or what stands between "the model
+wants to call a tool" and "the tool actually ran." This chapter answers both. A native
+function-calling API is what lets a model emit a structured, typed call directly, instead
+of a caller having to parse one out of free-form prose. A schema is not just
+documentation; it is what a validation step checks a proposed call against before
+anything is allowed to execute, and a call that fails that check never reaches the real
+function at all. A model can call more than one tool in the same turn, which is not the
+same problem as calling one tool correctly. And every one of these mechanisms fails in a
+distinct, nameable way: a badly written description gets the wrong tool picked, a
+malformed call gets caught by validation (or, worse, does not), and a tool that runs but
+errors has to report that error back in a form reasoning can actually use on the next
+turn.
+
+## High-Level Explanation
+
+Picture reasoning, inside Chapter 8.3's Plan step, deciding that the next action is a
+specific tool call: convert a temperature, look something up, send a message. What
+happens between that decision and something actually happening in the world is this
+chapter's entire subject. First, the decision has to come out of the model in a form a
+program can act on, not a sentence a program has to guess the meaning of; that is what a
+native function-calling API provides. Second, whatever comes out has to be checked
+against the tool's schema before anything runs, because a model's output, structured or
+not, is not automatically well-formed; that check is validation, and it happens before
+execution, not after. Third, only a call that passes validation actually reaches the
+underlying function, and either way, whether the call succeeded, failed validation, or
+executed and then errored, something has to come back in a shape reasoning can read on
+the next turn. That returned shape is a tool result, and Chapter 8.2's and 8.3's Observe
+step is what does the reading.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-4-tool-call-validation.svg').default}
+    alt="Reasoning proposes a tool call with a name and arguments. Validate checks the call against the tool's schema: a valid call proceeds to Execute, where the real function runs, while an invalid call is rejected without ever reaching the function. Either path produces a tool_result carrying is_error and content, which becomes the next turn's perception, closing the loop back to Reasoning. A note states that validation happens before execution, not after, and that a malformed call is caught and reported as an error result rather than reaching the real function."
+  />
+  <figcaption>A proposed call is validated before it is executed. Whether it succeeds, fails validation, or executes and then errors, a tool_result comes back either way.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### What a Tool Definition Actually Requires
+
+Chapter 8.2 named the minimum: "a name reasoning can refer to, a description telling
+reasoning what the tool does and when to reach for it, and a schema for the arguments it
+expects." A real function-calling API makes each of those three fields load-bearing
+rather than advisory. Anthropic's tool-use documentation specifies exactly this triple for
+a tool definition: `name`, "the name of the tool"; `description`, "a detailed plaintext
+description of what the tool does, when it should be used, and how it behaves"; and
+`input_schema`, "a JSON Schema object defining the expected parameters for the tool."
+Nothing about that third field is decorative. A JSON Schema is a machine-checkable
+specification: which fields exist, which are required, what type each one has to be, and,
+often, which specific values are allowed. That specification is what makes the rest of
+this chapter possible, because there is no way to check whether a proposed call is
+well-formed without first having something precise to check it against.
+
+OpenAI's original function-calling announcement frames the same three-part shape from the
+model's side rather than the schema's: "developers can now describe functions to
+`gpt-4-0613` and `gpt-3.5-turbo-0613`, and have the model intelligently choose to output a
+JSON object containing arguments to call those functions," with models "fine-tuned to
+both detect when a function needs to be called... and to respond with JSON that adheres
+to the function signature." Two things are packed into that sentence worth separating.
+First, the decision of *whether* to call a tool at all is the model's own judgment, made
+from the tool's description and the current context, exactly the design responsibility
+Chapter 8.2 assigned to a tool's description: "reasoning decides whether and when to use
+a tool based substantially on how well the tool's description matches what the current
+situation calls for." Second, the decision of *how* to fill in that call, which specific
+arguments, in which specific shape, is supposed to already conform to the schema by
+construction, because the model was fine-tuned specifically to produce JSON that adheres
+to it. Whether that construction-time guarantee actually holds for every call, in
+practice, is precisely why validation, covered later in this chapter, is a separate step
+rather than something a schema alone can be trusted to enforce.
+
+What a schema like this actually looks like is worth making concrete rather than leaving
+it abstract. A tool with two fields might specify an `input_schema` along the lines of the
+following:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "city": {"type": "string"},
+    "units": {"type": "string", "enum": ["metric", "imperial"]}
+  },
+  "required": ["city"]
+}
+```
+
+Every part of that structure is doing something specific. The `object` type says a call's
+arguments arrive as one structured value, not a bare string a caller has to further
+decompose. `properties` names each field and constrains its type. `enum` narrows `units`
+to exactly two allowed values rather than accepting any string at all. `required` marks
+`city` as non-optional while leaving `units` free to be omitted. JSON Schema is not a
+format invented by any one model provider, and that is precisely the point: a schema
+written this way describes a tool's contract independently of which model is calling it,
+so the same tool definition can, in principle, be handed to a different provider's
+function-calling API without being rewritten to match a provider-specific convention.
+
+### How a Model Signals a Call: Structured Output Instead of Parsed Prose
+
+Before native function-calling APIs existed, an agent's only way to get a tool call out
+of a model was Chapter 8.3's ReAct pattern: constrain the model, through prompting alone,
+to produce a specific text format, `finish[answer]` or `search[query]`, and then have the
+calling program parse that string with a hand-written parser to recover the action name
+and its argument. This works, and ReAct's own results prove it works well, but it puts
+the burden of getting the format right on the model's raw text generation and the burden
+of getting it back out on a parser that has to guess at exactly how that text might be
+malformed. A native function-calling API removes that guesswork by making tool-calling a
+first-class output mode rather than a text convention layered on top of one. Anthropic's
+documentation states the mechanism plainly: "tool use (also called function calling) lets
+Claude call functions that you define or that Anthropic provides. Claude determines when
+to call a tool based on the user's request and the tool's description," and when it does,
+"Claude responds with `stop_reason: \"tool_use\"` and one or more `tool_use` blocks,"
+which "returns a structured call that your application executes."
+
+The difference this makes is not cosmetic. A `tool_use` block is not a sentence that
+happens to look like a function call; it is a distinct part of the model's response,
+tagged as such, carrying a tool name and a set of arguments in a fixed, predictable
+structure that a caller reads directly rather than parses out of prose. `stop_reason:
+"tool_use"` specifically tells the caller *why* generation stopped, that the model
+deliberately paused to hand control to a tool rather than running out of tokens or
+finishing its answer, which is itself useful information a ReAct-style plain-text `finish`
+action never had a clean way to convey (a caller parsing free text has to infer intent
+from content, not read it off a dedicated field). None of this changes what Chapter 8.2
+and 8.3 already established about what a tool call fundamentally is, a name and a set of
+arguments, chosen by reasoning and handed to action; what changes is that the model
+itself now participates in producing a machine-readable call, rather than that
+translation being entirely the calling program's problem to solve after the fact.
+
+The fragility this replaces is worth making concrete rather than asserting it in the
+abstract. A hand-written parser for a `search[query]` convention has to decide, character
+by character, where the argument starts and where it ends, and a query that itself
+contains an unescaped closing bracket, `search[find x[1] in the array]`, breaks a naive
+parser that just looks for the first `]`: it truncates the argument at the inner bracket
+and silently hands reasoning's downstream action a wrong, partial query rather than
+raising any error at all. That is exactly the class of bug native function calling
+removes structurally rather than by writing a more careful parser, since a `tool_use`
+block's arguments arrive as an already-parsed, already-typed field, not a substring some
+regular expression happened to isolate. The same distinction shows up in how a caller
+even knows a tool call is coming in the first place: a model producing free text has no
+dedicated signal marking the moment it switches from answering to calling a tool, so a
+caller processing a streamed response has to buffer text and pattern-match against the
+expected convention to detect that switch, guessing at intent from content. `stop_reason:
+"tool_use"` tells a caller definitively, without inference, that this is what happened
+and exactly where the model's turn ended.
+
+### Execution and the Result Round-Trip: Closing the Loop With tool_result
+
+A `tool_use` block existing is not the same thing as a tool having run. Between those two
+moments sits exactly the check the High-Level section named: validation against the
+tool's `input_schema`, performed before the underlying function is ever invoked. A call
+missing a required field, carrying a value of the wrong type, or using a value outside an
+allowed set fails that check, and a well-built system stops right there, before the real
+function sees anything. This distinction, reject before execution versus fail during
+execution, matters for a concrete reason: a function that mutates something, sends a
+request, writes a record, charges an amount, cannot always be safely half-run and then
+abandoned partway through, so catching a malformed call before it starts is categorically
+safer than discovering the problem once the function is already partway through doing
+something.
+
+Whatever happens next, whether the call was rejected outright or executed and either
+succeeded or raised its own error, something has to come back in a form reasoning can use
+on its next turn, and Anthropic's `tool_result` format gives that return value a
+specific, predictable shape rather than leaving it to whatever a given function happens
+to produce. Its `is_error` field is documented plainly: "set to `true` if the tool
+execution resulted in an error." That one boolean is doing real work for the loop this
+chapter builds on. Chapter 8.3's Observe step folds an observation into the trajectory
+regardless of whether it was good news, and a tool result's `is_error` flag is what makes
+that distinction legible to reasoning without reasoning having to infer failure from the
+shape or tone of a free-text message. A `tool_result` with `is_error: true` and a clear
+message describing what went wrong is precisely the kind of observation Chapter 8.3's
+reflect-and-retry pattern depends on: reasoning cannot correct a bad call it does not know
+was bad, and a validation failure that surfaces as an unhandled exception or a silently
+wrong answer gives reasoning nothing to correct against.
+
+That distinction between a rejected call and an executed-then-failed call carries a
+second consequence beyond safety at the moment of the call: it changes what is safe to do
+next. A call that validation rejected never touched the underlying function, so retrying
+it, once corrected, is unconditionally safe, since nothing happened the first time that a
+second attempt could compound. A call that passed validation, executed, and then failed
+partway through is a different situation entirely, because a function like a payment
+charge or a database write might have caused a real, partial effect before the error
+occurred, and blindly retrying it risks charging twice or writing the same record twice
+rather than exactly once. A `tool_result`'s `is_error` flag cannot, by itself, distinguish
+these two cases; a well-written tool description or the function's own error message has
+to say which situation actually happened, validation failure or partial execution
+failure, because reasoning cannot safely decide whether a retry is free or risky without
+that information, and a result that says only "failed," with no further detail, forces
+reasoning to guess at exactly the kind of decision Chapter 8.3's termination discussion
+argued should never be left to guesswork.
+
+### Parallel Tool Calls: When One Turn Needs More Than One Action
+
+Everything so far has described one call, checked, executed or rejected, and reported
+back. Real turns are not always that simple. Anthropic's documentation states the default
+directly: "by default, Claude may call multiple tools in a single response." This is a
+genuinely different situation from Chapter 8.3's single-action loop, not just a larger
+version of it, because it raises a question a single-call loop never has to answer: do
+these calls depend on each other, or can they run independently?
+
+Two calls in the same response can be independent, checking the weather in two different
+cities, in which case there is no reason not to execute both and fold both results back
+into context together, and every reason to: running them one at a time when neither needs
+the other's result only adds latency for no benefit. But two calls can just as easily be
+dependent, looking up a customer's account and then, using the account ID that lookup
+returns, checking that account's order history, in which case the second call cannot even
+be constructed correctly until the first one's result is known, exactly Chapter 8.3's
+argument against a fully upfront fixed plan, now recurring one level down at the level of
+a single turn's tool calls rather than a whole task's steps. A model proposing multiple
+calls in one response is, implicitly, asserting that those particular calls do not depend
+on each other's results, since it is committing to all of their arguments before any of
+them has executed and returned anything. Whether that assertion is actually true is not
+something the function-calling mechanism itself checks; a badly-prompted or badly-designed
+agent can end up with a model proposing a dependent second call in parallel with a first
+call it should have waited on, using an argument value it guessed rather than one it
+looked up, which fails quietly rather than obviously, because the call is still
+well-formed and passes schema validation just fine. Recognizing which calls are safe to
+parallelize and which are not is therefore a design judgment placed on top of the
+mechanism, not something schema validation alone can settle, since a schema checks a
+call's shape, not whether its arguments were sourced from real information or invented to
+fill a slot early.
+
+Made concrete, the distinction looks like this. A model asked what the weather is in
+Paris and Tokyo can propose two `get_weather` calls in the same response, one per city,
+because neither call's arguments depend on anything the other call might return;
+executing both at once and folding both results back into context together costs no more
+than the slower of the two individual calls, rather than the sum of running them one
+after another. A model asked to look up a customer's account and then check whether their
+most recent order shipped cannot construct the second call correctly without an account
+or order identifier the first call has not returned yet; proposing both calls in the same
+response would mean guessing at an argument the model does not actually have yet, which is
+a quieter and more dangerous failure than an obviously malformed call, since a guessed
+identifier can still be well-formed enough to pass schema validation cleanly while
+pointing at entirely the wrong account.
+
+### Designing Tools Well: Descriptions, Granularity, and What Goes Wrong
+
+A tool's description is not incidental documentation; it is the input reasoning actually
+uses to decide whether and when to reach for that tool at all, a point Chapter 8.2 already
+made and this chapter's earlier sub-sections have only reinforced. That makes writing a
+good description an actual design task with real failure modes, not an afterthought to
+fill in once the function itself works. Three of those failure modes are common enough,
+and distinct enough from each other, to name directly.
+
+The first is an ambiguous or under-specified description: a tool named `search` with a
+one-line description gives reasoning almost nothing to distinguish it from a similarly
+named tool in a different context, and reasoning, faced with genuine ambiguity, does not
+raise an error, it guesses, silently, and the guess is wrong exactly often enough to be a
+real problem in production rather than an edge case. The second is too many overlapping
+tools: a system offering `get_weather`, `check_weather`, and `weather_lookup`
+simultaneously, each subtly different in argument shape or intended scope, forces
+reasoning to make a fine distinction the descriptions alone often cannot support, and the
+fix is usually design discipline on the tool set itself, consolidating overlapping tools
+or sharpening their descriptions until the difference between them is actually decidable,
+not a smarter model. The third, and the one this chapter's Hands-On demonstrates directly,
+is a malformed call reaching execution instead of being caught first: a required field
+silently defaulting to `None` inside the function rather than being rejected by schema
+validation, or a type mismatch that a loosely typed language coerces rather than raises,
+lets a bad call run to completion and produce a wrong result that looks exactly like a
+right one from the outside, which is strictly worse than an obvious failure, because
+nothing in the trajectory flags it as something reasoning should reconsider.
+
+What connects all three failure modes is the same principle stated three different ways:
+a tool's usefulness to an agent is bounded by how legible it is, to reasoning when
+deciding whether to call it, and to validation when checking whether a call is
+well-formed, not by how capable the underlying function is. A brilliantly implemented
+function behind a vague description or a validation step with a hole in it produces worse
+agent behavior than a simpler function that is easy to describe correctly and impossible
+to call incorrectly, because an agent's tool use is only ever as reliable as its weakest
+link between deciding to call something and finding out what actually happened.
+
+These failure modes also compound with the mechanisms described earlier in this chapter
+rather than sitting apart from them. An ambiguous description does not just risk a single
+wrong tool choice in isolation; inside a Chapter 8.3-style loop that keeps trying until it
+succeeds or hits a step limit, a wrong tool choice becomes a wrong observation, which
+reasoning then has to notice and correct on a later turn, consuming steps a well-described
+tool set would never have needed in the first place. And a tool whose real-world effect is
+hard to reverse, sending an email, deleting a record, is exactly the kind of tool a
+designer might deliberately exclude from the previous sub-section's default parallel
+behavior, forcing it to run alone rather than alongside other calls, precisely because
+getting the independence assumption wrong is far more costly for an action that cannot be
+undone than for a read-only lookup like checking the weather. Good tool design, in other
+words, is not a checklist applied once when a tool is written; it is an ongoing set of
+decisions, granularity, description clarity, and how freely a tool is allowed to combine
+with others, that determines how much of this chapter's machinery, validation, parallel
+execution, error reporting, actually protects an agent in practice rather than existing
+unused.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['ReAct-style text convention (Chapter 8.3)', 'Native function-calling API', 'What is genuinely different']}
+  rows={[
+    {aspect: 'How a call is produced', values: ["Free text matching a prompted format, such as search[query]", 'A structured tool_use block the model outputs directly', "The caller reads a field instead of parsing a string, removing an entire class of parsing bugs"], decisive: true},
+    {aspect: 'How malformed output is caught', values: ['Whatever the hand-written parser happens to check for, if anything', "Schema validation against input_schema, checked before execution", 'A precise, machine-checkable contract replaces ad hoc parser logic'], decisive: true},
+    {aspect: 'How a caller knows generation stopped for a tool call', values: ['Inferred from the text matching the expected pattern', 'A dedicated stop_reason: "tool_use" field', 'Intent is read directly off a field rather than inferred from content'] },
+    {aspect: 'How failure is reported back', values: ['Whatever shape the calling code chooses to feed back into the prompt', 'A tool_result with an explicit is_error flag', 'Failure is legible to reasoning without inferring it from tone or shape'] },
+    {aspect: 'Calling more than one tool per turn', values: ['Not addressed by the pattern itself; one action per loop iteration', 'Natively supported; multiple tool_use blocks in one response', 'Raises a new design question (independent vs. dependent calls) the single-action loop never had to answer'] },
+  ]}
+  caption="A native function-calling API does not change what a tool call fundamentally is, a name and a set of arguments chosen by reasoning. It changes how reliably that call can be produced, checked, and reported on, replacing several places where a text-based convention relied on hand-written glue code with a machine-checkable contract."
+/>
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A proposed call, validated, then executed or rejected"
+  mermaid={`
+flowchart TD
+  REASON[Reasoning proposes a call: name and arguments]
+  VALIDATE{Valid against the tool's input_schema?}
+  EXECUTE[Execute: the real function runs]
+  REJECT[Reject: no execution; an error result is built instead]
+  RESULT[tool_result: is_error, plus content]
+
+  REASON --> VALIDATE
+  VALIDATE -- valid --> EXECUTE --> RESULT
+  VALIDATE -- invalid --> REJECT --> RESULT
+  RESULT --> REASON
+`}
+  components={[
+    {name: 'Reasoning', responsibility: 'Decides whether to call a tool and proposes its arguments, exactly Chapter 8.3\'s Plan step.'},
+    {name: 'Validate', responsibility: 'Checks the proposed call against the tool\'s input_schema before anything executes; the gate this chapter adds.'},
+    {name: 'Execute', responsibility: 'Runs the real function, only ever reached by a call that already passed validation.'},
+    {name: 'Reject', responsibility: 'Builds an error result directly from the validation failure, without the underlying function ever running.'},
+    {name: 'tool_result', responsibility: 'Carries is_error plus content back to Reasoning, becoming Chapter 8.3\'s next Observe step either way.'},
+  ]}
+/>
+
+The diagram deliberately gives Reject its own box rather than folding it into Execute,
+because that is exactly the distinction this chapter keeps returning to: a rejected call
+and a call that executed and then failed both end up at the same `tool_result` shape, but
+only one of them ever touched the real function. Everything downstream of that box,
+Chapter 8.3's Plan step reading the result and deciding what to do next, cannot tell the
+difference between those two paths from the result alone unless the error message itself
+says which one happened, which is one more reason a validation error's message needs to
+be specific rather than generic.
+
+## Hands-On: A Tool Call That Gets Rejected, Corrected, and Then Succeeds
+
+The fastest way to see validation actually doing something is to give it a call it
+should reject, watch it reject that call before the underlying function ever runs, and
+then watch a corrected call succeed. This extends Chapter 8.3's loop with one real
+`input_schema`, real validation logic, and a `tool_result` shape carrying `is_error`
+exactly the way Anthropic's documentation specifies it.
+
+**Step 1: The tool's schema and its real implementation.** `convert_temperature` is a
+plain function; `CONVERT_TEMPERATURE_SCHEMA` is the contract a proposed call has to
+satisfy before that function is ever allowed to run.
+
+```python
+CONVERT_TEMPERATURE_SCHEMA = {
+    "name": "convert_temperature",
+    "description": "Converts a numeric temperature value from one unit to another.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "value": {"type": "number"},
+            "from_unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+            "to_unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+        },
+        "required": ["value", "from_unit", "to_unit"],
+    },
+}
+
+def convert_temperature(value, from_unit, to_unit):  # Tool: the actual function
+    if from_unit == to_unit:
+        return value
+    if from_unit == "celsius" and to_unit == "fahrenheit":
+        return value * 9 / 5 + 32
+    if from_unit == "fahrenheit" and to_unit == "celsius":
+        return (value - 32) * 5 / 9
+    raise ValueError(f"Unsupported unit pair: {from_unit} -> {to_unit}")
+```
+
+**Step 2: Validate, checked before execution, exactly as this chapter describes.** Every
+required field has to be present; every present field has to have the right type and, if
+the schema restricts it, an allowed value. Nothing here calls the real function.
+
+```python
+def validate_call(schema, call_input):
+    """Returns (is_valid, error_message). Never calls the underlying function."""
+    props = schema["input_schema"]["properties"]
+    required = schema["input_schema"]["required"]
+
+    for field in required:
+        if field not in call_input:
+            return False, f'Missing required field "{field}".'
+
+    for field, value in call_input.items():
+        if field not in props:
+            return False, f'Unexpected field "{field}" is not part of this tool\'s schema.'
+        expected_type = props[field]["type"]
+        if expected_type == "number" and not isinstance(value, (int, float)):
+            return False, f'Field "{field}" must be a number, got {type(value).__name__}.'
+        if expected_type == "string" and not isinstance(value, str):
+            return False, f'Field "{field}" must be a string, got {type(value).__name__}.'
+        if "enum" in props[field] and value not in props[field]["enum"]:
+            return False, f'Field "{field}" must be one of {props[field]["enum"]}, got "{value}".'
+
+    return True, None
+```
+
+**Step 3: Act, producing a `tool_result` shape either way.** A rejected call never
+reaches `convert_temperature` at all; only a validated call does.
+
+```python
+def act(schema, call_input):
+    is_valid, error = validate_call(schema, call_input)
+    if not is_valid:
+        return {"is_error": True, "content": error}
+    try:
+        result = convert_temperature(**call_input)
+        return {"is_error": False, "content": f"{result}"}
+    except Exception as exc:
+        return {"is_error": True, "content": str(exc)}
+```
+
+**Step 4: Plan, reading the trajectory exactly the way Chapter 8.3 described.** On the
+first turn it proposes a call; if the last observation was an error, it corrects the call
+based on what the error actually said, rather than repeating it unchanged.
+
+```python
+import copy
+
+def reason(question, scratchpad):
+    if not scratchpad:
+        if "32" in question and "fahrenheit" in question.lower():
+            return {"thought": "Convert 32 fahrenheit to celsius.",
+                     "call": {"value": 32, "from_unit": "fahrenheit"}}  # deliberately missing to_unit
+        return {"thought": "Convert 100 celsius to fahrenheit.",
+                "call": {"value": 100, "from_unit": "celsius", "to_unit": "fahrenheit"}}
+
+    last = scratchpad[-1]
+    if last["observation"]["is_error"]:
+        corrected = copy.deepcopy(last["call"])
+        if "to_unit" not in corrected:
+            corrected["to_unit"] = "celsius" if corrected["from_unit"] == "fahrenheit" else "fahrenheit"
+        return {"thought": f'That call was rejected: {last["observation"]["content"]} Retrying with a corrected call.',
+                "call": corrected}
+    return {"thought": "Already succeeded; nothing further to do.", "call": last["call"]}
+
+def run_loop(question, max_steps=3):
+    scratchpad = []
+    for step in range(1, max_steps + 1):
+        decision = reason(question, scratchpad)
+        observation = act(CONVERT_TEMPERATURE_SCHEMA, decision["call"])
+        scratchpad.append({**decision, "observation": observation})
+        if not observation["is_error"]:
+            return observation["content"], step
+    return None, max_steps
+```
+
+**Two runs, traced end to end.**
+
+```python
+print(run_loop("Convert 100 celsius to fahrenheit."))
+print(run_loop("Convert 32 fahrenheit to celsius."))
+```
+
+Run 1 succeeds in a single step: the call is well-formed on the first attempt, validation
+passes, `convert_temperature` executes, and the result, `212.0`, comes back with
+`is_error: False`. Run 2 needs two steps, and this is the one that actually exercises
+validation: the first proposed call is missing the required `to_unit` field, so
+`validate_call` catches it before `convert_temperature` ever runs and returns a result
+with `is_error` set to true and content stating that the required `to_unit` field is
+missing. Plan reads that observation on the next turn, sees `is_error` is true, reads what
+the message actually said was wrong, and
+corrects specifically that field rather than retrying the identical call or guessing at
+something unrelated. The corrected call, now complete, passes validation, executes, and
+returns `0.0` with `is_error: False`. Both runs were executed exactly as written and their
+output checked against this description line by line.
+
+The detail worth sitting with is what never happened in Run 2: `convert_temperature` was
+never called with an incomplete argument set, never raised an unhandled exception, and
+never silently produced a wrong answer from a missing field defaulting to something
+unintended. The failure was caught at the boundary this chapter has been describing the
+whole way through, before execution, reported in a form Plan could act on, corrected once,
+and resolved, which is the entire case for treating validation as a distinct step rather
+than trusting a schema to enforce itself.

@@ -19,10 +19,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [8.1 What Is an "Agent"? From Classical AI Agents to LLM Agents](./8-1-what-is-an-agent-classical-ai-to-llm-agents.mdx)
 - [8.2 Anatomy of an LLM Agent: Perception, Reasoning, Memory, Action, Tools](./8-2-anatomy-of-an-llm-agent-perception-reasoning-memory-action-tools.mdx)
 - [8.3 The Agent Loop: Plan, Act, Observe, Reflect (ReAct and Beyond)](./8-3-the-agent-loop-plan-act-observe-reflect-react-and-beyond.mdx)
+- [8.4 Tool Use and Function Calling: A Deep Dive](./8-4-tool-use-and-function-calling-deep-dive.mdx)
 
 ## Planned chapters
 
-- 8.4 Tool Use & Function Calling — Deep Dive
 - 8.5 Memory Systems for Agents — Compared
 - 8.6 [v3] Context Engineering for Agents
 - 8.7 Planning & Reasoning Strategies: CoT, ReAct, Reflexion, Plan-and-Execute, Graph-of-Thought
