@@ -1,0 +1,482 @@
+---
+title: "Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot"
+sidebar_label: "8.8 Terminology Untangled"
+sidebar_position: 8
+phase: 8
+chapter: "8.8"
+lms_presentation: "8.8-Terminology-Untangled-Slides.pptx"
+prerequisites: ["8.1", "8.3"]
+tags: ["agents", "terminology", "workflow", "chatbot", "assistant", "copilot", "agentic-ai"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.1 closed by promising to show how to "tell an agent apart from a workflow, an
+assistant, or a chatbot that only looks like one," and this chapter, plus a fifth term,
+copilot, is that promise kept. All five words get used almost interchangeably in product
+marketing, which makes them feel like synonyms or, worse, like a vague progression from
+"simple" to "impressive." They are not synonyms, and the real distinctions between them
+answer two genuinely separate, checkable questions rather than one fuzzy one. The first
+question is architectural: does a human-written program decide the sequence of steps in
+code, or does the model itself decide what happens next at runtime? That question is what
+actually separates a workflow from an agent, and it has nothing to do with how impressive
+the system looks from the outside. The second question is about autonomy and scope: once
+the model is in control, how many actions can it take, and how much does it take, before a
+human has to look at what it did? That question is what separates a chatbot from an
+assistant from a copilot from an agent, and it is a spectrum, not a single line. Holding
+both questions separately, rather than collapsing them into one vague axis of
+sophistication, is what lets you look at an unfamiliar system's actual behavior and name it
+correctly, regardless of what its product page calls it.
+
+## High-Level Explanation
+
+Four of this chapter's five terms, chatbot, assistant, copilot, and agent, describe roughly
+how much a system does on its own before a human has to step back in, from doing almost
+nothing without approval to running an entire multi-step task unsupervised. A chatbot sits
+at the low end: it answers in text, one request at a time, and takes no action beyond
+generating that reply. An assistant sits further along: it interprets what a user actually
+wants and can take one concrete action per turn, booking a slot, sending a message, but
+still checks back in after each one. A copilot sits further still: it can chain several
+actions together in a single pass, but by design keeps a human closely paired with it,
+reviewing before anything final happens, the same relationship a human copilot has to a
+pilot who remains in command. An agent sits at the high end: the model itself decides the
+sequence of actions at runtime and can carry a multi-step task all the way to completion
+with no human reviewing each intermediate step. The fifth term, workflow, is not a fifth
+point on that same line at all. It answers the architectural question instead: whether a
+human-written program fixes the sequence of steps in code, or whether the model decides
+that sequence itself. A chatbot, an assistant, and a copilot are, in practice, almost always
+workflows under the hood, since their limited scope rarely needs runtime-decided branching.
+An agent is the one label on the autonomy spectrum that can genuinely go either way, and
+Chapter 8.7's entire planning-and-reasoning map assumed exactly this kind of system.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-8-terminology-spectrum.svg').default}
+    alt="A horizontal spectrum runs from low autonomy, where a human approves or performs every action, to high autonomy, where the system runs a multi-step task to completion on its own. Chatbot sits at the low end, conversational text only, one request at a time. Assistant sits next, interpreting intent and taking one action per user turn. Copilot sits further along, chaining several actions but designed to keep a human closely paired with it. Agent sits at the high end, directing its own multi-step process with no human reviewing each step. A separate note box below states that workflow is not a fifth point on this spectrum, but describes whether a human-written program fixes the sequence of steps in code, a question that applies underneath any of the four labels above; a chatbot, an assistant, and a copilot are almost always workflows, while only an agent can be one or not."
+  />
+  <figcaption>Four terms sit on one autonomy spectrum. Workflow answers a different, architectural question that applies underneath any of them.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Two Questions That Actually Separate These Five Words
+
+It is worth being explicit about why collapsing these five terms into one axis of
+"sophistication" fails, because the failure is not just imprecise, it actively produces
+wrong classifications. Consider a code-completion tool that suggests entire functions as a
+developer types: by autonomy alone it might look agent-like, it clearly does more than a
+single-turn chatbot, but by the architectural question it is almost certainly a workflow, a
+fixed pipeline of retrieve-context, call-model, render-suggestion, with the model never
+deciding what step comes next. Now consider an email-triage system built from a rigid
+if/elif chain, that inspects a message and routes it to one of three fixed downstream
+steps: by the architectural question it is unambiguously a workflow, human-written code
+decides the branching, but by the autonomy question alone it might superficially resemble
+an agent, since it does take multiple actions per message without a human approving each
+one. These two systems land in completely different places once both questions are asked
+separately, and asking only one of the two questions would have misclassified at least one
+of them. The architectural question, does a human-written program fix the sequence of
+steps, or does the model decide it at runtime, is the one this course has already spent a
+full chapter's worth of primary-source grounding on: it is exactly Anthropic's own
+distinction, stated plainly in their engineering guidance on building agents: "Workflows are
+systems where LLMs and tools are orchestrated through predefined code paths," while
+"Agents, on the other hand, are systems where LLMs dynamically direct their own processes
+and tool usage, maintaining control over how they accomplish tasks." Nothing in that
+distinction mentions how many actions a system takes, how impressive its output looks, or
+what it is called on a pricing page, it is purely a claim about who authors the control
+flow. The autonomy question is separate and, unlike the architectural one, genuinely is a
+spectrum: how many actions happen, and how much of that sequence runs before a human
+reviews it, is a matter of degree rather than a binary, which is exactly why chatbot,
+assistant, and copilot exist as three distinct, ordered points rather than being collapsed
+into "not an agent yet."
+
+Treating these as two independent questions rather than one also explains why "agent" is
+the only one of the four autonomy-spectrum labels that can honestly be applied to a system
+built either way. A chatbot's scope is narrow enough, generate one text reply, that there is
+essentially never a reason to give the model runtime control over its own sequencing;
+fixing "receive message, generate reply" in code costs nothing and buys full predictability.
+The same argument holds, a little more loosely, for an assistant and a copilot: their action
+spaces are still bounded enough, one booking, one suggestion accepted, that a fixed pipeline
+usually covers the task without needing the model to improvise new sequences. An agent's
+entire premise, by contrast, is that the task is open-ended enough that no fixed sequence
+of code paths could have anticipated every situation in advance, which is precisely why
+Anthropic's own guidance frames the choice as a tradeoff rather than agent being a strict
+upgrade: "workflows offer predictability and consistency for well-defined tasks, whereas
+agents are the better option when flexibility and model-driven decision-making are needed
+at scale." An agent is not simply "a more capable assistant," it is a system built on the
+premise that fixing the sequence in advance would actively hurt it, and that premise is
+what should be checked, not the label on the product itself.
+
+It is also worth naming why these five words get conflated in the first place, since the
+conflation is not accidental. Calling a system an "agent" signals sophistication and
+justifies a higher price point; calling the same system a "copilot" or an "assistant"
+signals restraint and reassures a buyer worried about a model acting unsupervised on their
+behalf. Both signals can be commercially useful for the exact same underlying system
+depending on which audience is being sold to, which is why a vendor has little incentive to
+keep its own terminology internally consistent over time, let alone consistent with a
+taxonomy imposed from the outside. None of that is a criticism of any specific vendor; it is
+simply a reason the label itself carries close to zero information on its own, and a reason
+this chapter's two questions were chosen specifically because they can be answered from a
+system's documented behavior without needing to trust anyone's marketing department.
+
+### Chatbot and Assistant: The Terms That Predate LLM Agents
+
+Chatbot and assistant are the two oldest terms on this chapter's map, both predating large
+language models by years, and their older meanings still shape how the words get used
+today. IBM's own definition of the category is a useful, industry-standard anchor:
+"A chatbot is a software application that communicates with people through text or voice. It
+uses conversational interfaces to answer questions, provide information and help people
+complete tasks without navigating menus or searching web pages." Crucially, this definition
+already spans two very different implementations that both earn the label: "Traditional
+chatbots, also called rule-based chatbots, follow predefined rules, decision trees or
+scripted responses," while
+"AI chatbots use technologies such as natural language processing (NLP), generative AI and
+large language models (LLMs) to understand user intent, generate more natural responses and
+adapt to a wider range of conversations." A chatbot built on an LLM is a genuine improvement
+in how naturally it holds a conversation, but it does not thereby become an agent, and
+IBM's own comparison makes the actual dividing line explicit: "AI chatbots respond to user
+requests and guide conversations. They typically answer questions or help users complete
+specific tasks one step at a time. AI agents can plan, make task-specific decisions and
+carry out multi-step workflows with limited human involvement." A friendlier, more fluent
+chatbot is still answering one step at a time; fluency is not the same axis as autonomy, and
+an LLM upgrade to a chatbot's language model improves the former without automatically
+granting the latter.
+
+Assistant sits one notch higher on the same autonomy spectrum, and the difference from a
+chatbot is specifically about action, not just conversation quality. A widely used framing
+puts it this way: "An AI assistant (or virtual assistant) is a software application that
+uses artificial intelligence to perform tasks, provide information, and automate certain
+tasks and workflows based on contextual user input," distinguished from a plain chatbot by
+three concrete capabilities: it can "interpret user intent rather than just recognizing
+keywords," it can "learn from past interactions to improve future responses," and,
+critically, it can "integrate with business systems to automate complex workflows." That
+last point is the one that matters most for this chapter's architectural question: an
+assistant, unlike a chatbot, is expected to actually do something in an external system, not
+just talk about it, which is why a scheduling assistant that finds and books one calendar
+slot per request genuinely earns its label. The same source places assistants explicitly
+between chatbots and agents on autonomy, describing an assistant's characteristic mode as
+"Moderate, balances automation with human collaboration" against an agent's "High, operates
+with minimal user input, making complex decisions autonomously." The key word is
+collaboration: an assistant takes an action, but the interaction pattern still assumes a
+human is present, providing the next request, after each one, which is exactly what
+distinguishes it from a copilot's or an agent's ability to chain several actions in a single
+pass.
+
+### Copilot: A Design Philosophy, Not a Fixed Capability Tier
+
+Copilot is the newest of these five terms and, unlike the other four, it names a deliberate
+relationship between a human and a system rather than a specific technical capability, which
+is exactly why its usage has drifted the most since it was coined. The term's original,
+defining use was GitHub Copilot, introduced as "a new AI pair programmer that helps you
+write better code," a phrase whose own word choice, pair programmer rather than, say,
+autonomous coder, already signals a collaborative relationship rather than an autonomous
+one: "GitHub Copilot draws context from the code you're working on, suggesting whole lines
+or entire functions,"
+and, crucially, "As you type, it adapts to the way you write code, to help you complete your
+work faster," a description that assumes a developer reviewing and accepting each suggestion
+rather than a system shipping code unsupervised. Microsoft's later, company-wide adoption of
+"Copilot" as a brand name kept that same design philosophy explicit even as the products
+using the name multiplied: "With your permission, Copilot will ultimately be able to act on
+your behalf, smoothing life's complexities and giving you more time to focus on what matters
+to you," a framing that repeatedly emphasizes permission and partnership rather than
+unsupervised task completion, describing the relationship as "not creating a static tool so
+much as establishing a dynamic, emergent and evolving interaction." Read against this chapter's two
+questions, "copilot" was coined to name a specific point on the autonomy spectrum, one notch
+past assistant, capable of chaining several actions in a single suggestion, but still
+committed by design to keeping a human in the loop before anything lands.
+
+The complication worth naming directly is that "Copilot" the brand name has since drifted
+away from "Copilot" the design philosophy that originally defined it. Once a company builds
+an entire product family around one name, later products in that family inherit the name
+for marketing continuity even when their actual architecture has moved further along the
+autonomy spectrum than the term originally described, including products explicitly
+described as "Copilot agents" that are built to complete multi-step tasks in the background
+without a human reviewing each intermediate action, which is, by this chapter's own
+definition, the behavior of an agent rather than a copilot. This is not a minor branding
+footnote; it is the central practical lesson of this entire chapter. A product's name is a
+marketing decision, made once, for commercial reasons that have nothing to do with keeping
+a taxonomy internally consistent as the underlying technology keeps changing underneath a
+name chosen years earlier. The two questions this chapter opened with, who decides the
+sequence of steps, and how much of that sequence runs before a human reviews it, are
+questions about a specific system's actual, checkable behavior. They give the same answer
+regardless of which of these five words happens to be printed on the product page, which is
+exactly why they are worth learning instead of the vocabulary alone.
+
+### Workflow vs. Agent: The One Distinction With a Primary-Source Definition
+
+Of this chapter's five terms, workflow and agent are the only pair with a clean, checkable,
+publicly documented definition behind them, rather than usage that has to be reconstructed
+from marketing copy, and it is worth dwelling on why that pair is different from the other
+three. Anthropic's engineering guidance does not just define the two terms in isolation, it
+catalogs five concrete workflow patterns, prompt chaining, routing, parallelization,
+orchestrator-workers, and evaluator-optimizer, each one a fixed topology of LLM calls
+connected by code the developer wrote in advance, and contrasts all five against a single
+agent pattern in which the model's own actions and the real feedback it receives from
+using its tools directly determine what happens next, with no code-level branch deciding
+that in advance. OpenAI's own guidance reaches the same distinction from a different
+direction, worth quoting because it independently corroborates Anthropic's line rather than
+merely repeating it: "Agents are systems that independently accomplish tasks on your
+behalf," built from a system that "leverages an LLM to manage workflow execution and make
+decisions" and has "access to various tools to interact with external systems," explicitly
+excluding "Applications that integrate LLMs but don't use them to control workflow
+execution," such as "simple chatbots, single-turn LLMs, or sentiment classifiers." Two
+organizations with
+different products and different incentives independently converged on the same dividing
+line: an agent is defined by the model itself controlling what happens next, not by how many
+tools it has access to or how many turns a conversation lasts.
+
+This is also the distinction most directly useful for engineering decisions, which is why it
+gets the most rigorous treatment of the five. A workflow's fixed code path means every
+branch a system can take was enumerated by a human in advance, so testing it is a matter of
+exercising each known branch, and a failure mode is either a bug in one branch's code or a
+gap where a branch should exist but was not written. An agent's runtime-decided sequencing
+means the exact path taken through the task cannot be fully enumerated in advance, since it
+depends on the model's own decisions in response to real observations, which is why Chapter
+8.7's entire comparative map of planning strategies, ReAct, Reflexion, plan-and-execute,
+tree- and graph-of-thought, only applies to agents in the first place: a workflow has
+nothing to plan, its plan was already written into the code. This is precisely the
+architectural question this chapter's decision procedure checks first, before asking
+anything about autonomy or scope, because the answer determines which entire body of this
+course's material, Chapter 8.3's agent loop and Chapter 8.7's planning strategies for one
+side, or ordinary software engineering for well-tested branches on the other, actually
+applies to the system in front of you.
+
+The same distinction carries directly into how each kind of system gets evaluated once
+built, which is a second, equally concrete reason it matters more than the other four. A
+workflow's fixed branches can be tested the way ordinary software is tested: enumerate the
+known paths, write a case for each one, and treat a new failure as either a bug in an
+existing branch or a genuinely new branch nobody wrote code for yet. Chapter 8.1 already
+named the harder alternative this course settled on for agents specifically, because an
+agent's runtime-decided sequencing means the set of paths it might take is not fully known
+in advance: "a task success rate on a held-out set of scenarios, a human rating, or another
+model acting as a judge," a statistical measure of behavior across many runs rather than a
+pass/fail check against a fixed set of branches. Calling a fixed-branch workflow an "agent"
+does not just misdescribe its architecture, it invites evaluating it the wrong way,
+measuring a statistical success rate on a system whose actual failure modes are fully
+enumerable bugs, or conversely, trying to write an exhaustive branch-by-branch test suite
+for a system whose whole premise is that its paths cannot be enumerated in advance.
+
+### Applying Both Questions to a System You're Handed
+
+The practical value of holding these two questions apart shows up most clearly when
+classifying a real system rather than a textbook example, because real systems rarely
+announce their own architecture. The first question to ask is always the architectural one,
+not the autonomy one, because it determines what kind of system you are even looking at:
+open the system's actual logic, not its marketing page, and check whether the sequence of
+steps it can take was enumerated in code ahead of time, or whether the model decides that
+sequence at runtime in response to what it observes. A system where every possible path
+through the task could, in principle, be drawn as a fixed flowchart before the system ever
+ran is a workflow, regardless of how many steps that flowchart has or how convincingly its
+output reads. A system where the actual sequence of steps could differ meaningfully between
+two runs on the same input, because the model reasoned differently about an intermediate
+result, is a candidate for the agent side of the line, and only then does the second
+question become relevant. If it is a workflow, the autonomy-spectrum labels barely apply at
+all in the technical sense this chapter has been using them, though a chatbot, an assistant,
+or a copilot built as a workflow can still describe how a human interacts with it day to
+day. If the model is genuinely deciding the sequence, the second question, how much of that
+sequence runs before a human reviews it, determines whether "copilot" or "agent" is the
+honest label, independent of which one the product name uses.
+
+The second question deserves its own checklist, because "how much autonomy" is easy to
+gesture at vaguely and harder to check precisely. Does the system take any action beyond
+generating a text reply, calling a tool, writing to a system, sending a message? If not, it
+is a chatbot regardless of how fluent its replies are. If it does take actions, does it take
+more than one action per human turn, chaining several steps together in a single pass
+before control returns to a person? If not, it is an assistant. If it does chain multiple
+actions together, was it built to keep a human reviewing the result before anything is
+finalized, the design philosophy the term "copilot" was coined to describe, or was it built
+to run the entire sequence to completion with no such review point? The former is an honest
+use of "copilot"; the latter is an agent, whatever the product happens to call it, and this
+last check is exactly the one a "Copilot agent" or similarly branded product requires before
+its label can be trusted rather than merely repeated.
+
+Walking a concrete, unnamed example through both questions end to end shows how quickly the
+procedure resolves what a product page leaves ambiguous. Take a customer-support system that
+reads an incoming ticket and, in one pass, decides for itself whether to answer directly,
+escalate to a human, or open a return, each of those three actions requiring a different
+downstream tool call, and where the exact choice among the three depends on the model's own
+reading of that specific ticket rather than a fixed rule like "always escalate refund
+requests over $50." The architectural question resolves first and decisively: because the
+choice among three tool calls is made by the model at runtime based on ticket content, not
+by a human-authored branch condition, this is not a workflow, whatever else it turns out to
+be. The autonomy question resolves next: it plainly takes action beyond text, ruling out
+chatbot, and it can act on a single ticket without a human approving the specific choice
+made, ruling out assistant's one-action-with-checkpoint pattern. The remaining question is
+the design-intent one, and it is the one a product description will actually answer: if
+every escalation and every return is queued for a human to confirm before it takes effect,
+the system is a copilot, built to keep a human in that loop by design; if it can also close
+out a routine return with no human confirmation at all, it is an agent, regardless of
+whether its interface is styled to look like a chat window a customer would recognize as a
+"copilot."
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Chatbot', 'Assistant', 'Copilot']}
+  rows={[
+    {aspect: 'Takes action beyond generating a text reply', values: ['No, text only', 'Yes, one action per user turn', 'Yes, several actions chained together'], decisive: true},
+    {aspect: 'Human involvement per interaction', values: ['Reviews every reply by reading it', 'Reviews after each single action', "Reviews before a chained sequence's result is finalized, by design"]},
+    {aspect: 'Underlying architecture', values: ['Almost always a fixed workflow', 'Almost always a fixed workflow', 'Usually a fixed workflow, occasionally model-directed']},
+    {aspect: 'What the label promises about supervision', values: ['No action to supervise at all', 'A checkpoint after every action', 'A checkpoint before anything ships, as a design commitment'], decisive: true},
+  ]}
+  caption="These three sit on the same autonomy spectrum as agent, one notch apart each; a full row for agent and one for workflow appear in the next section's decision procedure instead, since agent is the one label that can be built either way architecturally."
+/>
+
+Autonomous, agentic, and copilot-branded are often used as if they were three separate
+technical categories in marketing copy, but only the architectural question this chapter
+opened with, who decides the sequence of steps, actually distinguishes an agent from
+everything else. "Autonomous" and "agentic" are near-synonyms for the same idea Anthropic's
+guidance names precisely: the model directing its own process. "Copilot," as the previous
+section detailed, names something else entirely, a commitment to human review, which is why
+a system can be simultaneously agentic in its architecture and marketed as a copilot in its
+product positioning, a combination that only looks contradictory until the two questions are
+separated.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A decision procedure for classifying any system you're handed"
+  mermaid={`
+flowchart TD
+  Q1{Who decides the sequence of steps: fixed code, or the model at runtime?}
+  WORKFLOW[Workflow: a human-written program orchestrates LLM calls through predefined code paths]
+  Q2{Once the model is in control, does it take actions beyond generating a text reply?}
+  CHATBOT[Chatbot: conversational text only, one request answered at a time]
+  Q3{Can it chain several actions together before a human reviews the result?}
+  ASSISTANT[Assistant: interprets intent, executes one action per user turn]
+  Q4{Is staying paired with a supervising human part of the design, or is running unsupervised the point?}
+  COPILOT[Copilot: multi-step, but built to keep a human closely in the loop]
+  AGENT[Agent: the model directs its own multi-step process toward a goal]
+
+  Q1 -- fixed code path --> WORKFLOW
+  Q1 -- model decides at runtime --> Q2
+  Q2 -- text only --> CHATBOT
+  Q2 -- calls tools or takes actions --> Q3
+  Q3 -- no, one action per turn --> ASSISTANT
+  Q3 -- yes, several actions in a row --> Q4
+  Q4 -- paired with a human by design --> COPILOT
+  Q4 -- runs unsupervised toward the goal --> AGENT
+`}
+  components={[
+    {name: 'Q1', responsibility: "The architectural question, checked first: does fixed code or the model itself decide what happens next. Answers this chapter's first, most rigorous question."},
+    {name: 'Workflow', responsibility: 'Every branch was enumerated by a human in code ahead of time; applies underneath any of the four autonomy labels below, not only to non-agents.'},
+    {name: 'Q2', responsibility: 'Checks whether the model-directed system takes any action beyond generating text at all.'},
+    {name: 'Chatbot', responsibility: 'Conversational text only; there is no action for a human to review.'},
+    {name: 'Q3', responsibility: 'Checks whether multiple actions chain together in one pass, or whether control returns to a human after each single action.'},
+    {name: 'Assistant', responsibility: 'Interprets intent and executes one action per user turn, checking back in every time.'},
+    {name: 'Q4', responsibility: "The design-intent question: whether human review before finalization is a deliberate part of the system's design, or whether running unsupervised is the point."},
+    {name: 'Copilot', responsibility: 'Chains several actions together but is built to keep a human reviewing the result before anything is finalized.'},
+    {name: 'Agent', responsibility: "The model directs its own multi-step process to completion with no human reviewing intermediate steps, whatever the product's name claims."},
+  ]}
+/>
+
+Notice that this decision procedure never once asks what the system is called. The
+architectural question and the two autonomy checks that follow it are all answerable from a
+system's actual behavior, which is exactly what makes them useful against a product whose
+name was chosen for reasons that have nothing to do with this chapter's taxonomy.
+
+## Hands-On: Classifying Systems by Behavior, Not by Name
+
+The clearest way to see that these five labels answer checkable questions, not vibes, is to
+turn the decision procedure above directly into code and run it against systems whose
+descriptions sound similar to real products, including one deliberately named to see whether
+the code cares about the name at all.
+
+**Step 1: The decision procedure as a function.** Each system is described by exactly the
+facts the previous section's checklist asks for, nothing about its name or marketing:
+
+```python
+def classify(system):
+    if system["fixed_code_path"]:
+        return "workflow"
+    if not system["takes_actions"]:
+        return "chatbot"
+    if not system["chains_multiple_actions"]:
+        return "assistant"
+    if system["designed_for_human_supervision"]:
+        return "copilot"
+    return "agent"
+```
+
+**Step 2: Six systems, described by behavior alone.** The last one is deliberately named
+`branded_copilot_agent` and described as being marketed as a "Copilot agent," specifically to
+check whether the function classifies by the name in its description string or by the actual
+fields:
+
+```python
+SYSTEMS = {
+    "faq_bot": {
+        "description": "Answers billing questions from a fixed FAQ, one question at a time.",
+        "fixed_code_path": False,
+        "takes_actions": False,
+        "chains_multiple_actions": False,
+        "designed_for_human_supervision": True,
+    },
+    "meeting_scheduler": {
+        "description": "Interprets a scheduling request and books one calendar slot per request.",
+        "fixed_code_path": False,
+        "takes_actions": True,
+        "chains_multiple_actions": False,
+        "designed_for_human_supervision": True,
+    },
+    "code_completion_tool": {
+        "description": "Suggests multi-line code completions inline, always reviewed before landing.",
+        "fixed_code_path": False,
+        "takes_actions": True,
+        "chains_multiple_actions": True,
+        "designed_for_human_supervision": True,
+    },
+    "email_triage_pipeline": {
+        "description": "A human-written if/elif chain routes each email in a fixed order.",
+        "fixed_code_path": True,
+        "takes_actions": True,
+        "chains_multiple_actions": True,
+        "designed_for_human_supervision": False,
+    },
+    "research_agent": {
+        "description": "Plans its own searches and keeps going until it has an answer.",
+        "fixed_code_path": False,
+        "takes_actions": True,
+        "chains_multiple_actions": True,
+        "designed_for_human_supervision": False,
+    },
+    "branded_copilot_agent": {
+        "description": "Marketed as a 'Copilot agent'; runs a multi-step task in the background with no human reviewing intermediate steps.",
+        "fixed_code_path": False,
+        "takes_actions": True,
+        "chains_multiple_actions": True,
+        "designed_for_human_supervision": False,
+    },
+}
+```
+
+**Step 3: Run it and check the results against what each description implies.**
+
+```python
+for name, system in SYSTEMS.items():
+    print(name, "->", classify(system))
+```
+
+Running this classifies all six exactly as their behavioral fields imply: `faq_bot` as
+`chatbot`, `meeting_scheduler` as `assistant`, `code_completion_tool` as `copilot`,
+`email_triage_pipeline` as `workflow`, and `research_agent` as `agent`. The result worth
+sitting with is the sixth one: `branded_copilot_agent` also classifies as `agent`, not
+`copilot`, even though its description string contains the word "Copilot," because the
+function never reads the description at all, only the four behavioral fields. This is the
+entire chapter compressed into one runnable assertion: `classify()` produces the correct
+label from a system's actual architecture and behavior, and it would produce the exact same
+answer if every string in that dictionary called the same system something else entirely.
+That is precisely the property a product's own name does not have.
+
+The detail worth being honest about is what this code cannot do: in practice, nobody hands
+you a dictionary with `fixed_code_path` and `designed_for_human_supervision` already filled
+in. Determining those four fields for a real, unfamiliar system is the actual work, reading
+its documentation, its source code if available, or its observed behavior across several
+runs, closely enough to answer the architectural question and the three autonomy checks
+honestly. `classify()` is not a shortcut around that work; it is a precise statement of
+which four facts that work needs to establish, and, just as importantly, which fact,
+the system's own name, it does not need at all.
