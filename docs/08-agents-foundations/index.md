@@ -24,8 +24,8 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [8.6 Context Engineering for Agents](./8-6-context-engineering-for-agents.mdx)
 - [8.7 Planning and Reasoning Strategies for Agents: A Comparative Map](./8-7-planning-and-reasoning-strategies-for-agents.mdx)
 - [8.8 Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot](./8-8-terminology-untangled-agent-workflow-assistant-copilot-chatbot.mdx)
+- [8.9 Conversational and Agent UX Design](./8-9-conversational-and-agent-ux-design.mdx)
 
 ## Planned chapters
 
-- 8.9 [v5] Conversational & Agent UX Design
 - 8.10 Single-Agent Reference Architecture Blueprint

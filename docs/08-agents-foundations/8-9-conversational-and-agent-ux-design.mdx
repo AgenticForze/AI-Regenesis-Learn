@@ -1,0 +1,442 @@
+---
+title: "Conversational and Agent UX Design"
+sidebar_label: "8.9 Conversational & Agent UX Design"
+sidebar_position: 9
+phase: 8
+chapter: "8.9"
+lms_presentation: "8.9-Conversational-and-Agent-UX-Design-Slides.pptx"
+prerequisites: ["8.3", "8.5", "8.6", "8.7", "8.8"]
+tags: ["agents", "ux", "human-ai-interaction", "conversational-ai", "trust", "transparency"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Every chapter so far in Phase 8 has been about what happens inside an agent: how it
+perceives, reasons, remembers, plans, and acts. None of that determines whether a person
+using the finished system actually trusts it, understands what it is doing, or can recover
+when it gets something wrong, and a system that is architecturally excellent by every
+standard this phase has covered can still fail in production for reasons that are purely
+about its interface. This chapter grounds agent UX in two evidence-based sources rather than
+design intuition: Jakob Nielsen's decades-old "visibility of system status" heuristic,
+extended with concrete timing thresholds for exactly when a waiting user needs feedback, and
+Amershi et al.'s eighteen guidelines for human-AI interaction, empirically validated against
+real products and organized around four moments, before first use, during the interaction,
+when the system is wrong, and over repeated use. Ordinary chatbot UX already has to answer
+most of these questions, since a chatbot's only output is text. An acting agent adds exactly
+one new question a chatbot never faced: before a specific action runs, does it need a
+human's approval first, a question this chapter answers by tying directly back to Chapter
+8.8's autonomy spectrum and Anthropic's own finding that requiring approval for every action
+creates friction without reliably improving safety.
+
+## High-Level Explanation
+
+Treat human-AI interaction design as a sequence of four moments rather than a single design
+problem, because the concrete question a designer has to answer is different at each one.
+Initially, before a user has sent a first message, the interface's job is to set accurate
+expectations: what can this system actually do, and how often should the user expect it to
+be wrong. During the interaction, the interface's job shifts to visibility and control: show
+what is happening as it happens, at a level of detail matched to how long each step takes,
+and, for a system that can take real actions rather than only generate text, decide which of
+those actions can simply run and which need to pause for a human first. When the system gets
+something wrong, which every non-trivial system eventually does, the interface's job is to
+make the mistake easy to notice, easy to explain, and easy to correct, rather than leaving a
+user to discover it downstream. Over time, across many sessions, the interface's job becomes
+memory and restraint: remembering enough recent context to avoid repeating a user, adapting
+to how that user actually works, and never silently changing behavior a user has come to
+depend on. These four moments are not this chapter's invention; they are exactly how Amershi
+et al.'s eighteen guidelines organize themselves. What changes for an agent specifically,
+compared to a chatbot that only ever produces text, is that the During moment gains a
+genuinely new question: given a specific pending action, should it simply run, or does its
+consequence justify pausing for a human first?
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-9-four-moments-of-agent-ux.svg').default}
+    alt="A horizontal timeline runs through four moments of using an agent. Initially, before the first message, the interface sets accurate expectations about capability and error rate. During the interaction, it shows status appropriate to how long each step takes and gates consequential actions behind confirmation based on reversibility. When the system is wrong, it makes correction easy and explains why the mistake happened. Over time, across sessions, it remembers recent context, adapts cautiously, and never silently changes behavior the user relies on. A note states these four moments are Amershi et al.'s own organizing categories for their eighteen guidelines for human-AI interaction, and that what changes for an acting agent, versus a text-only chatbot, is the During moment gaining a reversibility-based confirmation gate a chatbot never needed."
+  />
+  <figcaption>Four moments organize human-AI interaction design; only the During moment needs a genuinely new question for an acting agent.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Before the First Message: Setting Accurate Expectations
+
+The first two of Amershi et al.'s eighteen guidelines both concern a moment that happens
+before any actual interaction: "Make clear what the system can do. Help the user understand
+what the AI system is capable of doing," and "Make clear how well the system can do what it
+can do. Help the user understand how often the AI system may make mistakes." These
+guidelines were not proposed casually; the paper's authors synthesized "over 150 AI-related
+design recommendations" from academic and industry sources and then validated the resulting
+eighteen through evaluation phases involving forty-nine design practitioners testing them
+against twenty popular AI products, which is why this chapter treats them as an
+evidence-based foundation rather than one designer's checklist. The practical reason these
+two guidelines come first is that a user's mental model of a system is set before their
+first real interaction with it, often by the interface's opening message, its onboarding
+copy, or simply what it is called, and Chapter 8.8's entire terminology chapter is directly
+relevant here: calling a system an agent primes a user to expect autonomous multi-step
+behavior, while calling the identical system an assistant primes an expectation of narrower,
+one-action-at-a-time help, and a mismatch between either label and the system's actual
+behavior produces exactly the kind of miscalibrated trust these two guidelines exist to
+prevent. Nielsen Norman Group's own review of chatbot design reinforces the same point at a
+finer grain, noting that "the chatbot should clearly and concisely indicate what it can do,"
+and recommending that an opening message be tailored to context rather than generic, since
+"users won't assume a chatbot knows what they're looking at unless the chatbot makes it
+explicit to them." An interface that is honest about a narrower scope than a competitor
+claims is not a worse interface; a user who is told accurately what to expect corrects
+course faster than one who was oversold and only discovers the gap through repeated failure.
+
+Guideline two, communicating how often the system is wrong, is the harder of the pair to
+implement honestly, because most interfaces have no mechanism for surfacing a calibrated
+error rate at all, and it is worth being specific about why this matters more for an agent
+than for a single-turn tool. A calculator that is wrong essentially never can stay silent
+about its error rate without misleading anyone; an agent whose task success rate, in exactly
+the sense Chapter 8.1 introduced when discussing how to operationalize a performance measure
+for an LLM agent, is meaningfully below certain, communicates something false about its
+reliability if its interface presents every response with identical, uniform confidence.
+This does not require a numeric score attached to every output, which would itself violate
+guideline five's expectation that an experience matches what users expect from a given
+context, but it does mean the interface's overall tone, its hedging language, its
+willingness to say "I'm not certain" for genuinely uncertain cases, has to track the system's
+actual reliability rather than projecting uniform confidence regardless of task difficulty.
+An interface that is equally confident about a well-supported factual lookup and a
+genuinely uncertain multi-step judgment call is not being honest about guideline two, even
+if it never states an explicit error rate anywhere.
+
+### During the Interaction: Status, Timing, and the New Question Agents Introduce
+
+Once an interaction is underway, the single most-cited usability principle in the field
+applies directly, and it predates large language models by three decades: Jakob Nielsen's
+"visibility of system status" heuristic, defined as how well "the state of the system is
+conveyed to its users," with the standard that "systems should always keep users informed
+about what is going on, through appropriate feedback within reasonable time." The heuristic's
+own justification is worth stating plainly because it explains why this matters more, not
+less, for an agent than for a simple form: "communicating the current state allows users to
+feel in control of the system, take appropriate actions to reach their goal, and ultimately
+trust the brand." An agent executing Chapter 8.3's Plan-Act-Observe loop across several tool calls
+is a textbook case of a system whose internal state changes repeatedly during a single
+response, which means each step of that loop is a natural unit for a status update rather
+than collapsing an entire multi-step task behind one generic "thinking" indicator that tells
+a user nothing about which of several very different things is actually happening.
+
+"Within reasonable time" is not a vague qualifier; Nielsen Norman Group's own guidance on
+progress indicators gives concrete thresholds that translate directly into an agent
+interface's status design. Feedback is warranted for "any action that takes longer than
+about 1.0 second," a looped, indeterminate animation "should be reserved for actions that
+take between 2-10 seconds," and a determinate, percent-done indicator becomes appropriate
+"for longer processes that take 10 or more seconds," specifically because a percent-done
+indicator is "the most informative type of wait-animation feedback" in that it conveys
+approximately how much longer the wait will last, which a spinner cannot. Mapped onto an
+agent's Plan-Act-Observe loop, a sub-second tool call, a cached lookup, a short local
+computation, needs no visible status at all; a single web search or a short model call in
+the two-to-ten-second range warrants an indeterminate indicator showing that something is
+happening without claiming to know how long; and a genuinely long-running step, a multi-page
+document analysis, a batch operation across many records, warrants a determinate,
+step-by-step display, ideally naming which step of the plan is currently executing, since
+that is exactly the information a plan already contains and an indeterminate spinner
+discards. Guidelines three and four extend the same idea: "time when to act or interrupt
+based on the user's current task and environment," and "display information relevant to the
+user's current task and environment," both arguing against one fixed status style applied
+regardless of what a step actually is.
+
+The genuinely new question this section exists to answer is the one a text-only chatbot
+never faced: given a pending action, should it simply run, or does it need a human's
+approval first? Anthropic's own research into measuring agent autonomy in practice found the
+naive answer, require approval for every action, actively counterproductive: "oversight
+requirements that prescribe specific interaction patterns, such as requiring humans to
+approve every action, will create friction without necessarily producing safety benefits,"
+and that experienced users shift over time toward more selective supervision, auto-approving
+routine actions more often while also intervening more readily when something needs it,
+since "effective oversight doesn't require approving every action but being in a position to
+intervene when it matters." The same research offers a concrete, measured basis for
+distinguishing which actions matter: in the public API traffic Anthropic analyzed, "only
+0.8% of actions appear to be irreversible
+(such as sending an email to a customer)," meaning the overwhelming majority of an agent's
+individual steps are the kind that cost little to undo if wrong, and gating all of them
+behind confirmation spends a user's attention on the wrong 99.2%. The design principle this
+supports is a reversibility-based gate rather than a uniform one: an action that can be
+undone with no lasting cost, refining a search query, drafting text nobody has seen yet, can
+auto-proceed with nothing more than the status treatment already described, while an action
+whose consequence persists once taken, sending a message to another person, deleting a
+record, publishing something publicly, earns an explicit confirmation step regardless of how
+autonomous the surrounding system is meant to be. This also connects directly back to
+Chapter 8.8's autonomy spectrum: an interface calling itself a copilot is making an explicit
+design promise to keep a human paired in before anything is finalized, which means, for that
+class of product, the confirmation gate should trigger more readily than reversibility alone
+would strictly require, while a product built and marketed as a fully autonomous agent is
+making the opposite promise, and its confirmation gate should be reserved for the genuinely
+irreversible tail Anthropic's own data shows is small.
+
+### When the Agent Is Wrong: Explanation, Correction, and Graceful Degradation
+
+Guideline eleven states a requirement that is easy to state and surprisingly rare to see
+implemented well: "make clear why the system did what it did. Enable the user to access an
+explanation of why the AI system behaved as it did." Nielsen Norman Group's own case-study
+analysis of a real deployed shopping agent shows concretely what happens when this guideline
+is skipped rather than merely under-implemented: in one documented interaction, "the final
+price was ¥10.2 CNY (approximately $1.40 USD), with no explanation of the difference," after the agent had applied some
+adjustment the user could see the effect of but not the reason for, and the article's own
+diagnosis generalizes well beyond that one case: "the agent's efficiency in narrowing options
+meant nothing once decision-critical information was missing." An agent that silently
+re-plans, exactly the behavior Chapter 8.7 covered as one of plan-and-execute's core
+advantages over a plan with no revision mechanism, produces precisely this failure mode if
+the re-planning itself is invisible to the user: the original plan quietly became a different
+plan, the user sees only the final result, and any change in outcome between what was
+promised and what was delivered arrives with no visible cause. The fix is not architectural,
+Chapter 8.7's re-planning logic does not need to change at all, it is that the status
+treatment this chapter already established for ordinary steps should apply with equal
+weight to a re-planning event itself: a plan that changes mid-execution is exactly the kind
+of state change Nielsen's visibility heuristic was written for, and surfacing it as "the
+original approach hit a problem, here is what changed and why" turns a silent surprise into
+a comprehensible, trustworthy correction.
+
+Guideline nine, "support efficient correction. Make it easy to edit, refine, or recover when
+the AI system is wrong," and guideline ten, "scope services when in doubt. Engage in
+disambiguation or gracefully degrade the AI system's services when uncertain about a user's
+goals," work together to define what a good failure looks like rather than merely what
+causes a bad one. A system uncertain about what a user actually wants has two honest options,
+ask a clarifying question or narrow its own scope until the ambiguity resolves itself, and
+both are strictly better than guessing confidently and forcing the user to detect and correct
+a wrong guess after the fact, since detecting a wrong guess requires the user to have already
+noticed something is off, a strictly harder task than answering a direct clarifying question
+would have been. When a mistake does happen despite this, efficient correction means the
+interface treats the user's correction as new information to act on immediately rather than
+as a reason to restart the entire interaction from scratch, the same principle underlying
+Chapter 8.7's re-planning: a correction is a targeted update to the part of a plan that was
+wrong, not a reason to discard everything already established as still valid.
+
+### Over Time: Memory, Adaptation, and Not Surprising the User
+
+Amershi et al.'s final seven guidelines all concern behavior across repeated use rather than
+within a single interaction, and the first of them makes an explicit, UX-facing claim about
+memory that Chapter 8.5's entire treatment of agent memory systems was built underneath:
+"remember recent interactions. Maintain short term memory and allow the user to make
+efficient references to that memory." Chapter 8.5 covered MemGPT's working-versus-external
+context split and Generative Agents' retrieval-scored memory stream as engineering
+mechanisms; this guideline is the user-facing requirement those mechanisms exist to satisfy,
+a user who mentioned a constraint three turns ago should not have to repeat it, and an
+interface that appears to forget recent context is exposing a memory-architecture failure
+directly to the user regardless of how sophisticated the underlying retrieval scoring
+actually is. The same logic extends to Chapter 8.6's context-engineering techniques:
+compaction and structured note-taking are invisible infrastructure by design, but a
+compaction pass that drops something a user considers important produces a visible symptom,
+the system behaving as though an earlier instruction never happened, that a user experiences
+purely as a UX failure even though its root cause is an internal context-management
+decision. The interface layer cannot fix a bad compaction policy, but it can make the
+symptom detectable by surfacing, on request, what the system currently believes about the
+task, giving a user a way to notice a dropped constraint before it causes a wrong result
+rather than after.
+
+The remaining guidelines in this category are best read as a single, unified caution against
+surprise. "Update and adapt cautiously. Limit disruptive changes when updating and adapting
+the AI system's behaviors," "convey the consequences of user actions. Immediately update or
+convey how user actions will impact future behaviors of the AI system," and "notify users
+about changes. Inform the user when the AI system adds or updates its capabilities" all
+protect the same thing: a user's accumulated, working mental model of how the system
+behaves, built up over many prior interactions, which guideline fourteen exists specifically
+to avoid silently invalidating. A system that changes its own future behavior because of
+something the user did, guideline sixteen's concern, has to say so, because a user who does
+not know their action changed the system's future behavior cannot make an informed decision
+about whether to take that action again. Guideline seventeen, "provide global controls. Allow
+the user to globally customize what the AI system monitors and how it behaves," and guideline
+fifteen, "encourage granular feedback. Enable the user to provide feedback indicating their
+preferences during regular interaction with the AI system," together ensure that adaptation is something a user
+can steer deliberately rather than something that merely happens to them as an opaque
+side-effect of ordinary use. None of these seven guidelines is specific to agents rather than
+chatbots, but an agent's larger action space and multi-step autonomy make a silent behavioral
+change riskier to miss: a chatbot that quietly changed its tone is a minor annoyance, while
+an agent that quietly changed which actions it now takes without confirmation is a change to
+the reversibility gate this chapter spent an entire section establishing, and guideline
+eighteen's requirement to notify users of capability changes applies to that gate with
+particular force.
+
+### Designing the Whole System, Not Isolated Screens
+
+Treating these four moments as sequential rather than simultaneous is a useful simplification
+for explaining them, but a real interface has to satisfy all four at once, because a single
+user session typically passes through several of them in one sitting: a returning user
+arrives already carrying expectations from a prior session, over-time concerns, sends a
+request that triggers a multi-step agent loop, during-interaction concerns, and may hit a
+wrong or uncertain result before the session ends, when-wrong concerns, all without the
+system ever restarting from the initially moment's blank slate. This is precisely why
+Amershi et al.'s guidelines resist being implemented as four separate features bolted onto
+an existing interface; a status update shown during a step should already reflect the
+capability boundaries set during onboarding, and an explanation shown after an error should
+already draw on whatever short-term memory the interaction has accumulated, rather than
+reasoning about the current step in isolation. The reference architecture in the next
+section makes this concrete for exactly the During moment's new question, whether a given
+action should auto-proceed or pause, by wiring the reversibility check directly into the
+same loop Chapter 8.3 established for the agent's actual reasoning, rather than treating UX
+as a layer painted on afterward. A confirmation gate that lives outside the agent's own loop,
+implemented as a generic middleware step that inspects an action after the fact, tends to
+either fire too often, annoying users with confirmations for reversible actions the loop
+itself already knew were safe, or too rarely, missing an irreversible action whose
+consequence was only knowable from context the loop had but the middleware did not; a gate
+that is part of the loop's own step-by-step execution has access to exactly the information,
+what this specific action does and what state it changes, that the reversibility judgment
+actually depends on.
+
+A single concrete session makes the interdependence easier to see than any abstract
+statement of it. A user returns to an agent they have used before, opening the initially
+moment's expectations already carried forward as an over-time concern: the interface should
+not re-introduce capabilities the user already knows about, but it also should not assume
+familiarity with a capability added since their last visit, which is exactly what guideline
+eighteen's change-notification requirement is for. The user asks the agent to reconcile a
+spreadsheet against a vendor invoice and flag discrepancies, triggering a during-interaction
+sequence of several tool calls, a short read here, a longer computation there, each shown at
+the status level its own duration warrants rather than one undifferentiated spinner for the
+whole request. Partway through, the agent's plan hits a contradicted assumption exactly the
+way Chapter 8.7 described, the vendor invoice uses a currency the spreadsheet does not, and
+re-plans to add a conversion step; because that re-plan is surfaced rather than silent, the
+user sees why the task took an extra step rather than simply noticing it took longer than
+expected. The agent then reaches a step that would email the vendor about the discrepancy, an
+irreversible action by Anthropic's own criterion, and the confirmation gate this chapter's
+reference architecture wires directly into the loop pauses there rather than sending it
+unreviewed. If the user declines, the denial feeds back into the same re-planning mechanism
+rather than aborting the task outright, and the agent proposes flagging the discrepancy
+internally instead. None of these four moments was handled by a separate feature; each was
+the same underlying agent loop, the same status emitter, and the same reversibility check,
+applied consistently across a session that happened to pass through all four in sequence.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Assistant', 'Copilot', 'Agent']}
+  rows={[
+    {aspect: 'Default confirmation posture (Ch. 8.8 autonomy spectrum)', values: ['Confirms after every single action, by definition', 'Confirms before a chained sequence finalizes, as a design commitment', 'Confirms only for the reversibility-gated minority of actions'], decisive: true},
+    {aspect: 'What a status update needs to convey', values: ['Which one action is being taken right now', 'Which step of a short chain is executing, and what remains', 'Which step of a longer plan is executing, and whether a re-plan occurred'] },
+    {aspect: 'Cost of a silent behavior change (guideline 14, 16, 18)', values: ['Low: the next single action simply looks different', 'Moderate: a chained sequence the user expected to review may finalize differently', 'High: the reversibility gate itself may have shifted without notice'], decisive: true},
+  ]}
+  caption="These three sit on Chapter 8.8's same autonomy spectrum; what changes across them here is not whether Amershi et al.'s guidelines apply, all eighteen do, but how much is at stake when any one of them is skipped."
+/>
+
+Trust calibration, the general concept that a user's confidence in a system should track that
+system's actual reliability rather than running ahead of or behind it, is the thread running
+through guideline two's error-rate disclosure, the reversibility-based confirmation gate, and
+the over-time guidelines against silent change all at once. A system a user over-trusts skips
+confirmations it should have required and ignores explanations it should have sought out; a
+system a user under-trusts gets second-guessed even when it is right, forfeiting exactly the
+efficiency gains Chapter 8.7's planning strategies and Chapter 8.4's tool use were built to
+provide. Every guideline this chapter has covered is, from this angle, a specific mechanism
+for keeping a user's trust calibrated to a system's real, current, and possibly time-varying
+reliability, rather than a scattered list of independent interface conveniences.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A confirmation gate wired directly into the agent's own loop"
+  mermaid={`
+flowchart TD
+  AGENTLOOP[Agent loop: Plan, Act, Observe]
+  STATUS[Status emitter: turns each step into a visible update]
+  CHECK{Is the next action reversible and low-stakes?}
+  AUTOACT[Auto-proceed: the action runs, status updates the user]
+  CONFIRM[Confirmation gate: a human approves before the action runs]
+  RESULT[Result surfaced with a plain-language explanation]
+  REVISE[Agent revises its plan and tries a different step]
+
+  AGENTLOOP --> STATUS --> CHECK
+  CHECK -- yes, reversible and low-stakes --> AUTOACT
+  CHECK -- no, irreversible or high-stakes --> CONFIRM
+  CONFIRM -- approved --> AUTOACT
+  CONFIRM -- denied --> REVISE
+  AUTOACT --> RESULT
+  REVISE --> AGENTLOOP
+  RESULT --> AGENTLOOP
+`}
+  components={[
+    {name: 'Agent loop', responsibility: "Chapter 8.3's Plan, Act, Observe cycle; the source of every step this architecture makes visible or gates."},
+    {name: 'Status emitter', responsibility: 'Converts each step into a status update sized to that step\'s own estimated duration, per this chapter\'s timing thresholds.'},
+    {name: 'Reversibility check', responsibility: "The one question a chatbot never had to ask: does this specific pending action need a human's approval before it runs?"},
+    {name: 'Auto-proceed', responsibility: 'Runs a reversible, low-stakes action immediately, with only a status update, no interruption.'},
+    {name: 'Confirmation gate', responsibility: "Pauses an irreversible or high-stakes action for a human's explicit approval before it runs."},
+    {name: 'Result explanation', responsibility: 'Surfaces the outcome in plain language, including a visible note whenever a re-plan changed the original approach.'},
+    {name: 'Revise', responsibility: "On a denied confirmation, hands control back to the agent's own re-planning mechanism (Ch. 8.7) rather than aborting the whole task."},
+  ]}
+/>
+
+Notice that denial does not exit the loop; it feeds back into the same re-planning mechanism
+Chapter 8.7 already established, which means a user declining one specific action is treated
+as exactly the kind of contradicted assumption a plan-and-execute architecture already knows
+how to recover from, not as a special UX-only escape hatch bolted on separately from the
+agent's actual reasoning.
+
+## Hands-On: A Status and Confirmation Policy From Two Properties
+
+The clearest way to see that status timing and confirmation gating both reduce to a small,
+checkable policy is to write that policy as a function and run it against a handful of
+realistically varied actions, including one specifically chosen to show that reversibility
+alone is not always sufficient.
+
+**Step 1: The policy function.** Two properties of a pending action, how long it takes and
+how easy it is to undo, decide both what status to show and whether to gate it:
+
+```python
+def ux_policy(action):
+    seconds = action["est_seconds"]
+    if seconds < 1:
+        status = "no indicator needed"
+    elif seconds <= 10:
+        status = "indeterminate spinner"
+    else:
+        status = "determinate, step-by-step progress"
+
+    if action["reversible"] and not action.get("high_stakes", False):
+        gate = "auto-proceed"
+    else:
+        gate = "confirm before proceeding"
+
+    return {"status": status, "gate": gate}
+```
+
+**Step 2: Seven actions spanning the interesting cases**, from an instant lookup to a
+publicly visible post that is technically reversible but still earns a confirmation:
+
+```python
+ACTIONS = {
+    "lookup_definition": {"est_seconds": 0.2, "reversible": True},
+    "web_search": {"est_seconds": 4, "reversible": True},
+    "generate_report_draft": {"est_seconds": 25, "reversible": True},
+    "send_email_to_customer": {"est_seconds": 2, "reversible": False},
+    "delete_stale_records": {"est_seconds": 6, "reversible": False},
+    "reformat_internal_scratch_note": {"est_seconds": 0.5, "reversible": True, "high_stakes": False},
+    "post_to_public_status_page": {"est_seconds": 3, "reversible": True, "high_stakes": True},
+}
+```
+
+**Step 3: Run the policy across all seven.**
+
+```python
+for name, action in ACTIONS.items():
+    print(name, "->", ux_policy(action))
+```
+
+Running this produces exactly the mapping this chapter's thresholds predict: the
+sub-second lookup and the private scratch-note edit both need no status indicator and
+auto-proceed; the four-second search and the six-second deletion both fall in the
+two-to-ten-second indeterminate-spinner range, but only the search auto-proceeds, since
+deleting records is irreversible; the twenty-five-second report draft crosses into
+determinate, step-by-step territory and still auto-proceeds, since drafting is reversible and
+nobody has seen the draft yet; sending an email gates despite taking only two seconds,
+because gating depends on reversibility, not duration. The result worth sitting with is the
+last one: the public status-page post is marked `reversible: True`, technically it can be
+edited again after the fact, yet it still gates, because `high_stakes` overrides plain
+reversibility. This is the same distinction Chapter 8.8's copilot-versus-agent line drew in
+words: a copilot's design commitment to keep a human paired in is a policy choice layered on
+top of what is merely undoable, not a fact derivable from undoability alone, and this
+function's `high_stakes` field is exactly where that policy choice gets to override the
+default the reversibility check alone would have produced.
+
+The honest limitation to name is the same one Chapter 8.8's Hands-On section named for its
+own classifier: `ux_policy()` does not discover whether an action is reversible or
+high-stakes, it assumes those two facts have already been established for every action an
+agent's tool set can take. Establishing them accurately, deciding, for a specific tool in a
+specific product, whether its effects genuinely persist and how publicly, is a design and
+engineering judgment call this function has no way to make on its own; what the function
+guarantees is that once that judgment is made honestly, the status and confirmation behavior
+that follows from it is applied consistently, rather than varying by which engineer happened
+to write a given tool's integration code.
