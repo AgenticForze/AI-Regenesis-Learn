@@ -1,0 +1,529 @@
+---
+title: "Memory Systems for Agents: A Comparative Deep Dive"
+sidebar_label: "8.5 Memory Systems for Agents"
+sidebar_position: 5
+phase: 8
+chapter: "8.5"
+lms_presentation: "8.5-Memory-Systems-for-Agents-Slides.pptx"
+prerequisites: ["8.2", "8.4"]
+tags: ["agents", "memory", "memgpt", "generative-agents", "long-term-memory", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.2 named short-term and long-term memory and left it there: short-term is what
+fits in the context window, long-term is whatever gets stored outside it. This chapter
+asks the two questions that naming glosses over. What, specifically, decides that a piece
+of information is worth writing outside the context window in the first place, and what,
+specifically, decides that a piece of stored information should be pulled back in right
+now. Every memory system this chapter covers is an answer to exactly those two questions,
+a write policy and a retrieval policy, and nothing else. MemGPT answers them by treating
+the context window itself like a paged virtual memory system, moving data in and out via
+function calls the model issues about its own memory. Generative Agents answers them with
+a scored retrieval function over a running log of everything the agent has done, plus a
+periodic step that compresses many specific memories into fewer general ones. Neither
+system is memory in some deeper cognitive sense. Both are concrete, inspectable policies,
+and the differences between them are exactly where an agent's memory succeeds or fails in
+practice.
+
+## High-Level Explanation
+
+Every agent has exactly one place where the model can actually see anything: the prompt
+that gets sent to it on the current turn, Chapter 8.2's working memory. Everything else,
+no matter how it is stored, is invisible to the model until something puts it back into
+that prompt. That single fact is the entire memory problem. A context window is bounded
+(there is a hard token limit) and expensive (every token in it is paid for and processed
+on every single turn, including the tokens that are pure repetition of something already
+said ten turns ago). An external store, by contrast, can be effectively unbounded and
+cheap to hold things in, but it buys that with a cost of its own: nothing in it does
+anything for the model until a retrieval step actively pulls it back into view. A memory
+system is the pair of policies that manage that trade, one gate deciding what leaves the
+context window for external storage, another gate deciding what comes back.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-5-working-context-and-external-memory.svg').default}
+    alt="Two gated paths connect Working Context, everything in the prompt right now, bounded and expensive per token, to an External Memory Store that is effectively unbounded and invisible until retrieved. The write gate asks whether something is worth keeping or the context is over budget; if yes it is appended to the store, for example a memory stream or archival store, and if no it stays only in context and is evicted whenever it rolls over. The retrieve gate asks whether something in the store scores high enough right now to recall; if yes the top items by a combination of recency, importance, and relevance are pulled back into working context, and if no they are not recalled this turn and remain in the store. A note states that write and retrieve are two separately gated decisions, not one memory mechanism, and a system can get either gate wrong independently."
+  />
+  <figcaption>Write and retrieve are two independent gates connecting the same two stores, not a single mechanism called "memory."</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Why the Context Window Forces a Memory Problem
+
+Chapter 8.2 introduced short-term and long-term memory by naming them; it is worth being
+precise about why the distinction is forced on any agent rather than being a design
+preference. A transformer's self-attention cost grows with the square of the sequence
+length, so simply widening the context window is not a free fix, it makes every single
+turn more expensive, not just the turns that need the extra history. Providers also charge
+per input token, so an agent that pastes its entire history into every prompt pays for
+that history again and again, once per turn, whether or not the current turn needs any of
+it. MemGPT's authors frame the resulting bind directly: "Large language models (LLMs) have
+revolutionized AI, but are constrained by limited context windows, hindering their utility
+in tasks like extended conversations and document analysis." Two failure modes follow from
+this bind, and a memory system has to answer both. First, an agent that only ever uses its
+context window, with nothing evicted and nothing stored elsewhere, eventually hits the
+window's hard limit and simply cannot continue; something has to be removed to make room
+for what comes next, and removed information the agent later needs is now gone rather than
+merely far away. Second, an agent that keeps every single turn in context forever, right up
+until the window is full, is spending tokens and compute on repetition long before it hits
+that wall, most of a long transcript being small talk and dead ends rather than anything
+worth re-reading. A memory system is what turns "gone forever" into "retrievable on
+purpose," and what turns "paid for on every turn" into "paid for again only when actually
+relevant." Everything in the rest of this chapter is a specific, inspectable answer to how
+that turning happens.
+
+The token-cost side of this is easy to underestimate until it is written out
+concretely. An agent that resends its entire transcript on every turn, rather than relying
+on any server-side caching of the unchanged prefix, pays for turn 1's tokens once, turn 2's
+tokens twice (once as history, once as new content), turn 3's three times, and so on; the
+total tokens processed across a conversation of n turns grows as the sum of 1 through n,
+so a fifty-turn conversation conducted this way processes on the order of twenty-five times
+as many tokens in aggregate as the conversation actually contains, purely from re-reading
+history that has not changed, and the multiplier keeps growing with every additional turn.
+Prompt caching, offered by most major providers, blunts this by
+letting a provider reuse the compute already spent on an unchanged prefix rather than
+recomputing it from scratch, but it does not touch the other half of the bind: a cached
+prefix is still tokens counted against the context window's hard limit, and a long enough
+run still eventually hits that ceiling regardless of how cheaply the tokens leading up to
+it were served. This is also precisely why Chapter 8.3's termination conditions, a step
+limit or a self-consistency backoff, exist independently of anything discussed in this
+chapter: a loop that runs long enough will eventually need either a reason to stop or a
+memory system deciding what it can afford to stop carrying in every prompt, and a system
+with neither eventually fails from context overflow rather than from any error in its own
+reasoning.
+
+### MemGPT: Treating the Context Window Like Virtual Memory
+
+MemGPT's central move is to borrow a solved problem from operating systems rather than
+invent a new one. Modern operating systems give a program the appearance of more memory
+than physically exists in RAM by paging data between fast, limited main memory and slower,
+much larger disk storage, moving pages in only when something actually needs them.
+MemGPT's paper proposes "virtual context management, a technique drawing inspiration from
+hierarchical memory systems in traditional operating systems that provide the appearance of
+large memory resources through data movement between fast and slow memory," and applies
+that same idea to an LLM's context window. Concretely, MemGPT distinguishes what it calls
+"main context," which "consists of the LLM prompt tokens" and is "anything in main context
+[that] is considered in-context and can be accessed by the LLM processor during
+inference," from "external context," which "refers to any information that is held outside
+of the LLM's fixed context window." Within main context sits an editable region MemGPT
+calls working context, which the paper's own figures show being modified directly, for
+instance appending a new persona detail, `working_context.append('Birthday: 11th October.
+Favorite cake: Chocolate Lava made by mom Brenda')`, or, later, correcting one already
+stored, `working_context.replace('I watch horror movies.', 'I like romantic comedies.')`.
+External
+context is split into two stores with different jobs: recall storage, described as the
+system's message database, and archival storage, "a read/write database storing arbitrary
+length text objects" for anything too large or too old to keep active. The mechanism that
+moves data between all of these is not a fixed background process; it is the model itself.
+MemGPT's paper states plainly that "MemGPT orchestrates data movement between main context
+and external context via function calls that are generated by the LLM processor," which
+means the write and retrieve gates from the previous section are, in MemGPT's design,
+exactly Chapter 8.4's tool calls: reasoning decides, in the middle of an ordinary turn,
+that something belongs in long-term storage or that something in storage is needed now,
+and issues a function call to make that happen, the same structured mechanism used for any
+other tool. Eviction from main context, meanwhile, is handled by a simpler rule that does
+not depend on the model noticing anything: "when the prompt tokens exceed the 'flush token
+count' (e.g. 100% of the context window), the queue manager flushes the queue to free up
+space in the context window: the queue manager evicts a specific count of messages (e.g.
+50% of the context window)." Nothing in that eviction step consults importance or
+relevance; it is a capacity trigger, not a judgment call, which is precisely why the
+model-issued function calls for recall and archival storage matter: they are the only
+mechanism giving MemGPT any say over what happens to a memory before capacity, not
+judgment, decides its fate.
+
+The paper's abstract names one more mechanism worth separating from data movement itself:
+MemGPT "utilizes interrupts to manage control flow between itself and the user." A paging
+operation, searching archival storage or rewriting working context, takes real time and
+does not have to happen synchronously in the middle of a response the user is waiting on;
+an interrupt-driven control flow is what lets MemGPT schedule that work without forcing a
+user to sit through it turn after turn, the same way an operating system lets a slow disk
+read happen without freezing everything else the machine is doing. MemGPT's authors chose
+to evaluate this design against exactly the two failure modes the previous sub-section
+described rather than a generic benchmark: "document analysis, where MemGPT is able to
+analyze large documents that far exceed the underlying LLM's context window," which is a
+direct test of the hard-limit failure, and "multi-session chat, where MemGPT can create
+conversational agents that remember, reflect, and evolve dynamically through long-term
+interactions with their users," a direct test of paying for the same history repeatedly
+across sessions that would otherwise start from a blank context every time. That the
+evaluation domains map this cleanly onto the stated problem is itself informative: virtual
+context management is being sold as a fix for context-window economics specifically, not
+as a general claim about giving a model something resembling human memory.
+
+### Generative Agents: The Memory Stream, Retrieval Score, and Reflection
+
+Where MemGPT hands memory management to the model as tool calls, Generative Agents (Park
+et al., 2023) builds a fixed, always-on pipeline that runs the same way on every memory,
+with no per-memory decision required from the model at write time. Its foundation is the
+memory stream, defined as maintaining "a comprehensive record of the agent's experience,"
+concretely "a list of memory objects, where each object contains a natural language
+description, a creation timestamp, and a most recent access timestamp." Every single thing
+the agent perceives becomes an entry; nothing is filtered out at write time the way
+MemGPT's model-issued function calls filter what gets archived. All of the real work
+happens at retrieval time, through a scored combination of three signals. Recency "assigns
+a higher score to memory objects that were recently accessed, so that events from a moment
+ago or this morning are likely to remain in the agent's attentional sphere," computed, in
+the paper's own implementation, "as an exponential decay function over the number of
+sandbox game hours since the memory was last retrieved," with "decay factor... 0.995."
+Importance "distinguishes mundane from core memories by assigning a higher score to memory
+objects that the agent believes to be important," produced by directly prompting the
+model itself: "on the scale of 1 to 10, where 1 is purely mundane (e.g., brushing teeth,
+making bed) and 10 is extremely poignant (e.g., a break up, college acceptance), rate the
+likely poignancy of the following piece of memory." Relevance "assigns a higher score to
+memory objects that are related to the current situation," typically computed as embedding
+similarity between the memory and whatever situation or query triggered retrieval. All
+three scores are normalized to a common zero-to-one range and combined as a weighted sum,
+which the paper states directly: "the retrieval function scores all memories as a weighted
+combination of the three elements." No single signal wins by default; a very recent but
+irrelevant memory and a highly relevant but stale one can score similarly depending on how
+the weights are set, which is itself a design decision every deployment of this pattern has
+to make deliberately rather than inherit for free. The second pipeline stage, reflection,
+is what keeps the memory stream from being nothing more than an ever-growing, increasingly
+unwieldy transcript. Reflections trigger on accumulated importance rather than a fixed
+schedule: "reflections are generated periodically; in our implementation, we generate
+reflections when the sum of the importance scores for the latest events perceived by the
+agents exceeds a threshold (150 in our implementation)." When that threshold fires, the
+system does not simply summarize; it prompts the model with "the 100 most recent records in
+the agent's memory stream" and asks, "given only the information above, what are 3 most
+salient high-level questions we can answer about the subjects in the statements?" and
+answers to those generated questions become new memory objects in their own right,
+themselves retrievable, themselves eligible to seed further reflections built on top of
+earlier reflections. This is the mechanism that turns "the agent's coworker mentioned a
+party" and "the agent asked about the party plans" and "the agent bought a gift" into a
+single higher-level memory resembling "a party is being planned," available for retrieval
+as one item instead of forcing every future retrieval to independently re-discover the
+pattern from several scattered specifics. The paper's own ablation treats none of this as
+optional set dressing: removing observation, planning, or reflection each measurably
+degraded believability, and the paper states the finding directly, that "the components of
+our agent architecture, observation, planning, and reflection, each contribute critically
+to the believability of agent behavior." Reflection in particular is doing something
+neither raw storage nor scored retrieval can do on their own: storage keeps every specific
+event available in principle, and retrieval surfaces whichever specific events score
+highest for a given situation, but neither step ever produces a memory that did not
+already exist verbatim in the stream. Reflection is the only stage in this pipeline that
+synthesizes something genuinely new out of what is already stored, which is also exactly
+why it is the stage most exposed to getting the synthesis wrong, a concern the next
+sub-section returns to directly.
+
+### A Taxonomy: Working, Episodic, Semantic, and Procedural Memory
+
+MemGPT and Generative Agents solve the same underlying problem with genuinely different
+machinery, and a shared vocabulary helps pin down exactly where they overlap and where they
+diverge. Cognitive Architectures for Language Agents (Sumers et al., 2023) borrows a
+four-part memory taxonomy from the older Soar cognitive architecture and repurposes it for
+language agents. Working memory "reflects the agent's current circumstances: it stores the
+agent's recent perceptual input, goals, and results from intermediate, internal
+reasoning," which for an LLM agent is simply the context window itself, Chapter 8.2's
+short-term memory under a more formal name. The other three describe different shapes long-
+term memory can take, and the distinction between them is not about mechanism, both can be
+stored in the same database, but about what kind of content each holds and how it gets
+used later. Semantic memory "stores facts about the world": general, mostly timeless
+knowledge, not tied to any one specific event, the kind of content a vector database
+populated for retrieval-augmented generation typically holds, which is why Phase 6's RAG
+material and this chapter's memory material describe closely related machinery aimed at
+different content. Episodic memory "stores sequences of the agent's past behaviors":
+specific things that happened at specific times, which is exactly what a Generative
+Agents-style memory stream is, and exactly what MemGPT's recall storage holds when it is
+storing conversation history rather than durable facts. Procedural memory, finally, "stores
+the production system itself: the set of rules that can be applied to working memory to
+determine the agent's behavior," which for an LLM agent maps most directly onto the model's
+weights, its system prompt, and the code implementing its loop, none of which change turn
+to turn the way episodic and semantic memories do. Placed against this taxonomy, MemGPT's
+recall and archival storage function as a general-purpose external memory that can hold
+either episodic or semantic content depending on what gets written into it, while
+Generative Agents' memory stream is more specifically episodic by construction, a log of
+specific perceived events, with its reflection layer acting as a bridge that distills
+episodic specifics into something closer to semantic generalizations an agent can act on
+without re-deriving them from scratch every time. Neither system implements procedural
+memory in any adaptive sense; the closest either comes is a human updating a prompt or
+retraining a model between deployments, which is a genuinely open problem this taxonomy
+makes visible even though neither architecture solves it.
+
+The taxonomy earns its keep as a design tool the moment a concrete piece of information
+needs a home. "The user prefers metric units" is a fact true regardless of when it was
+learned, so it belongs in semantic memory, retrievable the same way whether it was said
+five minutes or five months ago. "The agent already tried calling this API with these
+arguments and it returned a validation error" is tied to one specific attempt at one
+specific time, so it belongs in episodic memory, useful mainly for the current task rather
+than as a standing fact about the world. "When a tool call fails, retry once with a
+corrected argument before giving up" is neither a fact nor an event; it is closer to a
+rule the agent's own loop follows, which is why it belongs in a system prompt or the
+agent's code, procedural memory, rather than in either store this chapter's two
+architectures actually implement. Getting this placement wrong has a direct cost: a fact
+stuffed into episodic storage gets scored partly on recency it does not deserve, quietly
+losing retrieval priority as it ages even though nothing about a unit preference becomes
+less true with time, while a one-off event stored as if it were a durable fact can keep
+influencing decisions long after the specific circumstance that produced it has stopped
+being relevant.
+
+### What Goes Wrong: Staleness, Interference, and the Cost of Remembering Everything
+
+Every mechanism in the previous three sub-sections has a specific, nameable failure mode,
+and naming them matters because "add a memory system" is not automatically an improvement
+over having no long-term memory at all. Staleness is the most direct: a fact written to
+memory once can silently become false later, and neither MemGPT's function-call-driven
+writes nor Generative Agents' always-on logging include any mechanism for a memory to
+expire or get corrected on its own. `working_context.replace('I watch horror movies.', 'I
+like romantic comedies.')` from MemGPT's own paper is exactly this problem solved by hand,
+one specific correction the model happened to be prompted to make; nothing guarantees
+every stale fact gets caught the same way, and a fact quietly retrieved after it stopped
+being true can steer an agent's reasoning as confidently as a fact that is still correct,
+with no signal in the retrieval score itself that anything is wrong. Interference is
+subtler and specific to scored retrieval: because Generative Agents' three-factor score is
+a weighted sum rather than a strict filter, a memory that is recent and unimportant can
+still outscore one that is old and highly relevant, and a retrieval step that returns
+several memories touching a topic from different, even contradictory, moments in time hands
+reasoning a mixed signal rather than a clean answer, without flagging that a contradiction
+exists at all. The cost of remembering everything is the third failure mode, and it is
+structural rather than a bug in either system: a memory stream that logs every perceived
+event grows without bound, and every retrieval over an unbounded store costs more compute
+and, if a vector index is involved, more storage, the longer the agent runs; Generative
+Agents' reflection layer is one deliberate answer, trading many specific memories for fewer
+general ones, and MemGPT's flush-triggered eviction is another, trading precision, no
+per-item judgment at all, for a hard guarantee that main context never overflows. Neither
+answer is free: reflection presumes the higher-level generalization it produces is actually
+a fair summary of what it was built from, which is not guaranteed, and flush-triggered
+eviction can just as easily discard something the agent will need next turn as something it
+will never need again, because capacity, not relevance, is what triggers it. A production
+system choosing between these approaches, or combining them, is really choosing which of
+these specific failure modes it can tolerate, not choosing between "has memory" and "does
+not."
+
+None of these failure modes has a complete fix in either architecture as published, but
+each has a partial mitigation worth naming precisely because it is partial rather than
+total. Staleness is reduced, never eliminated, by writing a timestamp alongside every
+memory and surfacing that timestamp to reasoning at retrieval time rather than only the
+memory's text, so a model at least has the information needed to weigh an old fact more
+skeptically, even though nothing forces it to. Interference is reduced by widening a
+retrieval query's context before scoring, retrieving with more of the current conversation
+rather than a single isolated phrase, which improves the relevance term's chances of
+telling a genuinely on-topic memory apart from a merely keyword-adjacent one, though it
+does nothing to stop two on-topic, mutually contradictory memories from being retrieved
+together. Unbounded growth is reduced by treating reflection or eviction as mandatory
+maintenance rather than an optional feature, run on a schedule regardless of whether a
+specific interaction seems to call for it, trading some wasted compute on turns that did
+not need it for the guarantee that the store never grows unchecked. Every one of these
+mitigations is a policy choice layered on top of the write and retrieve gates from the
+High-Level section, not a change to the gates themselves, which is exactly why a system's
+memory quality in practice depends as much on these secondary policies as on which of
+MemGPT or Generative Agents' core mechanisms it starts from.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['MemGPT (virtual context management)', 'Generative Agents (memory stream + reflection)', 'What is genuinely different']}
+  rows={[
+    {aspect: 'What triggers a write to long-term storage', values: ['A function call the model itself decides to issue', 'Every perceived event, unconditionally, at write time', 'Judgment lives in the model\'s own tool-calling choice, versus never being asked at all'], decisive: true},
+    {aspect: 'What triggers a retrieval', values: ['A function call the model itself decides to issue', 'Every turn, scored automatically by recency + importance + relevance', 'A call tied to an explicit information need, versus a score computed whether or not one exists'], decisive: true},
+    {aspect: 'How eviction from short-term memory works', values: ["A fixed capacity trigger (the 'flush token count'), no relevance judgment", 'Not applicable in the same way; the memory stream itself is the long-term store, not a short buffer', 'A hard capacity guarantee with zero judgment, versus no equivalent hard limit at all'] },
+    {aspect: 'How repetition gets compressed', values: ['Not a first-class mechanism; summarization, if any, is whatever the model chooses to do via its own function calls', 'A dedicated reflection step, triggered on cumulative importance, that distills many memories into fewer higher-level ones', 'An optional side effect of the model\'s own choices, versus a mechanism guaranteed to run on schedule'] },
+    {aspect: 'Where judgment about importance lives', values: ["In the model's own choice of when to call a memory function", "In an explicit, separately computed importance score attached to every memory object", 'An implicit judgment folded into a tool-calling decision, versus a standalone, inspectable number'] },
+  ]}
+  caption="Both systems answer the same write/retrieve pair from the High-Level section, but they place the judgment calls in different hands: MemGPT trusts the model's own tool-calling decisions (Chapter 8.4's mechanism, turned inward on the agent's own memory), while Generative Agents trusts a fixed, always-on scoring pipeline the model never has to remember to invoke."
+/>
+
+Phase 6's retrieval-augmented generation covers a closely related but distinct problem:
+retrieving from a static, externally authored corpus, a knowledge base, a set of documents,
+that does not change as a result of the agent's own actions. The memory systems in this
+chapter retrieve from a store the agent itself is continuously writing to as a side effect
+of doing its job, which is why staleness and interference, this chapter's failure modes,
+barely apply to a static RAG corpus in the same way: a document collection does not
+accumulate contradictions about what the agent itself did an hour ago, because it is not
+being written to by the agent's own behavior at all.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A write path and a retrieve path sharing one external store"
+  mermaid={`
+flowchart TD
+  PERCEIVE[Perceive: new event or observation]
+  WRITEGATE{Worth writing externally?}
+  STORE[(External store: episodic + semantic)]
+  RETRIEVEGATE{Scores high enough to recall?}
+  CONTEXT[Working context: this turn's prompt]
+  REASON[Reasoning]
+
+  PERCEIVE --> CONTEXT
+  CONTEXT --> WRITEGATE
+  WRITEGATE -- yes --> STORE
+  WRITEGATE -- no --> CONTEXT
+  REASON --> RETRIEVEGATE
+  RETRIEVEGATE -- yes, top-k --> STORE
+  STORE --> CONTEXT
+  CONTEXT --> REASON
+`}
+  components={[
+    {name: 'Perceive', responsibility: "Chapter 8.2's Perception step; a new event enters working context before anything is decided about it."},
+    {name: 'Write gate', responsibility: 'Decides whether an item is worth appending to the external store, by a model-issued function call (MemGPT) or unconditionally (Generative Agents).'},
+    {name: 'External store', responsibility: 'Holds episodic and semantic content indefinitely, invisible to reasoning until a retrieval step pulls something back in.'},
+    {name: 'Retrieve gate', responsibility: 'Scores stored items against the current situation and admits only the top-k back into working context.'},
+    {name: 'Working context', responsibility: "Everything currently in the prompt; Chapter 8.2's short-term memory, and the only thing reasoning ever directly sees."},
+    {name: 'Reasoning', responsibility: "Chapter 8.3's Plan step; the only place a retrieval need originates, and the only consumer of whatever the retrieve gate admits."},
+  ]}
+/>
+
+The loop closes through Reasoning rather than around it, which matters: a retrieval gate
+that fires without Reasoning ever asking for anything is guessing at relevance from context
+alone, while one that only fires when Reasoning has an actual question in hand, the way a
+MemGPT function call works, ties retrieval to a concrete information need rather than a
+fixed schedule. Both designs are represented in this diagram as the same two gates; which
+one triggers them, a schedule or a judgment call, is the design decision Chapter 8.4's
+tool-calling machinery makes possible for the judgment-call side of that choice.
+
+## Hands-On: A Small, Testable Memory Stream
+
+The fastest way to see a scored retrieval policy actually discriminate between memories,
+rather than just reading about the idea, is to build a minimal version of Generative
+Agents' memory stream, run it against a sequence of events, and check that it surfaces the
+right ones. This version replaces the paper's embedding-based relevance with keyword
+overlap and its LLM-generated reflections with a deterministic stand-in, so it runs and is
+checked without a network call or an API key, while keeping the same three-factor scoring
+structure and the same importance-triggered reflection rule.
+
+**Step 1: A memory object and a retrieval score.** Each memory carries a description, an
+importance rating, and timestamps for when it was created and last accessed:
+
+```python
+REFLECTION_STOPWORDS = {
+    "agent", "agent's", "about", "with", "that", "this", "being", "planned",
+    "small", "long",
+}
+
+def keyword_overlap(query, text):
+    q = set(query.lower().split())
+    t = set(text.lower().split())
+    if not q:
+        return 0.0
+    return len(q & t) / len(q)
+
+def normalize(scores):
+    lo, hi = min(scores), max(scores)
+    if hi - lo < 1e-9:
+        return [0.5 for _ in scores]
+    return [(s - lo) / (hi - lo) for s in scores]
+
+class MemoryObject:
+    def __init__(self, description, importance, created_at_hour):
+        self.description = description
+        self.importance = importance
+        self.created_at_hour = created_at_hour
+        self.last_accessed_hour = created_at_hour
+```
+
+**Step 2: The memory stream itself.** `add` appends a memory and checks whether
+cumulative importance has crossed the reflection threshold; `retrieve` scores every stored
+memory by the normalized, weighted combination of recency, importance, and relevance, and
+returns the top `k`:
+
+```python
+class MemoryStream:
+    def __init__(self, decay=0.995, weights=(1.0, 1.0, 1.0), reflection_threshold=15):
+        self.memories = []
+        self.decay = decay
+        self.w_recency, self.w_importance, self.w_relevance = weights
+        self.reflection_threshold = reflection_threshold
+        self.importance_since_reflection = 0
+        self.reflections = []
+
+    def add(self, description, importance, current_hour):
+        mem = MemoryObject(description, importance, current_hour)
+        self.memories.append(mem)
+        self.importance_since_reflection += importance
+        if self.importance_since_reflection >= self.reflection_threshold:
+            self._reflect(current_hour)
+        return mem
+
+    def retrieve(self, query, current_hour, k=3):
+        if not self.memories:
+            return []
+        recency = [self.decay ** (current_hour - m.last_accessed_hour) for m in self.memories]
+        importance = [m.importance / 10.0 for m in self.memories]
+        relevance = [keyword_overlap(query, m.description) for m in self.memories]
+        recency_n, importance_n, relevance_n = normalize(recency), normalize(importance), normalize(relevance)
+
+        scored = []
+        for i, m in enumerate(self.memories):
+            score = (self.w_recency * recency_n[i] + self.w_importance * importance_n[i]
+                     + self.w_relevance * relevance_n[i])
+            scored.append((score, m))
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        top = scored[:k]
+        for _, m in top:
+            m.last_accessed_hour = current_hour
+        return [m for _, m in top]
+
+    def _reflect(self, current_hour):
+        recent = self.memories[-10:]
+        themes = {}
+        for m in recent:
+            for word in m.description.lower().strip(".").split():
+                word = word.strip(",.")
+                if len(word) > 4 and word not in REFLECTION_STOPWORDS:
+                    themes[word] = themes.get(word, 0) + 1
+        top_theme = max(themes, key=themes.get) if themes else "recent events"
+        text = f"Reflection: a recurring theme in recent memory is '{top_theme}'."
+        reflection = MemoryObject(text, importance=5, created_at_hour=current_hour)
+        self.memories.append(reflection)
+        self.reflections.append(reflection)
+        self.importance_since_reflection = 0
+        return reflection
+```
+
+**Step 3: A short simulated day, then a retrieval.** Seven events are added across six
+simulated hours, mixing low-importance routine with a high-importance thread about a
+workplace promotion and a surprise party. The reflection threshold here is set to 15
+rather than the paper's 150 purely because this demonstration has seven events total
+rather than a full simulated day's worth; the mechanism is identical, only scaled down so
+that a threshold crossing is actually reachable within a short example:
+
+```python
+stream = MemoryStream(decay=0.995, reflection_threshold=15)
+
+stream.add("Agent brushed teeth in the morning", importance=2, current_hour=0)
+stream.add("Agent had a long conversation about a promotion at work", importance=8, current_hour=1)
+stream.add("Agent made the bed", importance=1, current_hour=1)
+stream.add("Agent's coworker mentioned a surprise party planned for the promotion", importance=7, current_hour=2)
+# cumulative importance so far: 2 + 8 + 1 + 7 = 18, past the threshold of 15
+
+stream.add("Agent ate lunch alone", importance=2, current_hour=3)
+stream.add("Agent asked a friend about the party plans", importance=6, current_hour=4)
+stream.add("Agent bought a gift for the promotion celebration", importance=9, current_hour=5)
+# cumulative importance since the last reflection: 2 + 6 + 9 = 17, past the threshold again
+
+top = stream.retrieve("promotion party", current_hour=6, k=3)
+```
+
+Running this produces exactly two reflections, one after the fourth event and one after
+the seventh, and a top-3 retrieval for `"promotion party"` of the gift purchase, the
+surprise-party mention, and the friend conversation, in that order, with neither the
+teeth-brushing nor the bed-making memory anywhere in it despite both having been
+retrievable candidates. That ordering is not hard-coded; it falls directly out of the
+scoring formula. The gift purchase wins because it is both the single most recent event in
+the stream and the single highest-rated for importance, which together outweigh that its
+description shares only one query word, "promotion," rather than both. The surprise-party
+mention has the opposite profile, a perfect match on both query words but a lower
+importance rating and less recency than the gift, and lands second rather than first for
+exactly that reason. The friend conversation shares the gift's partial keyword match but
+trails both on importance, landing third. The two routine memories score at or near zero
+on every one of the three signals and never come close, and the retrieval function only
+ever looks at scores, never at which memory a person would find obviously more
+interesting.
+Both assertions, the reflection count and the exclusion of the routine memories from the
+top-3, were checked by actually running this code rather than predicted by hand, and both
+passed.
+
+The detail worth sitting with is what the reflection step actually bought here. Without
+it, a query touching a topic that spans several small events, the coworker's mention, the
+friend conversation, the gift purchase, has to rediscover the connection between them from
+three separate, unlinked memories every single time it is asked. With it, a fourth memory
+object exists that already states the connection in one place, available for retrieval on
+equal footing with everything else, which is exactly Generative Agents' claim about what
+reflection is for: not remembering more, but remembering the same amount in a form that
+takes less work to use later.
