@@ -21,10 +21,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [8.3 The Agent Loop: Plan, Act, Observe, Reflect (ReAct and Beyond)](./8-3-the-agent-loop-plan-act-observe-reflect-react-and-beyond.mdx)
 - [8.4 Tool Use and Function Calling: A Deep Dive](./8-4-tool-use-and-function-calling-deep-dive.mdx)
 - [8.5 Memory Systems for Agents: A Comparative Deep Dive](./8-5-memory-systems-for-agents-compared.mdx)
+- [8.6 Context Engineering for Agents](./8-6-context-engineering-for-agents.mdx)
 
 ## Planned chapters
 
-- 8.6 [v3] Context Engineering for Agents
 - 8.7 Planning & Reasoning Strategies: CoT, ReAct, Reflexion, Plan-and-Execute, Graph-of-Thought
 - 8.8 Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot
 - 8.9 [v5] Conversational & Agent UX Design

@@ -1,0 +1,428 @@
+---
+title: "Context Engineering for Agents"
+sidebar_label: "8.6 Context Engineering for Agents"
+sidebar_position: 6
+phase: 8
+chapter: "8.6"
+lms_presentation: "8.6-Context-Engineering-for-Agents-Slides.pptx"
+prerequisites: ["8.2", "8.3", "8.4", "8.5"]
+tags: ["agents", "context-engineering", "compaction", "sub-agents", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+Chapter 8.5 asked what belongs in the context window versus what belongs in external
+storage. This chapter asks the question one level up: everything that ends up in the
+context window, the system prompt, the tool definitions, retrieved memories, conversation
+history, is competing for the same fixed, finite budget, and more of it is not automatically
+better. Anthropic's own framing draws the line precisely: "prompt engineering refers to
+methods for writing and organizing LLM instructions for optimal outcomes," while "context
+engineering refers to the set of strategies for curating and maintaining the optimal set of
+tokens (information) during LLM inference, including all the other information that may
+land there outside of the prompts." A context window that could technically hold everything
+relevant to a task is not the same as a context window that should. This chapter covers the
+four places that curation decision actually gets made: how tightly a system prompt is
+scoped, how many tools an agent is handed at once, whether content is loaded up front or
+fetched just-in-time, and how a long-running task keeps its accumulating history from
+crowding out everything else.
+
+## High-Level Explanation
+
+Every token in a context window is not free, and this is true in a stronger sense than
+just "tokens cost money." A transformer's self-attention mechanism forms a relationship
+between every pair of tokens, "n² pairwise relationships for n tokens," so a longer context
+does not just cost more, it changes how much attention any single piece of it can actually
+receive. Empirically, this shows up as a documented phenomenon: "as the number of tokens in
+the context window increases, the model's ability to accurately recall information from
+that context decreases," a pattern given a name, context rot. "Context, therefore, must be
+treated as a finite resource with diminishing marginal returns." Context engineering is the
+discipline built around that constraint: not maximizing what goes into the window, but
+choosing, deliberately, what earns a place in it.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-6-context-window-as-a-finite-budget.svg').default}
+    alt="A context window is a fixed token budget divided among four kinds of content: a system prompt pitched at the right altitude, curated and non-overlapping tool definitions, content retrieved just-in-time rather than pre-loaded wholesale, and conversation history kept small through compaction plus a persisted scratchpad. Below, a declining curve shows recall accuracy falling as the number of tokens in context increases, even when every added token is technically relevant, a pattern called context rot, attributed to self-attention forming n-squared pairwise relationships for n tokens all competing for the same fixed capacity. A closing note states that context engineering is deciding what earns a place in this fixed budget: not more context, the right context, at the right time."
+  />
+  <figcaption>Four kinds of content compete for one fixed budget, and context rot is why filling that budget carelessly has a real cost.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Context as a Finite, Attention-Limited Resource
+
+It is worth being precise about why context rot is a real, structural finding rather than
+a vague warning against long prompts. Self-attention computes, for every token, a weighted
+combination of every other token in the sequence, which is exactly what produces "n²
+pairwise relationships for n tokens": doubling the length of a context does not double the
+work, it roughly quadruples the number of pairwise relationships competing for the model's
+attention. Anthropic's own analogy makes the consequence concrete: "like humans, who have
+limited working memory capacity, LLMs have an 'attention budget' that they draw on when
+parsing large volumes of context." Needle-in-a-haystack style benchmarks are what turned
+this from a theoretical concern into a measured one, showing directly that recall accuracy
+over a fixed target fact declines as unrelated context around it grows, even when nothing
+about the target fact itself has changed. This has a specific, counter-intuitive
+implication: adding more genuinely relevant information to a context window is not always a
+net improvement, because every token added, relevant or not, is one more competitor for the
+same fixed attention budget every other token in that window is also drawing on. Chapter
+8.5's write and retrieve gates were framed as a cost-and-capacity problem, tokens are
+expensive and the window has a hard limit; this sub-section adds a second, independent
+reason the same gates matter, that a full-but-under-the-limit context window can already be
+degrading the quality of what the model does with everything in it, well before the hard
+limit is ever reached.
+
+Needle-in-a-haystack testing is what turned this from an argument about attention
+mechanics into a measurable claim, and the design of that test is itself informative:
+a single target fact is planted at a known position inside an otherwise unrelated,
+increasingly long span of filler text, and the model is asked to recall the fact. Nothing
+about the target fact changes across test runs, only the amount of unrelated content
+surrounding it, and recall accuracy still declines as that surrounding volume grows. This
+rules out the obvious alternative explanation, that longer contexts fail because they more
+often contain genuinely conflicting or distracting information; the filler in these
+benchmarks is inert by construction, and performance still degrades. Chapter 8.5's
+retrieval score is directly exposed to this finding in a way that is easy to miss: a
+retrieve gate that returns a generous top-k, on the reasoning that more retrieved context
+can only help, is not a free hedge against under-retrieving. Every additional memory
+object it admits is additional filler competing for the same attention budget as the one
+memory object that actually mattered for the current turn, which means a retrieval policy
+tuned to be maximally inclusive can measurably hurt the same reasoning it was meant to
+support, not merely waste tokens doing so.
+
+### System Prompts at the Right Altitude
+
+A system prompt is the first and most persistent thing competing for that budget, present
+on every single turn for the life of an agent's run, and Anthropic's guidance names two
+specific, opposite ways to get it wrong rather than treating "write a good system prompt"
+as a single skill. The first failure mode is over-specification: "engineers hardcoding
+complex, brittle logic in their prompts to elicit exact agentic behavior," which "creates
+fragility and increases maintenance complexity over time," because every edge case not
+explicitly anticipated in that hardcoded logic has no fallback to fall back on, and every
+new edge case discovered in production means another patch to an already-brittle prompt.
+The second failure mode sits at the opposite end: "engineers sometimes provide vague,
+high-level guidance that fails to give the LLM concrete signals for desired outputs or
+falsely assumes shared context," which fails for the reverse reason, the model is left to
+guess at specifics the prompt writer had in mind but never actually wrote down. "The right
+altitude is the Goldilocks zone between two common failure modes," concrete enough to be
+actionable without trying to enumerate every case in advance, general enough to generalize
+without leaving genuinely important specifics unstated. This is not a compromise splitting
+the difference between the two failure modes; it is a distinct design target, closer to
+writing a job description an experienced hire could act on than either a legal contract
+trying to cover every contingency or a one-line mission statement. Getting the altitude
+right also has a direct token-budget consequence tying back to the previous sub-section: an
+overly brittle prompt tends to be long, itself competing for attention budget with
+everything else the agent needs to use to actually reason well within it.
+
+The two failure modes are easiest to tell apart by what they do when a genuinely new
+situation arrives, one the prompt's author did not specifically anticipate. A brittle
+prompt tends to read like an ever-growing list of conditionals accumulated over many
+rounds of patching, if the user asks about billing then do this, if they mention a refund
+then do that, each rule added in response to one specific incident, and a new situation
+that does not match any existing rule leaves the model with no guidance at all, forced to
+extrapolate from a list of specifics that was never meant to generalize. A vague prompt
+fails the opposite way on the very first situation: told only to "handle customer
+questions helpfully," the model has no way to know whether this particular business wants
+a formal or casual tone, whether refunds need a supervisor's approval, or what counts as
+an escalation, because none of that was ever stated and none of it can be safely assumed.
+The right-altitude alternative states the underlying principle once, refunds under a
+stated dollar threshold can be approved directly, larger ones need escalation, rather than
+enumerating every dollar amount and every product category separately, which is exactly
+what lets it cover a new product or a new dollar amount it has never specifically seen
+without requiring a prompt edit first.
+
+### Tool Design as Context Engineering
+
+Chapter 8.4 covered tool design failure modes, ambiguous descriptions, overlapping tool
+sets, from the standpoint of getting a single call right. Context engineering reframes the
+same failure modes from a different angle, as a budget problem rather than only a decision-
+quality problem: every tool definition an agent is handed sits in context on every single
+turn, whether or not that turn ever calls it, which means a bloated tool set is not merely
+a source of wrong choices, it is a permanent tax on the same attention budget the previous
+two sub-sections already described as scarce. "One of the most common failure modes we see
+is bloated tool sets that cover too much functionality or lead to ambiguous decision points
+about which tool to use." The diagnostic Anthropic proposes for whether a tool set has
+crossed this line is worth stating precisely because it does not require guessing at the
+model's internal experience at all: "if a human engineer can't definitively say which tool
+should be used in a given situation, an AI agent can't be expected to do better." That test
+converts a fuzzy question, is this tool set well designed, into a concrete one, could a
+person unfamiliar with the model's internals but familiar with the tools pick the right one
+every time, and if the honest answer is no, the fix is tool design discipline, consolidating
+overlapping tools or sharpening descriptions, not a more capable model absorbing the
+ambiguity the tool set itself created. Curating a tool set well is, in this specific sense,
+indistinguishable from curating any other kind of content competing for context: fewer,
+sharper, non-overlapping options beat a larger set covering the same ground redundantly,
+for exactly the reason a shorter, sharper system prompt beats a longer, hedgier one.
+
+Of Chapter 8.4's three named tool-design failure modes, ambiguous descriptions, overlapping
+tool sets, and malformed calls reaching execution, the context-budget framing lands hardest
+on the second. An ambiguous description is a quality problem regardless of how many tools
+surround it, and a malformed call is caught, or not, by validation regardless of context
+length; overlapping tool sets, by contrast, are specifically a volume problem, more
+definitions occupying the same fixed budget without adding any capability a smaller,
+better-organized set could not have provided. This is also where just-in-time thinking,
+covered next, applies directly to tools themselves rather than only to retrieved content: a
+system with fifty tools spanning several unrelated domains does not need to hold all fifty
+definitions in every single context window if most tasks only ever touch a handful of them.
+Loading a smaller, task-relevant subset of tool definitions, determined dynamically rather
+than fixed once at design time, keeps the per-turn token cost close to what a five-tool
+agent would pay while still leaving the full fifty available to whichever task actually
+needs them, trading a small amount of upfront routing complexity for a context window that
+is never paying for capability a given task has no use for.
+
+### Just-in-Time Retrieval vs. Upfront Loading
+
+Chapter 8.5 described a retrieve gate without fully specifying when it fires. Context
+engineering gives that timing question a name and a default answer. The default Anthropic
+describes is deliberately lazy: "rather than pre-processing all relevant data up front,
+agents built with the 'just in time' approach maintain lightweight identifiers (file paths,
+stored queries, web links, etc.) and use these references to dynamically load data into
+context at runtime using tools." The identifier itself, a file path, a query, a link, costs
+almost nothing in tokens; the actual content it points to is only paid for, in tokens and in
+attention budget, at the moment something in the task actually needs it. This is a direct
+extension of Chapter 8.5's own comparison: MemGPT's function-call-driven memory writes were
+already an example of the model deciding, at the moment of need, that something belongs in
+or out of context, and just-in-time retrieval generalizes that same decision to any external
+resource, not only an agent's own memory store. The alternative, loading everything a task
+might plausibly need before reasoning even starts, trades a slower, more deliberate first
+step for a context window front-loaded with content that may turn out to be irrelevant to
+however the task actually unfolds, paying the context-rot cost described earlier for
+information that never ends up being used. Neither approach dominates the other
+unconditionally, which is why production systems often do not pick one exclusively: "in
+certain settings, the most effective agents might employ a hybrid strategy, retrieving some
+data up front for speed, and pursuing further autonomous exploration at its discretion."
+Loading a small, high-confidence set of context eagerly, then falling back to just-in-time
+retrieval for anything that set turns out not to cover, captures most of the latency
+benefit of upfront loading without fully re-introducing the token cost of loading
+everything.
+
+A concrete contrast makes the trade-off easier to see than either description alone. Told
+to fix a reported bug in one file of a large codebase, an agent following the upfront
+approach might load that file along with everything it imports, everything that imports
+it, and the project's full test suite, on the reasoning that any of it could conceivably be
+relevant, paying the full context-rot cost of all of it before reasoning has even started
+narrowing down what the bug actually is. An agent following the just-in-time approach
+instead loads only the one reported file to start, keeping a lightweight reference, a file
+path, to everything it imports rather than the imported content itself, and only follows
+one of those references into context if reasoning actually traces the bug to a call
+crossing into that specific file. In the common case, where the bug is local to the file
+originally reported, the just-in-time agent never pays for the rest of the codebase at all;
+in the less common case where the bug genuinely spans several files, it pays for exactly
+the files the trace actually visits, still short of the upfront approach's blanket load. The
+upfront approach only wins outright when nearly everything loaded turns out to be
+necessary, which is precisely the condition a hybrid strategy is designed to detect and
+exploit without committing to either extreme in advance.
+
+### Managing Long-Horizon Tasks: Compaction, Note-Taking, and Sub-Agents
+
+A task that runs for many turns eventually accumulates more history than the previous four
+sub-sections' curation policies alone can keep small, and three distinct techniques address
+that accumulation rather than the initial curation decision. Compaction addresses it by
+periodically starting over from a smaller base: "compaction is the practice of taking a
+conversation nearing the context window limit, summarizing its contents, and reinitiating a
+new context window with the summary." Concretely, "in Claude Code, for example, we
+implement this by passing the message history to the model to summarize and compress the
+most critical details," trading the full, verbatim history for a compressed one, which
+recovers most of the attention budget the original history was consuming at the cost of
+whatever specific detail the summarization step fails to preserve, a cost that is only as
+small as the summarization step is good. Structured note-taking addresses a different part
+of the same problem by not relying on the context window to hold anything durable at all:
+"structured note-taking, or agentic memory, is a technique where the agent regularly writes
+notes persisted to memory outside of the context window. These notes get pulled back into
+the context window at later times." This is Chapter 8.5's write gate applied specifically
+to the agent's own working notes rather than to general long-term memory, and it composes
+directly with compaction rather than competing with it: a fact written to a persisted note
+survives a compaction pass intact, because compaction only ever summarizes what is still
+inside the context window, never what has already been moved outside it. Sub-agent
+architectures address the same accumulation from a third angle entirely, not by compressing
+or externalizing history, but by never letting one context window accumulate all of it in
+the first place: "rather than one agent attempting to maintain state across an entire
+project, specialized sub-agents can handle focused tasks with clean context windows. The
+main agent coordinates with a high-level plan while subagents perform deep technical work or
+use tools to find relevant information." A sub-agent's context window fills with only the
+detail its one focused task needs, and only a summary of its result, not its full working
+history, ever has to cross back into the main agent's own context, which keeps the main
+agent's budget spent on coordination rather than on every sub-task's intermediate steps.
+None of these three techniques is a strict improvement on the others; compaction risks
+losing detail the summarization step judged unimportant, structured notes require the agent
+to correctly judge what is worth writing down before it is needed, and sub-agent
+architectures add coordination overhead and the risk that a sub-agent's summary omits
+something the main agent actually needed. A long-running agent's design is, in large part,
+a decision about which of these three specific costs it can most afford to pay.
+
+Compaction's specific risk also compounds in a way worth naming directly: a task long
+enough to trigger one compaction pass is often long enough to eventually trigger a second,
+and a second compaction pass summarizes a context window that already contains a first
+pass's summary rather than the original, verbatim turns. Whatever detail the first
+summarization step judged safe to drop is gone before the second pass ever runs, and the
+second pass cannot recover it, it can only summarize what survived the first cut. This is
+precisely why structured note-taking and compaction are complementary rather than
+redundant: a fact worth surviving many compaction cycles is a fact worth moving into a note
+once, rather than trusting it to survive being summarized repeatedly. Sub-agent
+architectures can draw on both of the other two techniques internally without the main
+agent needing to know which one a given sub-agent used, a sub-agent handling a long enough
+focused task can compact its own history or write its own structured notes exactly as a
+top-level agent would, and only the final summary that crosses back to the main agent has
+to reflect whatever internal bookkeeping the sub-agent needed to get there.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Compaction', 'Structured note-taking', 'Sub-agent isolation']}
+  rows={[
+    {aspect: 'Where the accumulated detail ends up', values: ['Summarized and kept inside a reinitialized context window', 'Written outside the context window, pulled back in only when needed', 'Never enters the main context at all; only a sub-agent\'s summary does'], decisive: true},
+    {aspect: 'What is at risk of being lost', values: ['Anything the summarization step judges unimportant', 'Anything the agent fails to recognize as worth writing down at the time', "A sub-agent's working detail its own summary omits"] },
+    {aspect: 'What it costs to run', values: ['One extra summarization call each time the window nears its limit', 'Negligible per note, but requires the write-gate judgment from Ch. 8.5', 'Coordination overhead between the main agent and each sub-agent'] },
+    {aspect: 'What it composes with', values: ['Runs on whatever is still in context; does not touch anything already externalized', 'Survives compaction untouched, since it was never in the summarized window', 'Can use compaction or note-taking internally, invisibly to the main agent'] },
+  ]}
+  caption="These are not competing solutions to the same problem so much as three different places to spend the same underlying cost, lost detail, agent judgment, or coordination overhead, and most production long-horizon agents combine at least two of the three."
+/>
+
+Retrieval-augmented generation, covered in Phase 6, and just-in-time context retrieval
+describe closely related mechanics, fetching relevant content at the moment it is needed,
+but differ in what triggers the fetch: a RAG pipeline typically retrieves once per query
+against a static corpus, while an agent's just-in-time retrieval is triggered repeatedly,
+at the model's own discretion, against whatever sources, files, memory, web pages, the task
+happens to need at each step, using Chapter 8.4's tool-calling mechanism as the trigger
+itself.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A main agent's context stays small; sub-agents absorb the detail"
+  mermaid={`
+flowchart TD
+  MAIN[Main agent: high-level plan]
+  DECIDE{Needs focused, detailed work?}
+  SUB[Sub-agent: clean context window, one focused task]
+  SUMMARY[Summary of sub-agent's result]
+  COMPACT[Compaction: summarize + reinitialize]
+  NOTES[(Persisted notes, outside context)]
+
+  MAIN --> DECIDE
+  DECIDE -- yes --> SUB --> SUMMARY --> MAIN
+  DECIDE -- no --> MAIN
+  MAIN -- nearing limit --> COMPACT --> MAIN
+  MAIN -- write a note --> NOTES
+  NOTES -- read back later --> MAIN
+`}
+  components={[
+    {name: 'Main agent', responsibility: 'Holds the high-level plan and coordinates; never accumulates a sub-agent\'s full working history.'},
+    {name: 'Needs focused, detailed work?', responsibility: 'The main agent\'s own judgment call about whether the next step is worth delegating rather than handling inline.'},
+    {name: 'Sub-agent', responsibility: 'Gets a clean context window scoped to one focused task; nothing about the main task\'s history is inherited.'},
+    {name: 'Summary', responsibility: 'The only thing that crosses back from a sub-agent to the main agent, deliberately smaller than the sub-agent\'s own context.'},
+    {name: 'Compaction', responsibility: 'Fires when the main agent\'s own context nears its limit, summarizing and reinitializing rather than growing further.'},
+    {name: 'Persisted notes', responsibility: 'Chapter 8.5\'s write gate applied to working notes; survives compaction because it was never inside the summarized window.'},
+  ]}
+/>
+
+Three of this chapter's four long-horizon techniques appear in this one diagram
+deliberately, because a real long-running agent rarely relies on only one: a main agent
+delegates detailed work to keep its own context clean, compacts what remains when even that
+grows too large, and writes anything durable to a note rather than trusting either the live
+context or a compaction pass to preserve it.
+
+## Hands-On: Compaction and Structured Notes, Side by Side
+
+The clearest way to see compaction and structured note-taking as genuinely different
+mechanisms, not two names for the same idea, is to run them together against the same
+simulated task and check what each one does and does not preserve.
+
+**Step 1: A token-budget-aware context manager.** Token counts are approximated as
+whitespace-split word counts, and summarization is a deterministic heuristic, pulling out
+capitalized tokens and numbers, standing in for a real LLM summarization call, so this runs
+without any network access:
+
+```python
+def token_count(turns):
+    return sum(len(t.split()) for t in turns)
+
+def summarize(turns):
+    facts = []
+    skip = {"the", "agent", "a", "i", "an", "to", "for", "and", "on", "in", "at"}
+    for t in turns:
+        for word in t.split():
+            stripped = word.strip(".,:;!?")
+            if not stripped:
+                continue
+            if stripped.isdigit():
+                facts.append(stripped)
+            elif stripped[:1].isupper() and stripped.lower() not in skip:
+                facts.append(stripped)
+    unique_facts = list(dict.fromkeys(facts))
+    return f"Summary of {len(turns)} earlier turns. Key facts retained: {', '.join(unique_facts)}."
+```
+
+**Step 2: Compaction and a separate, untouched scratchpad.** `add_turn` triggers
+compaction only once the running token count exceeds the budget; `write_note` puts
+something in the scratchpad, which `_compact` never reads from or writes to:
+
+```python
+class ContextManager:
+    def __init__(self, token_budget=75, keep_recent=2):
+        self.turns = []
+        self.scratchpad = []
+        self.token_budget = token_budget
+        self.keep_recent = keep_recent
+        self.compactions = 0
+
+    def add_turn(self, text):
+        self.turns.append(text)
+        if token_count(self.turns) > self.token_budget:
+            self._compact()
+
+    def _compact(self):
+        if len(self.turns) <= self.keep_recent:
+            return
+        to_summarize = self.turns[: -self.keep_recent]
+        recent = self.turns[-self.keep_recent:]
+        summary = summarize(to_summarize)
+        self.turns = [summary] + recent
+        self.compactions += 1
+
+    def write_note(self, note):
+        self.scratchpad.append(note)
+
+    def context_now(self):
+        return self.scratchpad + self.turns
+```
+
+**Step 3: A six-turn debugging task, with one fact written as a note up front.** A ticket
+number is deliberately written to the scratchpad before any turns are added, separately
+from the same ticket number that also appears naturally inside the turns themselves:
+
+```python
+cm = ContextManager(token_budget=75, keep_recent=2)
+cm.write_note("Ticket ID: 4521")
+
+cm.add_turn("Agent opened Ticket 4521 reported by Maria about a failing Checkout page on Friday")
+cm.add_turn("Agent searched the logs and found a NullPointerException in PaymentValidator on line 88")
+cm.add_turn("Agent reproduced the bug locally using Chrome and confirmed it only happens for Guest checkout")
+cm.add_turn("Agent proposed a fix in PaymentValidator adding a null check before calling validate")
+cm.add_turn("Agent ran the test suite and 47 tests passed with zero failures after the fix")
+cm.add_turn("Agent asked Maria to confirm the fix resolves the original report from Ticket 4521")
+```
+
+Running this triggers exactly one compaction, after the sixth turn pushes the running
+count past the 75-token budget. The four oldest turns collapse into a single summary
+retaining "Ticket, 4521, Maria, Checkout, Friday, NullPointerException, PaymentValidator,
+88, Chrome, Guest" as key facts, while the two most recent turns are kept verbatim, leaving
+three items in the context window afterward instead of six. The scratchpad, checked
+separately, still contains exactly the one note written before any turn was ever added,
+untouched by the compaction pass that just ran, because `_compact` only ever reads and
+writes `self.turns`. Both the single compaction and the scratchpad's exact, unchanged
+contents were confirmed by actually running this code, not predicted by hand.
+
+The detail worth sitting with is why the ticket number survives twice, for two entirely
+different reasons. It survives inside the compacted summary because the summarization
+heuristic happened to treat "4521" as a key fact worth retaining, a judgment call that
+could, in principle, have gone the other way if the heuristic, or a real summarization
+model standing in for it, judged differently. It survives in the scratchpad for a
+structurally different reason: not because anything judged it important enough to keep
+during a lossy compression step, but because it was never inside the thing being compressed
+in the first place. A fact whose loss would be genuinely costly belongs in a structured
+note precisely because that guarantee, and only that guarantee, does not depend on a
+summarization step continuing to make the right call every single time it runs.
