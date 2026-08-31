@@ -1,0 +1,505 @@
+---
+title: "Single-Agent Reference Architecture Blueprint"
+sidebar_label: "8.10 Single-Agent Reference Architecture"
+sidebar_position: 10
+phase: 8
+chapter: "8.10"
+lms_presentation: "8.10-Single-Agent-Reference-Architecture-Blueprint-Slides.pptx"
+prerequisites: ["8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9"]
+tags: ["agents", "architecture", "blueprint", "guardrails", "reference-architecture"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+This chapter introduces almost no new mechanism. Every layer it names, perception and
+context, memory, tool use, planning, UX and confirmation, has already been built in detail
+somewhere in Chapters 8.2 through 8.9; what has not happened yet is assembling them into one
+coherent picture of a single, complete agent. That assembly is worth doing carefully rather
+than assuming it is obvious, because two independent vendors converge on essentially the same
+shape when they describe what a production agent actually consists of: Anthropic frames the
+core as "an LLM enhanced with augmentations such as retrieval, tools, and memory," while
+OpenAI decomposes an agent into exactly three parts, "the LLM powering the agent's reasoning
+and decision-making," "external functions or APIs the agent can use to take action," and
+"explicit guidelines and guardrails defining how the agent behaves." This chapter is
+explicitly scoped to a single agent, not a multi-agent system, and that scope is a deliberate
+choice this course shares with production guidance rather than a limitation: OpenAI's own
+recommendation is to "maximize a single agent's capabilities first," since multiple agents
+"can introduce additional complexity and overhead" that a single, well-built agent often does
+not need. This chapter is where that single agent finally gets fully assembled, wired
+together, and traced through one complete request from first input to final answer.
+
+## High-Level Explanation
+
+Picture a single agent as six layers stacked on top of one another, each one built in an
+earlier chapter, read from the bottom up in the order a piece of reasoning actually
+originates. At the base sits the augmented LLM core from Chapter 8.2, the model plus its
+instructions, the one reasoning primitive every other layer exists to extend rather than
+replace. Above it, tool use from Chapter 8.4 gives that reasoning a way to act on the world
+rather than only describe it. Above that, memory and context engineering from Chapters 8.5
+and 8.6 determine what persists across turns and what actually gets assembled into the
+model's context window on any given turn. Above that, the planning strategy layer from
+Chapter 8.7 decides, given everything currently in context, what the next action should
+actually be. Above that sits a layer this chapter introduces directly, guardrails, which
+validate a chosen action and its eventual result against policy before either one is allowed
+to proceed. At the very top, the UX and interaction layer from Chapter 8.9 shows the user
+what is happening and gates any action that needs a human's approval first. None of these
+six layers runs once per task; Chapter 8.3's agent loop cycles through all six of them once
+per step, which is precisely why a multi-step task involves the stack executing repeatedly
+rather than once. Crucially, what a finished system built from this exact stack gets called,
+a chatbot, an assistant, a copilot, or an agent in Chapter 8.8's sense, is determined entirely
+by how the top two layers are configured, how aggressively the guardrails constrain scope and
+how readily the confirmation gate fires, not by which of the six layers happen to be present.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-10-single-agent-blueprint-stack.svg').default}
+    alt="A vertical stack of six layers represents one single agent's architecture, read top to bottom in the order a request actually flows through them. The UX and interaction layer from Chapter 8.9 shows status and gates confirmation. Guardrails validate inputs and outputs against policy. The planning strategy layer from Chapter 8.7 decides what happens next. Memory and context engineering from Chapters 8.5 and 8.6 determine what persists and what is assembled into context this turn. Tool use from Chapter 8.4 executes the chosen action against the real world. At the bottom, the augmented LLM core from Chapter 8.2, the model plus its instructions, is the one reasoning primitive every other layer extends. A looping arrow beside the stack states that the agent loop from Chapter 8.3 cycles through all six layers once per step, not once per entire task. A closing note states that what this system is called depends on how the top two layers are configured, not on which of the six layers are present, since a chatbot, a copilot, and an agent can be, and often is, this exact same stack."
+  />
+  <figcaption>Six layers, each already built in an earlier chapter, assembled into one blueprint the agent loop cycles through every step.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### The Augmented LLM: The One Primitive Everything Else Extends
+
+Chapter 8.2 decomposed an LLM agent into perception, reasoning, memory, action, and tools as
+five conceptual capabilities; this section's job is to show that two organizations building
+production agent systems, with different products and different commercial incentives,
+independently arrived at essentially the same minimal core when describing what actually has
+to exist before any of the later chapters' refinements matter. Anthropic states it plainly:
+"The basic building block of agentic systems is an LLM enhanced with augmentations such as
+retrieval, tools, and memory," adding that current models "can actively use these
+capabilities, generating their own search queries, selecting appropriate tools, and
+determining what information to retain" rather than needing every augmentation
+hand-orchestrated by surrounding code. OpenAI's own decomposition names three components
+instead of listing augmentations, but covers the identical ground: "the LLM powering the
+agent's reasoning and decision-making" is the model; "external functions or APIs the agent
+can use to take action" is Chapter 8.4's tool use; and "explicit guidelines and guardrails
+defining how the agent behaves" covers both the system prompt Chapter 8.6 discussed at
+length and the guardrails layer this chapter adds. Two vendors describing the same minimal
+core from different angles, one framing it as an LLM with augmentations, the other as three
+named components, is itself evidence that this is close to the actual, load-bearing shape of
+a production agent rather than one company's particular design choice.
+
+The practical reason to start a blueprint here rather than with a more elaborate diagram is
+that both sources independently warn against reaching for the full stack before it is
+needed. Anthropic's own guidance is direct: "For many applications, however, optimizing
+single LLM calls with retrieval and in-context examples is usually enough," and the broader
+philosophy behind that observation, "start with simple prompts, optimize them with
+comprehensive evaluation, and add multi-step agentic systems only when simpler solutions
+fall short," applies with equal force inside this chapter's own blueprint. Every layer above
+the augmented LLM core in this chapter's stack, sophisticated memory retrieval, a
+non-trivial planning strategy, an elaborate guardrail policy, a full confirmation-gated UX,
+is a specific answer to a specific problem a simpler system was actually failing to solve,
+not a checklist to implement unconditionally because Phase 8 covered it. A task that a single
+augmented LLM call already handles reliably does not need Chapter 8.7's planning-strategy
+selection layered on top of it; the blueprint this chapter assembles is meant to be built up
+layer by layer as a specific task's actual requirements demand each one, not poured in all
+at once.
+
+Each layer above the core has a specific, checkable trigger that justifies adding it, rather
+than a vague sense that a more sophisticated agent needs more sophistication everywhere. Tool
+use earns its place once a task requires information or an effect the model's own generated
+text cannot supply, a real lookup, a real side effect in another system; a task fully
+answerable from what the model already knows needs no tools at all, whatever else the
+blueprint eventually grows to include. Memory beyond the current turn earns its place once a
+task spans more than one turn or more than one session in a way that repeating context every
+time would waste; a single-turn question has nothing for a memory layer to do. A
+non-default planning strategy earns its place once Chapter 8.7's own cost-versus-recovery
+tradeoff actually favors one, a task cheap to verify and cheap to redo needs nothing more
+than the simplest reactive choice. Guardrails beyond whatever the base model already refuses
+earn their place once the task's own action space includes something genuinely sensitive
+enough to warrant an explicit, auditable check rather than trusting the model's default
+judgment alone. A blueprint assembled by checking each trigger against the actual task, layer
+by layer, is a fundamentally different exercise than one assembled by implementing every
+layer this phase covered because the phase covered it, and only the former is the discipline
+Anthropic's own guidance is actually recommending.
+
+### Perception, Context, and Memory: What Enters the Loop Each Turn
+
+The bottom three layers of this chapter's stack, tools aside, are jointly responsible for
+answering a single question every time the agent loop runs a step: what, exactly, does the
+model see this turn? Chapter 8.2's perception concept and Chapter 8.6's context-engineering
+techniques answer this from the assembly side: a context constructor gathers the current
+user input, whatever system-prompt instructions apply at Chapter 8.6's "Goldilocks zone" of
+altitude, neither so specific it becomes brittle nor so vague it fails to constrain, and
+tool descriptions sized to avoid the tool-set bloat Chapter 8.6 warned degrades a model's
+ability to pick the right one. Chapter 8.5's memory systems answer the same question from
+the retention side: working context carries forward what the current task has already
+established, while external memory, scored by the recency, importance, and relevance weights
+Generative Agents introduced, supplies whatever from before this task began is worth pulling
+back in. These two concerns, what to assemble and what to retain, are not the same layer
+doing double duty; a context constructor with no memory behind it repeats itself across
+sessions, while a memory system with no disciplined context constructor in front of it risks
+exactly the context rot Chapter 8.6 measured, where relevant information gets buried under
+everything a less careful assembly step decided to include.
+
+This is also where Chapter 8.6's just-in-time-versus-upfront retrieval choice becomes a
+concrete architectural decision rather than an abstract tradeoff. A context constructor built
+around upfront loading assembles everything the current task might plausibly need before the
+agent loop's first step, favoring predictability at the cost of a larger initial context; one
+built around just-in-time retrieval assembles a lightweight identifier set and defers pulling
+full content until a specific step's planner actually requests it, favoring a smaller
+context at the cost of an extra retrieval round-trip mid-task. Neither choice is universally
+correct, and a blueprint that hardcodes one without checking which the task's actual context
+budget and latency tolerance favor is making exactly the kind of premature complexity
+commitment the augmented LLM section just cautioned against. What matters for this chapter's
+purposes is that both choices are variations within the same layer of the stack, not
+different architectures entirely; swapping one retrieval strategy for the other changes how
+the memory-and-context layer is implemented without touching any other layer above or below
+it, which is precisely the kind of localized change a cleanly layered blueprint is supposed
+to make possible.
+
+Making this concrete, what the context constructor actually hands the planner for the
+order-status task this chapter traces is a small, specific object, not an open-ended blob of
+text: a system message describing the agent's role and limits, a short working-memory record
+of anything already established this session, an order ID if the user already supplied one,
+and the two tool descriptions, lookup and escalate, the planner is allowed to choose between.
+Every one of those four pieces is deliberately present and everything else is deliberately
+absent; the full order history, unrelated account settings, or a general product catalog have
+no claim on this turn's context regardless of how available they are elsewhere, because
+including them would spend Chapter 8.6's attention budget on tokens this specific step cannot
+use. This is the same discipline guideline four from Chapter 8.9's Amershi et al. framework
+argues for at the interaction layer, showing only what is relevant to the user's current
+task, applied one layer lower, to what the model itself is shown rather than what the user
+is shown. A context constructor that cannot explain, for a specific turn, why each included
+piece earns its place is not yet doing the job Chapter 8.6 described; it is closer to upfront
+loading by default, which Chapter 8.6 treated as one legitimate strategy among several, not
+as the absence of a strategy.
+
+### Planning and Guardrails: Deciding What Happens Next, and Whether It's Allowed
+
+Once context is assembled, Chapter 8.7's planning-strategy layer decides what the agent
+actually does next, and this chapter's blueprint treats that decision as a genuine design
+choice rather than a fixed default, exactly as Chapter 8.7's own closing section argued: a
+narrow, cheap-to-verify task like the Hands-On order-lookup scenario later in this chapter
+warrants a simple reactive, linear strategy, while a task whose intermediate steps are
+individually expensive to get wrong warrants the deliberative planning or branching
+strategies that same chapter catalogued. What Chapter 8.7 did not cover, because it belongs
+one layer up in this chapter's stack, is what happens to a planner's chosen action before it
+is allowed to run at all. Guardrails are OpenAI's own term for exactly this: "explicit
+guidelines and guardrails defining how the agent behaves," described as "a critical
+component of any LLM-based deployment" that functions as "a layered defense mechanism," with
+multiple specialized checks working together rather than one monolithic filter. A guardrail
+answers a different question than Chapter 8.9's confirmation gate does, even though both sit
+near the top of this chapter's stack and both can block an action: a guardrail asks whether
+an action is permitted at all under the system's own policy, refusing to look up a record
+outside an authorized scope, refusing to emit a response that leaks a system prompt, while
+the confirmation gate assumes the action is permitted and asks only whether a human should
+approve this specific instance of it before it runs. A well-formed blueprint needs both,
+because collapsing them into one layer conflates a policy violation, which should simply be
+refused, with a legitimate but consequential action, which should be paused for approval
+rather than refused outright.
+
+Placing guardrails as their own layer, distinct from both the planner and the confirmation
+gate, also clarifies where each of this chapter's earlier layers' failures actually get
+caught. A planning-strategy bug that proposes a nonsensical action is exactly what an input
+guardrail, checking the chosen action against policy before execution, is positioned to
+catch before any tool call happens; a tool that returns a malformed or policy-violating
+result is exactly what an output guardrail, checking the observation before it reaches the
+user or the next planning step, is positioned to catch after execution but before any
+downstream layer trusts it. This two-sided placement, one guardrail check before acting and
+one after observing, is why this chapter's reference architecture draws two separate
+guardrail boxes rather than one: an input violation and an output violation are different
+failures with different causes, and conflating them into a single generic "guardrail" step
+loses the information about which side of an action actually went wrong.
+
+OpenAI's description of guardrails as "a layered defense mechanism" is worth taking
+literally rather than as a figure of speech: a single input guardrail box in this chapter's
+diagram typically bundles several distinct, independently checkable policies rather than one
+monolithic rule, a scope check confirming the requested data belongs to the requesting user,
+a content check confirming the proposed action does not touch a category the deployment has
+excluded entirely, and a rate or cost check confirming the action does not exceed whatever
+budget this task has been given. Each of these can be implemented, tested, and updated
+separately, which matters in practice because a scope violation and a cost overrun call for
+different responses, one should simply refuse, the other might instead route back to the
+planner for a cheaper alternative, and a single undifferentiated guardrail step cannot make
+that distinction. This also connects directly back to Chapter 8.8's autonomy spectrum: a
+system built and marketed as a copilot, with its explicit design commitment to keep a human
+paired in, generally warrants a stricter guardrail policy, more categories excluded outright,
+lower thresholds before a check fires, than a system built as a fully autonomous agent
+operating in a narrower, well-understood domain, even when both are assembled from this exact
+same six-layer blueprint. The guardrail layer is where that difference in intended posture
+actually gets encoded as policy, rather than staying an unenforced description in a product's
+marketing copy.
+
+### Assembling the Blueprint: One Request, Traced Through Every Layer
+
+The clearest way to confirm these six layers actually form one coherent system, rather than
+six independently correct ideas that happen to share a chapter, is to trace one concrete
+request through all of them in order. A user asks about an order's status. The context
+constructor assembles the system prompt, whatever working memory the current session already
+holds, and the tool descriptions for order lookup and human escalation, exactly Chapter 8.2's
+perception and Chapter 8.6's context-engineering layer at work. The planner, running Chapter
+8.7's simplest reactive strategy since this task's actions are individually cheap to verify,
+decides the next action is to look up the order. The input guardrail checks that this lookup
+is within the requesting user's own authorized scope and lets it proceed. The reversibility
+check from Chapter 8.9 finds a lookup reversible and low-stakes, so it auto-proceeds without
+pausing for confirmation. The tool executes, Chapter 8.4's actual function-calling mechanism,
+and returns a real result: the order is delayed. The UX layer shows a brief status update per
+that same chapter's timing thresholds, the raw result becomes this step's observation, and the
+output guardrail checks that observation for anything that should not reach the user, finds
+nothing, and passes it onward. Because the task is not yet complete, a delayed order needs escalating, the loop
+returns to the planner rather than finishing, which now proposes escalating to a human. This
+time the reversibility check finds the action irreversible, so the confirmation gate fires,
+the UX layer surfaces exactly why an extra step is happening rather than leaving it silent,
+per Chapter 8.9's own guidance on surfacing re-planning events, and only after approval does
+the escalation tool actually run. The loop returns once more, finds nothing left to do, and
+finishes.
+
+A second trace through the same scenario, this time hitting a guardrail rather than the
+confirmation gate, shows the other failure path this chapter's architecture was built to
+handle. Suppose the same lookup returns an order that belongs to a different account than
+the one making the request, a scope violation rather than a reversibility question. The
+input guardrail catches this before the tool executor ever runs, exactly the layer this
+chapter placed it in to catch, and the loop does not proceed to the reversibility check at
+all, because an action that fails a policy check is refused outright rather than offered up
+for a human to approve. The distinction matters concretely here: routing a scope violation to
+the confirmation gate instead of refusing it outright would present a human reviewer with an
+action that should never have been proposed in the first place, asking them to catch a policy
+violation the guardrail layer already had the information to catch on its own. This is the
+practical payoff of keeping guardrails and the confirmation gate as two separate layers
+rather than one: a system that conflated them would either annoy reviewers with obviously
+invalid actions dressed up as approval requests, or, worse, let some of those same violations
+slip through if the confirmation step were ever bypassed for a trusted user.
+
+Every layer this chapter named did real work in that one trace, and, just as importantly, no
+layer needed to know the internal details of any other layer to do its job correctly: the
+planner did not need to know how the context constructor assembled its input, and the
+guardrail did not need to know which planning strategy proposed the action it is checking. A
+question worth asking of any real blueprint, and a genuine test of whether a proposed
+architecture is actually layered rather than layered in name only, is whether a specific
+layer can be swapped out, a different memory-retrieval strategy, a different planning
+strategy for a harder task, a stricter guardrail policy for a more sensitive deployment,
+without requiring changes to the layers around it. The trace above only worked cleanly
+because each layer's contract with its neighbors, what it consumes and what it produces, was
+already fixed by the chapter that introduced it; this chapter's contribution is making that
+set of contracts explicit as one system rather than leaving each reader to infer how Chapter
+8.4's tool executor and Chapter 8.7's planner are actually supposed to hand control back and
+forth.
+
+### What This Blueprint Is Not: Scope, Limits, and What Comes Next
+
+This chapter's title says single-agent deliberately, and the boundary is worth stating
+explicitly rather than leaving it implicit. Nothing in this chapter's six-layer stack
+requires, or even anticipates, more than one agent coordinating with another; the planner
+layer chooses among tools and actions available to one reasoning process, not among other
+agents to delegate to. This is not an oversight this chapter is quietly working around, it
+is the same considered choice OpenAI's own guidance makes explicit: "our general
+recommendation is to maximize a single agent's capabilities first," because additional agents
+"can provide intuitive separation of concepts, but can introduce additional complexity and
+overhead, so often a single agent with tools is sufficient." A team that reaches for a
+multi-agent architecture before this chapter's single-agent blueprint has been pushed as far
+as it reasonably goes is very often solving a problem this stack's own layers, a better
+planning strategy, a properly scoped guardrail policy, a cleaner separation between memory
+and context construction, would have solved without the coordination overhead a second agent
+introduces at all.
+
+That overhead is concrete, not merely conceptual. Every additional agent in a multi-agent
+system carries its own full instance of this chapter's six-layer stack, its own context
+constructor spending its own share of Chapter 8.6's attention budget, its own memory that
+somehow has to stay consistent with what sibling agents already know, and its own guardrail
+layer that has to be kept in policy alignment with every other agent's, none of which is free
+to build or to keep correct as the system evolves. A genuine candidate for splitting work
+across agents is a task that decomposes the way Chapter 8.7's graph-of-thought strategy
+described a sorting problem decomposing, into independent sub-results that a later step
+combines, a research task where several unrelated sources need investigating in parallel
+before one synthesis step merges the findings, for instance, rather than a single linear task
+artificially cut into pieces for its own sake. A task that is already well served by one
+planner choosing among several tools inside this chapter's blueprint gains nothing from being
+split this way; it only adds the coordination layer's own cost on top of a decomposition that
+was not solving any real bottleneck of the single-agent version.
+
+This boundary also clarifies what a future phase covering multi-agent systems would actually
+add on top of, rather than instead of, everything this chapter assembled. A multi-agent
+system does not replace any of this chapter's six layers; each individual agent inside a
+multi-agent system is still, underneath, an instance of this exact same blueprint, its own
+augmented LLM core, its own tools, its own memory and context construction, its own planning
+strategy, its own guardrails, its own interaction layer, with a coordination mechanism added
+on top to route work between multiple such instances. Understanding this chapter's blueprint
+thoroughly is therefore not a detour on the way to multi-agent systems; it is the specific
+prerequisite for understanding what a multi-agent architecture is actually coordinating
+between, since a coordination layer with no clear picture of what a single, well-built agent
+already handles on its own has no principled way to decide when splitting work across
+multiple agents is solving a real problem rather than introducing exactly the complexity
+this chapter's sources both warn against.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['Minimal augmented LLM', 'Production single agent (this blueprint)', 'Multi-agent system (future phase)']}
+  rows={[
+    {aspect: 'What runs the reasoning', values: ['One LLM call, retrieval and in-context examples only', 'All six layers of this chapter\'s stack, cycled by the agent loop', 'Multiple instances of this same six-layer stack, plus a coordination layer'], decisive: true},
+    {aspect: 'Planning strategy (Ch. 8.7)', values: ['None: the single call is the whole answer', 'Selected per task: reactive for cheap, verifiable steps; deliberative or branching for costly ones', 'Selected per agent, plus a routing decision about which agent handles which sub-task'] },
+    {aspect: 'Guardrails and confirmation (Ch. 8.9, this chapter)', values: ['Whatever the base model provides by default', 'A dedicated input and output guardrail layer, plus a reversibility-based confirmation gate', 'The same layer, replicated per agent, plus policy about what one agent may ask another to do'] },
+    {aspect: 'When it is the right choice', values: ['A task a single well-optimized call already handles reliably', 'A task complex enough to need memory, planning, or actions, but that one agent can still own end to end', 'A task that genuinely decomposes into separable sub-tasks best owned by different specialized agents'], decisive: true},
+  ]}
+  caption="Each column adds structure only where the one before it demonstrably falls short, per Anthropic's own start-simple guidance; a multi-agent system is this same blueprint replicated and coordinated, not a different architecture."
+/>
+
+Orchestration is the general term both primary sources in this chapter use for the mechanism
+that keeps an agent's loop running: OpenAI describes it as needing "the concept of a 'run',
+typically implemented as a loop that lets agents operate until an exit condition is reached,"
+which is exactly Chapter 8.3's agent loop described in different words. Whether that
+orchestration coordinates six layers inside one agent, this chapter's entire subject, or
+coordinates several complete agents against each other, a concern this chapter deliberately
+leaves to a future phase, the same underlying idea, a loop that continues until a specific,
+checkable condition says to stop, is what makes either shape of system an agent at all rather
+than a single, one-shot model call.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="One request traced through every layer of a single agent"
+  mermaid={`
+flowchart TD
+  CONTEXT[Context constructor: assembles system prompt, memory, tool descriptions]
+  MEMORY[Memory store: working context plus external retrieval]
+  PLANNER[Planner: chooses the next action for this task's own strategy]
+  GUARD_IN[Input guardrail: validates the plan against policy]
+  TOOLS[Tool executor: runs the chosen action]
+  GATE{Reversible and low-stakes?}
+  CONFIRM[Confirmation gate: a human approves first]
+  UX[Status layer: shows what is happening]
+  OBSERVE[Observation: the real result]
+  GUARD_OUT[Output guardrail: checks the result before it reaches the user]
+  DONE[Finish: respond to the user]
+
+  CONTEXT --> MEMORY --> PLANNER --> GUARD_IN --> GATE
+  GATE -- yes --> TOOLS
+  GATE -- no --> CONFIRM --> TOOLS
+  TOOLS --> UX --> OBSERVE --> GUARD_OUT
+  GUARD_OUT -- task incomplete --> PLANNER
+  GUARD_OUT -- task complete --> DONE
+`}
+  components={[
+    {name: 'Context constructor', responsibility: "Assembles this turn's system prompt, working memory, and tool descriptions (Ch. 8.2, 8.6)."},
+    {name: 'Memory store', responsibility: 'Supplies working context and scored external retrieval alongside whatever the context constructor assembles (Ch. 8.5).'},
+    {name: 'Planner', responsibility: "Chooses the next action using this task's own planning strategy, reactive or deliberative (Ch. 8.7)."},
+    {name: 'Input guardrail', responsibility: "Checks the planner's chosen action against policy before anything executes."},
+    {name: 'Reversibility check', responsibility: "Chapter 8.9's gate: decides whether the action can auto-proceed or needs a human's approval first."},
+    {name: 'Confirmation gate', responsibility: 'Pauses an irreversible or high-stakes action for explicit human approval.'},
+    {name: 'Tool executor', responsibility: "Runs the approved action against the real world (Ch. 8.4)."},
+    {name: 'Status layer', responsibility: "Shows the user what is happening, sized to the action's duration (Ch. 8.9)."},
+    {name: 'Observation', responsibility: "Captures the tool executor's real-world result before any guardrail or planner sees it."},
+    {name: 'Output guardrail', responsibility: 'Checks the real result against policy before it reaches the user or the next planning step.'},
+    {name: 'Finish', responsibility: "Reached only once the output guardrail finds the task complete; otherwise control returns to the planner."},
+  ]}
+/>
+
+Notice that the loop can return control to the planner from the output guardrail, not only
+from a failed confirmation; a delayed order that still needs escalating is not a failure of
+any layer, it is this chapter's blueprint correctly recognizing that one pass through the
+stack resolved one sub-step, not the whole task, exactly the incremental behavior Chapter
+8.3's agent loop was built to support.
+
+## Hands-On: A Complete Single-Agent Loop, Assembled and Run
+
+The clearest way to confirm this chapter's six layers form one working system, not six
+correct ideas on paper, is to implement a minimal version of every layer and run one complete
+task through all of them, using the same order-status scenario this chapter traced in prose.
+
+**Step 1: The layers, each reduced to its essential behavior.** A context constructor, a
+planner using a simple reactive strategy, a tool executor, and a reversibility table keyed to
+Chapter 8.9's confirmation gate, deliberately distinct from the input and output guardrail
+layer this chapter's Deep-Dive argued belongs on its own:
+
+```python
+ORDERS = {"A100": "delivered", "A200": "delayed"}
+
+REVERSIBILITY = {
+    "lookup_order": {"reversible": True},
+    "escalate_to_human": {"reversible": False},
+}
+
+def build_context(memory, user_message):
+    return {"system": "You help customers check order status.", "memory": dict(memory), "user_message": user_message}
+
+def plan_next_action(state):
+    if "order_id" not in state:
+        return "ask_for_order_id"
+    if "order_status" not in state:
+        return "call_tool:lookup_order"
+    if state["order_status"] == "delayed" and not state.get("escalated"):
+        return "call_tool:escalate_to_human"
+    return "finish"
+
+def execute_tool(tool_name, state):
+    if tool_name == "lookup_order":
+        state["order_status"] = ORDERS[state["order_id"]]
+    elif tool_name == "escalate_to_human":
+        state["escalated"] = True
+    return state
+```
+
+**Step 2: The loop itself**, wiring every layer together and applying the reversibility gate
+before any tool actually runs:
+
+```python
+def run_agent(user_message, order_id=None, memory=None):
+    memory = memory or {}
+    state = {"order_id": order_id} if order_id else {}
+    context = build_context(memory, user_message)
+    history = [("context_built", context["user_message"])]
+
+    for _ in range(10):
+        action = plan_next_action(state)
+        if action == "finish":
+            history.append(("finish", dict(state)))
+            break
+        if action == "ask_for_order_id":
+            history.append(("ask_for_order_id", None))
+            break
+        tool_name = action.split(":")[1]
+        if not REVERSIBILITY[tool_name]["reversible"]:
+            history.append((f"confirm_before:{tool_name}", dict(state)))
+        state = execute_tool(tool_name, state)
+        history.append((f"executed:{tool_name}", dict(state)))
+
+    return history, state
+```
+
+**Step 3: Run three scenarios that exercise every branch of the reference architecture.**
+
+```python
+run_agent("Where is my order?", order_id="A100")   # delivered: no escalation
+run_agent("Where is my order?", order_id="A200")   # delayed: escalation gated
+run_agent("Where is my order?")                     # no ID: loop asks rather than guesses
+```
+
+Running the delivered-order scenario produces exactly three steps, `context_built`,
+`executed:lookup_order`, `finish`, with no confirmation gate, matching this chapter's trace of
+the layer stack for a reversible, low-stakes action. The delayed-order scenario produces
+five steps, the same two opening steps, then `confirm_before:escalate_to_human`,
+`executed:escalate_to_human`, and `finish`, confirming that the reversibility check correctly
+distinguishes an irreversible action from the reversible lookup that preceded it in the same
+run, using the identical reversibility table for both. The no-order-ID scenario stops after
+two steps at `ask_for_order_id`, confirming that a planner missing required information asks
+rather than guessing, exactly Chapter 8.9's guidance on graceful degradation under
+uncertainty. All three runs use the same six functions; nothing about the code changed
+between scenarios, only the input and the real state the tools returned, which is the
+concrete, executable version of this chapter's planner-through-confirmation-gate path, the
+portion of the reference architecture diagram every one of these three runs actually
+exercises.
+
+The honest limitation, consistent with every Hands-On section this phase has included, is
+scale: `plan_next_action` is a fixed decision tree because this task's own action space is
+small enough that a fixed tree is the right, cheap, and fully verifiable choice, exactly the
+augmented-LLM section's point that complexity should answer a demonstrated need rather than
+arrive by default. A second, deliberate omission is the input and output guardrail layer
+itself: this code's `REVERSIBILITY` table only answers Chapter 8.9's confirmation-gate
+question, not the separate policy question, a scope check, a content check, a rate or cost
+check, this chapter's Deep-Dive argued belongs in its own layer; a task whose action space
+includes something genuinely sensitive enough to warrant that check would add it as its own
+function, sitting between `plan_next_action` and `execute_tool`, without touching either. A
+task whose action space does not fit a short if-chain is precisely the case Chapter 8.7
+covered under planning strategies proper, ReAct, plan-and-execute, or one of the branching
+strategies, plugged into this exact same planner slot in this exact same loop without
+disturbing any other layer. That substitutability, swapping the planner's implementation, or
+adding a guardrail check, without touching the other layers around it, is this chapter's
+blueprint working as intended, not a limitation of it.

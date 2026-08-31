@@ -8,12 +8,6 @@ sidebar_position: 0
 
 What an agent actually is, the agent loop, tool use, memory, context engineering, and agent UX — the flagship phase most Practitioners come for.
 
-:::info Chapter shells
-The chapters below are planned and tracked, but not yet written. Content is added
-incrementally — see the [Contribution Guide](/docs/capstones-and-contributing) to propose or
-draft one. Check the [Recently Added](/docs) page for what has shipped so far.
-:::
-
 ## Chapters
 
 - [8.1 What Is an "Agent"? From Classical AI Agents to LLM Agents](./8-1-what-is-an-agent-classical-ai-to-llm-agents.mdx)
@@ -25,7 +19,4 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [8.7 Planning and Reasoning Strategies for Agents: A Comparative Map](./8-7-planning-and-reasoning-strategies-for-agents.mdx)
 - [8.8 Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot](./8-8-terminology-untangled-agent-workflow-assistant-copilot-chatbot.mdx)
 - [8.9 Conversational and Agent UX Design](./8-9-conversational-and-agent-ux-design.mdx)
-
-## Planned chapters
-
-- 8.10 Single-Agent Reference Architecture Blueprint
+- [8.10 Single-Agent Reference Architecture Blueprint](./8-10-single-agent-reference-architecture-blueprint.mdx)
