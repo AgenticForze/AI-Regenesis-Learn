@@ -1,0 +1,442 @@
+---
+title: "Planning and Reasoning Strategies for Agents: A Comparative Map"
+sidebar_label: "8.7 Planning and Reasoning Strategies"
+sidebar_position: 7
+phase: 8
+chapter: "8.7"
+lms_presentation: "8.7-Planning-and-Reasoning-Strategies-Slides.pptx"
+prerequisites: ["8.3", "8.4", "8.6"]
+tags: ["agents", "planning", "react", "reflexion", "plan-and-execute", "graph-of-thought", "llm-agents"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+import ArchitectureDiagram from '@site/src/components/ArchitectureDiagram';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase}</p>
+
+## TL;DR / Intuition
+
+By this point in the course, chain-of-thought, self-consistency, tree-of-thought, and
+least-to-most prompting have all appeared in Phase 5, and ReAct, Reflexion, and
+Plan-and-Solve have all appeared in Chapter 8.3. Each was introduced on its own, as a specific
+mechanism. This chapter does not re-derive any of them; it places them on one shared map so
+their real differences and real similarities become visible at once, and it introduces the
+two names still missing from that map, plan-and-execute and graph-of-thought. Every
+strategy this chapter covers differs along exactly two independent questions. First, how
+far ahead does it commit before acting: does it decide one step at a time, reacting to
+whatever the last step returned, or does it produce a full plan upfront and then carry it
+out? Second, what shape does its reasoning take: a single chain of steps, a branching tree
+of alternatives, or a graph where branches can merge back together? Once a strategy's
+position on both axes is fixed, most of what matters about it, its cost, its ability to
+recover from a bad early decision, whether it even needs a real environment to run at all,
+follows from that position rather than needing to be learned separately for each name.
+
+## High-Level Explanation
+
+Treat the two questions above as two axes and every strategy this course has covered lands
+somewhere on the resulting map. Chain-of-thought commits nothing at all to an environment,
+it plans and reasons entirely inside one model response, no tool calls, no observations, so
+it sits at the fully deliberative end and, being a single chain of reasoning steps, at the
+linear end too. ReAct sits at the opposite end of the first axis, deciding one action at a
+time and reading a real observation back before deciding the next, while remaining linear,
+one sequence of steps, on the second. Reflexion occupies the same reactive, linear position
+as ReAct but adds a loop back to the start when an attempt fails outright. Tree-of-thought
+keeps chain-of-thought's fully deliberative, no-environment character but trades its linear
+shape for a branching one, exploring several candidate continuations rather than committing
+to one. Graph-of-thought, introduced in this chapter, keeps that same deliberative,
+branching character but changes what a branch is allowed to do: two branches can be merged
+back into one. Plan-and-execute, this chapter's other new name, is the one strategy that
+does not sit still on the first axis: it produces a full plan upfront, deliberative, then
+executes that plan step by step against a real environment, and re-plans reactively the
+moment a step's result contradicts what the plan assumed.
+
+<figure>
+  <img
+    src={require('@site/static/img/illustrations/8-7-planning-strategy-quadrant.svg').default}
+    alt="A two-axis map places six planning and reasoning strategies. The horizontal axis runs from reactive, committing to one action at a time, to deliberative, planning every step upfront before acting. The vertical axis runs from linear, one chain of steps, to graph-shaped, where branches can merge back together. ReAct and Reflexion sit reactive and linear, with Reflexion adding a retry loop; Reflexion and ReAct are labeled as covered in Chapter 8.3. Chain-of-thought sits deliberative and linear, labeled as covered in Phase 5. Tree-of-thought sits deliberative and branching, also labeled Phase 5. Plan-and-execute sits deliberative, then reactive when re-planning fires, positioned between the linear and branching rows. Graph-of-thought sits deliberative and graph-shaped, the only strategy whose branches can merge. A closing note states that every strategy is a specific point on this map, not a wholly separate idea, and that plan-and-execute is the only one that moves during a single run."
+  />
+  <figcaption>Every strategy in this course is a specific point on two axes, not a separate idea requiring its own mental model.</figcaption>
+</figure>
+
+## Deep-Dive Explanation
+
+### Two Independent Axes: When to Commit, and What Shape Reasoning Takes
+
+The commitment axis is really a question about what a strategy is willing to assume before
+it has evidence. A fully reactive strategy, ReAct, assumes nothing about what a later step
+will find, because it has not decided on a later step yet, it only ever commits to the
+single next action and reads a real observation before committing to the one after that. A
+fully deliberative strategy, plain chain-of-thought, assumes everything upfront in the
+sense that it never gets to revise its reasoning against real-world feedback at all, it
+produces an entire line of reasoning in one pass with no environment in the loop. Neither
+extreme is a strictly better place to be; a fully reactive strategy pays an
+environment-interaction cost on every single step, one real observation per action, while a fully
+deliberative one pays nothing per step but has no way to notice, mid-plan, that an
+assumption it made two steps ago has already turned out to be wrong. The shape axis is a
+separate question about how many candidate lines of reasoning exist at once and how they
+relate to each other. A linear strategy, whether reactive like ReAct or deliberative like
+chain-of-thought, maintains exactly one line of reasoning throughout; there is no
+alternative path being held in reserve. A branching strategy maintains several candidate
+continuations simultaneously and can abandon the weaker ones, which costs more compute, one
+model call per candidate rather than one per step, but buys the ability to not have
+committed early to a path that turns out to be a dead end. Crucially, these two axes are
+genuinely independent: knowing that a strategy is deliberative says nothing about whether it
+is linear or branching, and knowing that a strategy is linear says nothing about whether it
+is reactive or deliberative, which is exactly why four fundamentally different strategies,
+ReAct, chain-of-thought, tree-of-thought, and plan-and-execute, can each occupy a distinct
+position on the same two-dimensional map rather than forming a simple ranked list from
+worst to best.
+
+A map with two independent axes has four quadrants, and it is worth naming what each one
+represents rather than treating the axes as pure abstraction. Reactive and linear is the
+quadrant for a strategy that trusts the environment to keep it honest one step at a time,
+never planning further ahead than it has to, exactly ReAct and Reflexion. Deliberative and
+linear is the quadrant for a strategy that trusts its own single line of reasoning to reach
+a correct answer without ever checking that reasoning against anything external,
+chain-of-thought's quadrant. Deliberative and branching or graph-shaped is the quadrant for
+a strategy that does not trust any single line of reasoning enough to commit to it without
+comparing alternatives first, tree-of-thought and graph-of-thought. The fourth combination,
+reactive and branching, describes a strategy that maintains several live candidate action
+sequences at once and prunes them as real observations arrive, which none of this chapter's
+named strategies fully occupies on its own, plan-and-execute comes closest by branching only
+in the narrow sense that a re-plan discards the remainder of one candidate plan in favor of
+another, rather than exploring several candidate plans in parallel the way tree-of-thought
+explores several candidate reasoning paths. That gap is not an oversight in this chapter's
+map; it reflects that reactive branching is expensive in a way deliberative branching is
+not, every additional candidate branch in a reactive strategy needs its own real tool calls
+and real observations, not just its own model call, which is why production agents rarely
+maintain more than one live action sequence against a real environment at a time.
+
+### Plan-and-Execute: Separating Planning From Execution
+
+Plan-and-execute is easy to confuse with Chapter 8.3's Plan-and-Solve prompting because
+both names describe producing a plan before acting, and the confusion is worth resolving
+precisely because the two are not the same kind of thing at all. Plan-and-Solve is a single
+prompting technique: one model call devises a plan and a second, often the same call,
+carries it out in text, with no tool use and no opportunity to revise the plan once real
+information arrives, because there is no real environment in the loop to arrive from.
+Plan-and-execute, as described by LangChain's own architecture for it, is a multi-call agent
+architecture built from two distinct components: "a planner, which prompts an LLM to
+generate a multi-step plan to complete a large task," and "executor(s), which accept the
+user query and a step in the plan and invoke 1 or more tools to complete that task." The
+planner's output is a concrete, ordered list of steps, not prose describing an approach, and
+each step in that list is handed to an executor that can actually call tools and observe
+real results, exactly Chapter 8.4's tool-calling machinery, one step at a time. What makes
+this a genuinely different architecture from either Plan-and-Solve or ReAct is what happens
+after a step executes: "once execution is completed, the agent is called again with a
+re-planning prompt, letting it decide whether to finish with a response or whether to
+generate a follow-up plan." This re-planning step is where plan-and-execute picks up
+ReAct's core advantage, the ability to notice that reality does not match what was assumed,
+without giving up the advantage an upfront plan provides in the first place, that "the LLM only plans for 1 sub-problem at a time" in a pure ReAct loop, which "may lead to
+sub-optimal trajectories, since it isn't forced to "reason" about the whole task" before
+starting. The trade is not free: plan-and-execute's own stated limitation is that it "still
+is restricted by serial tool calling and uses an LLM for each task since it doesn't support
+variable assignment," meaning steps still generally run one after another rather than in
+parallel, and each step still costs a full model call regardless of how simple that step
+turns out to be. What plan-and-execute buys in exchange is stated just as directly: agents
+built this way can "execute multi-step workflow faster," can "offer cost savings over
+ReAct agents" on tasks with many steps, because the plan is produced once rather than
+re-derived turn by turn, and can "perform better overall... by forcing the planner to
+explicitly think through all the steps" before any of them run, catching a poorly ordered
+or logically inconsistent plan before it costs a single tool call to discover.
+
+The planner and executor's separation also changes where a description problem, Chapter
+8.4's and Chapter 8.6's shared concern about tool sets, actually shows up. A pure ReAct loop
+has one component deciding both what the overall task needs and which specific tool serves
+the very next action, so an ambiguous tool description degrades every single decision that
+component makes. Splitting planning from execution narrows that exposure: the planner only
+ever needs to know a task decomposes into steps like "find a flight" or "check the total
+cost," not which specific tool implements either one, while only the executor, working one
+step at a time, needs the finer-grained tool knowledge Chapter 8.4 covered. This means a
+planner's plan can, in principle, remain valid even after the underlying tools change,
+provided the new tools still cover the same step descriptions, whereas a ReAct loop's
+single reasoning stream has no equivalent layer of indirection between deciding on an
+approach and deciding on a specific call. The separation is not without its own failure
+mode, though: a planner that names a step in terms the available executor cannot actually
+fulfill, "negotiate a lower rate" when no tool supports negotiation, produces a plan that
+looks coherent on paper and only reveals the mismatch once an executor tries and fails to
+carry that specific step out, at which point re-planning has to correct a problem the
+planner itself introduced rather than one the environment introduced.
+
+### Graph-of-Thought: When Branches Need to Merge
+
+Tree-of-thought, covered in Phase 5, lets reasoning branch: at each step, several candidate
+continuations are generated, evaluated, and the weaker ones are pruned, keeping the
+strongest paths alive for the next round. What a tree structure cannot do, by definition, is
+let two branches that split apart earlier come back together; once a tree forks, each
+resulting path is on its own for the rest of the search. Graph of Thoughts (Besta et al.,
+2023) removes exactly that restriction by changing the underlying data structure: "the key
+idea and primary advantage of GoT is the ability to model the information generated by an
+LLM as an arbitrary graph, where units of information, LLM thoughts, are vertices, and edges
+correspond to dependencies between these vertices." A graph, unlike a tree, permits a vertex
+with more than one incoming edge, which is precisely what lets two previously independent
+branches feed into a single new thought that combines them, an operation the paper describes
+as "combining arbitrary LLM thoughts into synergistic outcomes," alongside two other
+named capabilities a tree structure does not support, "distilling the essence of whole
+networks of thoughts," compressing many prior thoughts into a smaller number without
+discarding them the way pruning does, and "enhancing thoughts using feedback loops," revising
+a thought using a later thought's evaluation of it, which requires an edge pointing backward,
+something a tree's strictly branching structure has no way to represent at all. The paper's
+own headline result on a sorting task makes concrete what this structural freedom is worth
+in practice, not just in principle: GoT achieved "increasing the quality of sorting by 62%
+over ToT, while simultaneously reducing costs by >31%," improving on both the
+answer's quality and the compute spent reaching it in the same comparison, rather than
+trading one for the other the way many of this chapter's other comparisons do. The intuition
+behind why merging helps on a task like sorting is straightforward once stated: sorting a
+long list decomposes naturally into sorting several shorter sublists and then merging the
+sorted results, and a tree structure has no native way to represent that final merge step as
+part of the same search it used to produce the sublists, forcing a tree-based approach to
+handle merging as a separate, unscored step outside the reasoning process the tree itself
+was tracking.
+
+Whether merging is worth its added complexity depends heavily on what kind of problem is
+being solved, which is why graph-of-thought is best understood as extending tree-of-thought
+for a specific class of tasks rather than replacing it outright. A problem that genuinely
+decomposes into independent sub-results needing later combination, sorting a list by
+sorting and merging sublists, synthesizing several partial drafts of a document into one,
+aggregating several independent estimates into a single figure, plays directly to a graph
+structure's strength, because the combination step is exactly the kind of operation a tree
+cannot natively score as part of the same search. A problem that is genuinely a single
+branching decision tree, where each path really does represent a mutually exclusive choice
+rather than a partial result meant to be recombined, gets no benefit from the extra
+structure graph-of-thought provides, and pays the cost of a more complex reasoning
+framework for a merge operation it never actually needs. The practical reason
+graph-of-thought is introduced here rather than back in Phase 5 alongside tree-of-thought is that the
+decision of whether a task decomposes this way is often only visible once an agent is
+already working the task, which is squarely this course's territory rather than a
+pure-prompting one: an agent midway through a multi-step task is frequently the one
+best positioned to recognize that two of its own partial results, not two hypothetical
+reasoning branches planned in advance, are what actually need merging.
+
+### Reactive vs. Deliberative: What Each Strategy Assumes About the Environment
+
+A distinction this chapter's map makes visible, but that is easy to miss when each strategy
+is studied in isolation, is that not every strategy on it is actually a candidate for
+Chapter 8.3's agent loop in the first place. ReAct, Reflexion, and plan-and-execute all
+assume a real environment exists to act on and observe, tools that return real results,
+because their reactive component is specifically a response to those real results; take the
+environment away and there is nothing left for the reactive half of either strategy to react
+to. Chain-of-thought, tree-of-thought, and graph-of-thought assume no such thing: every one
+of them can run to completion with zero tool calls, zero observations, and zero interaction
+with anything outside the model's own generated text, because they were designed to improve
+how a model reasons about a self-contained problem, not to interleave reasoning with acting
+in a world that talks back. This is not a hierarchy where the reactive strategies are
+strictly more capable; it means the two groups are typically not competing for the same job
+inside an agent's design. A concrete way to see this is to notice that the deliberative,
+no-environment strategies are eligible to run inside a single Plan step of Chapter 8.3's
+loop, an agent could use tree-of-thought or graph-of-thought purely to decide what its next
+action should be, still handing that decision off to ReAct-style Act and Observe steps
+afterward, whereas it makes no sense to describe running ReAct "inside" a chain-of-thought
+step, because ReAct's very definition requires the real Act and Observe steps that a single
+reasoning step does not have access to. Plan-and-execute complicates this picture in a
+useful way rather than breaking it: its planner half behaves like a deliberative,
+no-environment strategy, producing a plan without touching any tool, while its executor and
+re-planner halves behave exactly like ReAct, one real action and one real observation at a
+time, which is exactly why plan-and-execute was the strategy on this chapter's map that
+would not sit still on a single point.
+
+This split also determines which of Chapter 8.6's context-engineering concerns actually
+apply to a given strategy. A deliberative, no-environment strategy's entire working set,
+every candidate thought a tree-of-thought or graph-of-thought search maintains, lives inside
+context for the duration of one call and is discarded once that call returns an answer;
+none of Chapter 8.6's long-horizon techniques, compaction, structured notes, sub-agent
+isolation, are relevant to a strategy that never runs long enough to need them. A reactive
+strategy's context, by contrast, accumulates exactly the way Chapter 8.6 described, one
+observation at a time across a run that can extend indefinitely, which is why ReAct,
+Reflexion, and plan-and-execute's executor loop are the strategies actually exposed to
+context rot and actually candidates for compaction or note-taking, while chain-of-thought,
+tree-of-thought, and graph-of-thought simply are not, by virtue of not running long enough
+in the first place for accumulated history to become a problem.
+
+### Choosing a Strategy: Cost, Latency, and Failure Recovery
+
+Every strategy on this chapter's map trades off the same three practical quantities
+differently, and naming the trade explicitly is more useful than treating any one strategy
+as a universal default. Cost, measured in model calls for an n-step task, is lowest for
+plain chain-of-thought, one call regardless of n, because there is no environment loop to
+pay for at all; ReAct and Reflexion cost roughly one call per step, since each action needs
+its own reasoning call informed by the previous observation; branching strategies,
+tree-of-thought and graph-of-thought, cost a multiple of that per step, one call per
+candidate continuation being explored, before any pruning or merging reduces the surviving
+set; and plan-and-execute costs one upfront planning call plus roughly one call per step,
+occasionally more when a step triggers re-planning, landing between ReAct's per-step cost
+and a branching strategy's per-candidate cost. Latency tracks cost closely but not
+identically, because branching strategies can often evaluate their candidates in parallel,
+several model calls issued at once rather than in sequence, while ReAct, Reflexion, and
+plan-and-execute's executor are inherently sequential, each step's call needing the
+previous step's real-world result before it can even be issued. Failure recovery is where
+the strategies diverge most sharply from each other, and this is arguably the most
+practically important axis of the three: plain chain-of-thought has no recovery mechanism
+of any kind, an error introduced early in the chain propagates to every step built on top of
+it with nothing to catch it; Reflexion adds recovery specifically for outright failures,
+detected and corrected only at the level of an entire attempt via Chapter 8.3's reflect
+step, not mid-attempt; branching strategies recover by never fully committing to a single
+path until pruning or merging happens, at the direct cost of exploring multiple candidates
+whether or not the eventual winner needed the alternatives at all; and plan-and-execute
+recovers at the level of an individual step, re-planning precisely when that step's result
+contradicts an assumption, which is finer-grained than Reflexion's whole-attempt recovery
+and cheaper than a branching strategy's always-on redundancy, at the cost of only catching
+problems a step's own observation actually surfaces.
+
+None of these three quantities should be optimized in isolation, because the right balance
+depends on what a wrong answer actually costs in the specific task at hand. A task where a
+wrong final answer is cheap to detect and cheap to redo, drafting a short summary, favors
+minimizing cost and latency over failure recovery, since plain chain-of-thought's total
+inability to self-correct mid-reasoning barely matters when checking and regenerating the
+whole output costs almost nothing. A task where a wrong intermediate step is expensive to
+discover late, a multi-step booking process where an early bad assumption is only caught
+after several more steps have already run and possibly committed real side effects, favors
+exactly the opposite trade, paying plan-and-execute's or a branching strategy's higher
+per-task cost specifically to catch the bad assumption closer to where it was made rather
+than several irreversible steps later. This is also why no single strategy from this
+chapter's map should be treated as a default: the right choice is a property of the task's
+own cost of being wrong, not a property of which strategy happens to be newest or most
+sophisticated on paper.
+
+## Comparison & Related Concepts
+
+<ComparisonTable
+  columns={['ReAct / Reflexion (Chapter 8.3)', 'Plan-and-execute', 'Graph-of-thought']}
+  rows={[
+    {aspect: 'How far ahead it commits before acting', values: ['One action at a time', 'A full multi-step plan upfront, revised via re-planning', 'N/A: no real environment or tool calls at all'], decisive: true},
+    {aspect: 'What happens when a step contradicts an assumption', values: ['The next reasoning step simply sees the new observation', 'A re-planning call explicitly revises the remaining plan', 'Not applicable in the same sense; a weak thought is pruned or merged, not "corrected"'] },
+    {aspect: 'Model calls for an n-step task', values: ['Roughly one per step', 'One planning call plus roughly one per step', 'A multiple of one per step, one per candidate thought explored'] },
+    {aspect: 'Needs a real environment to run at all', values: ['Yes, by definition', "Yes, for the executor and re-planner halves", 'No; can run entirely on the model\'s own generated text'], decisive: true },
+  ]}
+  caption="These three are not ranked best to worst; they occupy genuinely different positions on this chapter's two-axis map, and a real agent's design often uses more than one of them for different parts of the same task."
+/>
+
+Least-to-most prompting, covered in Phase 5, decomposes a problem into ordered subproblems
+and solves them in sequence, which sounds similar to plan-and-execute's ordered list of
+steps but differs on the environment axis the same way chain-of-thought differs from ReAct:
+least-to-most solves every subproblem inside the model's own reasoning, with no tool calls
+and nothing to re-plan against, while plan-and-execute's steps are executed against a real
+environment specifically so that a step's real result can trigger real re-planning.
+
+## Reference Architecture
+
+<ArchitectureDiagram
+  title="A plan is produced once, then executed and revised step by step"
+  mermaid={`
+flowchart TD
+  PLANNER[Planner: produces an ordered, multi-step plan]
+  EXECUTOR[Executor: runs the next step's tool call]
+  OBSERVE[Observation: the step's real result]
+  CHECK{Does the result match what the plan assumed?}
+  REPLAN[Re-planner: revises the remaining steps]
+  DONE[Finish: respond with the result]
+
+  PLANNER --> EXECUTOR --> OBSERVE --> CHECK
+  CHECK -- yes, plan holds --> EXECUTOR
+  CHECK -- no, revise --> REPLAN --> EXECUTOR
+  CHECK -- no steps remain --> DONE
+`}
+  components={[
+    {name: 'Planner', responsibility: 'Produces the full ordered plan upfront, before any tool has been called; the chapter\'s deliberative half.'},
+    {name: 'Executor', responsibility: 'Runs one step\'s tool call at a time, exactly Chapter 8.4\'s tool-calling mechanism applied to a plan\'s next item.'},
+    {name: 'Observation', responsibility: 'The step\'s real result, becoming Chapter 8.3\'s Observe step for this one step of the plan.'},
+    {name: 'Check', responsibility: 'Decides whether the plan still holds, needs revision, or is complete; the hinge between this architecture\'s deliberative and reactive halves.'},
+    {name: 'Re-planner', responsibility: 'Revises the remaining steps when a result contradicts what the original plan assumed, without restarting the whole plan.'},
+    {name: 'Finish', responsibility: 'Reached only once the check finds no steps remaining; responds with the result rather than looping back to the executor.'},
+  ]}
+/>
+
+The loop only ever revises the plan's remaining steps, never the steps already executed;
+re-planning is forward-looking by construction, because a tool call already made cannot be
+unmade the way a purely deliberative strategy's untried candidate can simply be discarded.
+
+## Hands-On: A Plan That Gets Revised, Not Just Followed
+
+The clearest way to see what re-planning actually buys over a plan that can only ever be
+followed is to give a fixed three-step plan a result partway through that violates one of
+its assumptions, and watch the difference between a system that notices and one that does
+not.
+
+**Step 1: A plan, and the state it operates on.** The plan books a flight, books a hotel,
+and checks the combined cost against a budget; nothing about the plan itself anticipates
+that the hotel choice might need to change:
+
+```python
+FLIGHTS = {"flight": 450}
+HOTELS = {"standard": 900, "budget": 500}
+BUDGET_LIMIT = 1200
+
+def make_plan():
+    return ["find_flight", "find_hotel", "check_budget"]
+
+def execute_step(step, state):
+    if step == "find_flight":
+        state["flight_cost"] = FLIGHTS["flight"]
+        return f"Booked flight for ${state['flight_cost']}."
+    if step == "find_hotel":
+        state["hotel_cost"] = HOTELS[state["hotel_choice"]]
+        return f"Booked {state['hotel_choice']} hotel for ${state['hotel_cost']}."
+    if step == "check_budget":
+        total = state["flight_cost"] + state["hotel_cost"]
+        state["total"] = total
+        if total > BUDGET_LIMIT:
+            return f"Over budget: ${total} exceeds limit ${BUDGET_LIMIT}."
+        return f"Within budget: ${total} is under limit ${BUDGET_LIMIT}."
+    raise ValueError(f"unknown step: {step}")
+```
+
+**Step 2: A re-planner that only fires when the plan's assumption is actually violated.**
+It checks the observation, not a fixed schedule, and returns corrective steps only when
+needed:
+
+```python
+def replan(observation, state):
+    """Returns a list of corrective steps to append, or [] if none needed."""
+    if "Over budget" in observation and state["hotel_choice"] != "budget":
+        state["hotel_choice"] = "budget"
+        return ["find_hotel", "check_budget"]
+    return []
+
+def run_plan_and_execute():
+    state = {"flight_cost": 0, "hotel_cost": 0, "hotel_choice": "standard"}
+    plan = make_plan()
+    history = []
+    replans = 0
+    i = 0
+    while i < len(plan):
+        step = plan[i]
+        obs = execute_step(step, state)
+        history.append((step, obs))
+        if step == "check_budget":
+            extra = replan(obs, state)
+            if extra:
+                replans += 1
+                plan = plan[: i + 1] + extra
+        i += 1
+    return history, replans, state
+```
+
+**Step 3: Run it.** The initial plan assumes a standard hotel, which turns out to exceed
+budget once combined with the flight:
+
+```python
+history, replans, state = run_plan_and_execute()
+```
+
+Running this executes five steps in total, not the original plan's three:
+`find_flight`, `find_hotel`, `check_budget`, then, because the first `check_budget` result
+was `"Over budget: $1350 exceeds limit $1200."`, a re-planned `find_hotel` and a second
+`check_budget`, this time reporting `"Within budget: $950 is under limit $1200."`. Exactly
+one re-plan fires, the hotel choice switches from standard to budget, and the final state's
+total is 950. All of this was confirmed by actually running the code, including the exact
+sequence of five steps and the exact dollar figures at each one, not predicted by hand.
+
+The detail worth sitting with is what would have happened under Plan-and-Solve instead of
+plan-and-execute, given the identical starting plan. Plan-and-Solve produces its plan and
+carries it out within a single pass of reasoning, with no real tool call and no real
+observation to notice that the standard hotel plus the flight actually exceeds budget until
+the whole thing is already reasoned through; there is no step in that architecture
+positioned to catch the problem and revise just the hotel choice, only to report a finished
+answer that is wrong, or to restart the entire plan from scratch, which is the least
+efficient way this chapter's map describes to recover from one bad assumption two steps in.
+Re-planning is not "using tools" that Plan-and-Solve lacks; ReAct alone could catch the same
+overage, one action at a time, but only after re-deciding everything about the flight step
+too, since it never had a distinct kept plan for re-planning to leave untouched in the first
+place. Plan-and-execute's specific advantage is narrower and more precise than either
+alternative: it revises exactly the part of an existing plan that a real result invalidated,
+and nothing else.

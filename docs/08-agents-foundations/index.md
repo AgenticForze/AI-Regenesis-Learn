@@ -22,10 +22,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [8.4 Tool Use and Function Calling: A Deep Dive](./8-4-tool-use-and-function-calling-deep-dive.mdx)
 - [8.5 Memory Systems for Agents: A Comparative Deep Dive](./8-5-memory-systems-for-agents-compared.mdx)
 - [8.6 Context Engineering for Agents](./8-6-context-engineering-for-agents.mdx)
+- [8.7 Planning and Reasoning Strategies for Agents: A Comparative Map](./8-7-planning-and-reasoning-strategies-for-agents.mdx)
 
 ## Planned chapters
 
-- 8.7 Planning & Reasoning Strategies: CoT, ReAct, Reflexion, Plan-and-Execute, Graph-of-Thought
 - 8.8 Terminology Untangled: Agent vs. Workflow vs. Assistant vs. Copilot vs. Chatbot
 - 8.9 [v5] Conversational & Agent UX Design
 - 8.10 Single-Agent Reference Architecture Blueprint
