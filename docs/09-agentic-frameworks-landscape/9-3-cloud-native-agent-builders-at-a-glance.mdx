@@ -1,0 +1,100 @@
+---
+title: "Cloud-Native Agent Builders at a Glance"
+sidebar_label: "9.3 Cloud-Native Agent Builders at a Glance"
+phase: 9
+chapter: "9.3"
+lms_presentation: "9.3-Cloud-Native-Agent-Builders-at-a-Glance-Slides.pptx"
+sidebar_position: 3
+prerequisites: ["9.2"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+All three major hyperscalers now sell a hosted, managed agent-building platform, and all three
+either renamed or absorbed an older product to get to their current one within roughly the last
+twelve months: Amazon Bedrock AgentCore, Microsoft Foundry Agent Service, and Google's Gemini
+Enterprise Agent Platform. Unlike Chapter 9.2's frameworks, none of these is something you
+import; each is a vendor's own infrastructure, identity system, and billing sitting underneath
+whatever you build. This chapter names the current products and what they replaced; Phase 14
+gives each vendor its own dedicated survey chapter, and Phase 15 is where an actual platform
+decision gets deep-dive, enterprise treatment.
+
+## High-Level Explanation
+
+Amazon's current entry is Amazon Bedrock AgentCore, generally available since October 13,
+2025. AWS describes it as "an agentic platform for building, deploying, and operating highly
+effective agents securely at scale using any framework and foundation model," and is explicit
+that this is not a walled garden: "AgentCore services work together or independently with any
+open-source framework such as CrewAI, LangGraph, LlamaIndex, and Strands Agents and with any
+foundation model, so you don't have to choose between open-source flexibility and
+enterprise-grade security and reliability." AgentCore supersedes the older, more constrained
+Amazon Bedrock Agents feature, launched in November 2023, which AWS's own documentation now
+calls Amazon Bedrock Agents Classic: that older service closed to new customers on July 30,
+2026, and AWS recommends that existing customers "migrate your Amazon Bedrock Agents Classic
+workloads to Amazon Bedrock AgentCore." Two migration paths exist: an "AgentCore harness" that
+is a config-based experience close to the original Bedrock Agents model, and "code-defined
+agents on AgentCore" for teams that need custom orchestration or multi-agent collaboration and
+want to deploy an existing framework's code directly onto AgentCore's managed infrastructure.
+
+Microsoft's rebrand covers more than one product at once. At Microsoft Ignite in November
+2025, the company renamed its entire AI development platform: Microsoft's own Foundry blog
+states plainly that "Azure AI Foundry is now Microsoft Foundry." Its agent-specific product,
+Foundry Agent Service, is a "managed runtime for agentic apps, supporting multi-agent
+workflows, persistent memory, and enterprise governance," and developers "can now deploy
+custom-code agents built with Microsoft Agent Framework, LangGraph, CrewAI, or other
+open-source frameworks directly into a fully managed runtime, no container images, Kubernetes
+clusters, or deployment pipelines required." Microsoft's own marketing copy for the service is
+more compact: "Build, connect, and scale intelligent agents: open, integrated, and
+enterprise-ready."
+
+Google's version of this same churn is the most structurally significant of the three. On
+April 22, 2026, Google's Cloud blog announced, "Today, we're launching Gemini Enterprise Agent
+Platform, our new, comprehensive platform to build, scale, govern, and optimize agents," framed
+explicitly as succeeding Vertex AI rather than sitting alongside it: "it's the evolution of
+Vertex AI, bringing the model selection, model building, and agent building capabilities that
+customers love, together with new features for agent integration, DevOps, orchestration, and
+security." Google was direct about what this means going forward: "all Vertex AI services and
+roadmap evolutions will be delivered exclusively through the Agent Platform, rather than as a
+standalone service, to power the next generation of agent development." The components a
+developer actually builds with, including the Agent Development Kit, continue to exist under
+the new platform's own documentation; what changed is the framing at the top. Agent building is
+no longer a capability bolted onto a model-serving product; it is the product, with model
+selection folded into it as one of several building blocks.
+
+Three hyperscalers, three different paths to the same kind of announcement: AWS is migrating an
+existing agent feature onto a new, framework-agnostic runtime; Microsoft folded its rename into
+a platform-wide rebrand that goes well beyond agents; and Google inverted its own product
+hierarchy so that agents, not models, sit on top. None of these three names is likely to be the
+last one this ecosystem uses for these products within the working life of this curriculum,
+which is exactly the caution Chapter 9.1 opened this phase with.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Amazon Bedrock AgentCore', 'Microsoft Foundry Agent Service', 'Gemini Enterprise Agent Platform']}
+  rows={[
+    {aspect: 'Backing organization', values: ['Amazon Web Services', 'Microsoft', 'Google Cloud'], decisive: true},
+    {aspect: 'What it replaced or renamed', values: ['Amazon Bedrock Agents, now called Bedrock Agents Classic and in maintenance mode', 'Azure AI Foundry, renamed at Microsoft Ignite', 'Vertex AI, its former standalone identity'] },
+    {aspect: 'Framework and model flexibility', values: ['Explicitly agnostic: any open-source framework such as CrewAI, LangGraph, LlamaIndex, or Strands Agents, and any foundation model', 'Managed runtime accepts agents built with various frameworks, no container image or Kubernetes cluster required', "Integrates Google's own model selection and agent-building tools, including the Agent Development Kit, into one platform"] },
+    {aspect: 'When the current name took effect', values: ['General availability October 13, 2025; Bedrock Agents Classic closed to new customers July 30, 2026', 'Renamed from Azure AI Foundry at Microsoft Ignite, November 2025', 'Renamed from Vertex AI on April 22, 2026'] },
+    {aspect: 'What it optimizes for', values: ['Migrating existing Bedrock Agents workloads while scaling any framework securely', "Enterprise governance, observability, and multi-agent orchestration inside Microsoft's stack", 'Unifying model selection and agent building under a single top-level product'], decisive: true},
+  ]}
+  caption="All three are hosted platforms a vendor operates for you, not libraries you import, and all three either renamed or absorbed an older product within roughly the last twelve months."
+/>
+
+## Where to Go Deeper
+
+- **Next in this phase:** [9.4 Protocol Layer at a Glance](./9-4-protocol-layer-at-a-glance-mcp-and-a2a-in-one-page.mdx).
+- **Per-vendor depth:** Phase 14's breadth-first vendor surveys cover Google Cloud in Chapter
+  14.2, AWS in 14.3, and Microsoft in 14.4, each still a survey rather than a deep dive.
+- **An actual platform decision:** Phase 15 (Enterprise Agentic AI: Governance, Security,
+  Evaluation & Operations) is where choosing among these platforms for a real deployment gets
+  deep-dive, enterprise treatment.
+- **Choosing among them at this phase's own depth:** [9.5 Open-Source vs. Managed/Proprietary Frameworks](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx) and [9.6 How to Pick a Starting Framework for Your First Project](./9-6-how-to-pick-a-starting-framework-for-your-first-project.mdx).
+- **What any of these platforms is hosting:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)

@@ -18,10 +18,10 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 
 - [9.1 Why an Ecosystem Landscape Chapter? How to Read This Phase](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)
 - [9.2 Orchestration Frameworks at a Glance](./9-2-orchestration-frameworks-at-a-glance.mdx)
+- [9.3 Cloud-Native Agent Builders at a Glance](./9-3-cloud-native-agent-builders-at-a-glance.mdx)
 
 ## Planned chapters
 
-- 9.3 Cloud-Native Agent Builders at a Glance
 - 9.4 Protocol Layer at a Glance: MCP and A2A in One Page
 - 9.5 Open-Source vs. Managed/Proprietary Frameworks — HL Trade-offs
 - 9.6 How to Pick a Starting Framework for Your First Project

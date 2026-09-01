@@ -48,8 +48,8 @@ The rest of this phase sorts everything it covers into three categories, and nam
 precisely now saves each later chapter from re-explaining the distinction. A framework is a
 library or SDK a developer writes code against: LangGraph, CrewAI, and OpenAI's Agents SDK are
 each a set of importable functions and classes, not a service running somewhere. A platform is
-a hosted, managed product a cloud vendor operates for you, AWS Bedrock Agents or Azure AI
-Foundry Agent Service, where the vendor's own infrastructure, identity system, and billing
+a hosted, managed product a cloud vendor operates for you, Amazon Bedrock AgentCore or
+Microsoft Foundry Agent Service, where the vendor's own infrastructure, identity system, and billing
 sit underneath whatever you build. A protocol is neither of those: it is a wire-format
 specification, Model Context Protocol or Agent2Agent, that lets independently built agents
 and tools interoperate regardless of which framework or platform produced them, the same role
@@ -78,7 +78,7 @@ come away able to build with anything it names.
     {aspect: 'What you actually interact with', values: ['A library or SDK you import and write code against', 'A hosted console, API, and managed runtime a vendor operates', 'A wire-format specification other systems implement'], decisive: true},
     {aspect: 'Who controls its roadmap', values: ['An open-source maintainer or a vendor-backed SDK team', 'The cloud vendor operating the service', 'A standards body or foundation with multiple member organizations'] },
     {aspect: 'Where it runs', values: ['Wherever you deploy your own code', "The vendor's own infrastructure", "Anywhere either side of a connection implements the spec"] },
-    {aspect: 'Representative example', values: ['LangGraph, CrewAI, OpenAI Agents SDK', 'AWS Bedrock Agents, Azure AI Foundry Agent Service', 'Model Context Protocol, Agent2Agent'] },
+    {aspect: 'Representative example', values: ['LangGraph, CrewAI, OpenAI Agents SDK', 'Amazon Bedrock AgentCore, Microsoft Foundry Agent Service', 'Model Context Protocol, Agent2Agent'] },
     {aspect: 'What switching costs you', values: ['A rewrite of your orchestration code', "A migration off the vendor's managed infrastructure and tooling", 'Nothing, if both sides still implement the same spec'], decisive: true},
   ]}
   caption="Three different layers of the same ecosystem, not three competing choices; a single project often uses a framework running on a platform that speaks a protocol to the outside world."
