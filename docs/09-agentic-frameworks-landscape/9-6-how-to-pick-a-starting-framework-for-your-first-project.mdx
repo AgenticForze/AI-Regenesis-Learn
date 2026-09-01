@@ -1,0 +1,87 @@
+---
+title: "How to Pick a Starting Framework for Your First Project"
+sidebar_label: "9.6 How to Pick a Starting Framework"
+phase: 9
+chapter: "9.6"
+lms_presentation: "9.6-How-to-Pick-a-Starting-Framework-Slides.pptx"
+sidebar_position: 6
+prerequisites: ["9.5"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+This chapter turns 9.2, 9.3, and 9.5's names and trade-offs into an actual starting point: four
+questions to ask before writing any code, each pointing toward one or two of the specific
+frameworks or platforms already named in this phase. It is a starting point, not a permanent
+commitment, since 9.5 already showed that both directions, self-hosting an open framework and
+adopting a managed platform, carry a real but different switching cost.
+
+## High-Level Explanation
+
+The first and most practical question is not which framework is "best," but what a team is
+already committed to. A team already running production workloads on one hyperscaler has a
+strong default reason to start with that vendor's own platform: Amazon Bedrock AgentCore for an
+AWS-committed team, Microsoft Foundry Agent Service for an Azure-committed team, or the Gemini
+Enterprise Agent Platform for a Google Cloud-committed team, since each folds identity,
+billing, and existing infrastructure into an account already in place, at the cost of the
+vendor lock-in 9.5 described. A team with no such commitment, or one that wants to avoid
+creating one, has more reason to start with an open-source framework instead, since none of
+LangGraph, CrewAI, Microsoft Agent Framework, or OpenAI's Agents SDK requires choosing a cloud
+vendor upfront.
+
+The second question is which model a team is already building against. A team already deep in
+OpenAI's own ecosystem has the most direct reason to start with OpenAI's Agents SDK, the
+framework 9.2's own comparison judged to offer the shortest path from zero to a working agent
+among the four. A team that wants to swap
+models later, or that has not committed to one model vendor, gains more from a framework that
+treats the model as a pluggable choice rather than a built-in assumption, the position LangGraph
+and CrewAI both start from.
+
+The third question is whether the very first project needs more than one agent working
+together. Microsoft Agent Framework's merged lineage was built with multi-agent coordination as
+a first-class case from the start, inherited directly from AutoGen's own origins as Microsoft
+Research's conversable multi-agent framework; LangGraph's explicit graph extends naturally to
+the same case, since the same graph structure serves a single agent, a multi-agent system, or a
+hierarchical one without switching frameworks; and CrewAI's role-based model reaches a similar
+place from a different angle, agents with distinct roles handing off work to each other. A team
+building a single agent for its first project, with no near-term plan to add more, can
+reasonably defer this question rather than choosing a framework for a capability it does not
+yet need. A related fourth question follows directly from what 9.2 already established about
+Microsoft's entry: a team already standardized on Microsoft's enterprise stack gains more from
+Microsoft Agent Framework's carried-over Semantic Kernel features (session-based state
+management, type safety, middleware, and telemetry) than from adopting an unrelated framework
+and bolting equivalent enterprise controls on afterward.
+
+None of these four questions produces a permanent commitment. 9.5 already established that both
+directions carry a real switching cost, just a different kind: code written against one
+framework's specific abstractions on one side, and a migration off a vendor's managed
+infrastructure on the other. The point of a starting framework is to get a first working agent
+built against Chapter 8.10's blueprint as quickly as a team's actual constraints allow, not to
+lock in an architecture for every project that follows it.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Start with a Framework', 'Start with a Platform']}
+  rows={[
+    {aspect: 'Best default signal', values: ['No existing cloud commitment, or a wish to avoid one', 'Already running production workloads on one hyperscaler'], decisive: true},
+    {aspect: 'Model commitment', values: ["Not committed to one model vendor (LangGraph, CrewAI), or already deep in OpenAI's ecosystem (OpenAI Agents SDK)", 'The platform bundles a specific model family with the cloud account'] },
+    {aspect: 'Fastest path to a first working agent', values: ["CrewAI's role-based setup, or OpenAI Agents SDK's three primitives", "A platform's config-based harness, for example, AWS's AgentCore harness"] },
+    {aspect: 'Multi-agent coordination from day one', values: ["LangGraph's explicit graph, Microsoft Agent Framework's merged lineage, or CrewAI's role-based model", "Each vendor's own multi-agent maturity, covered in Phase 14"] },
+    {aspect: "What you're deferring by starting here", values: ['An evaluation of managed-platform trade-offs, covered in 9.5', 'An evaluation of self-hosting trade-offs, covered in 9.5'], decisive: true},
+  ]}
+  caption="This table names a reasonable starting point, not a permanent architecture; 9.5's trade-offs still apply to whichever side you start on."
+/>
+
+## Where to Go Deeper
+
+- **Next in this phase:** [9.7 Landscape Comparison Table](./9-7-landscape-comparison-table.mdx), this phase's capstone summary.
+- **The products and trade-offs behind these questions:** [9.2 Orchestration Frameworks at a Glance](./9-2-orchestration-frameworks-at-a-glance.mdx), [9.3 Cloud-Native Agent Builders at a Glance](./9-3-cloud-native-agent-builders-at-a-glance.mdx), and [9.5 Open-Source vs. Managed/Proprietary Frameworks](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx).
+- **Implementation depth:** Phase 12 for frameworks and protocols; Phase 14 then Phase 15 for platforms, once a starting point from this chapter needs an actual production decision behind it.
+- **What a starting framework is used to build:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)
