@@ -1,0 +1,90 @@
+---
+title: "Why an Ecosystem Landscape Chapter? How to Read This Phase"
+sidebar_label: "9.1 Why an Ecosystem Landscape Chapter?"
+phase: 9
+chapter: "9.1"
+sidebar_position: 1
+prerequisites: ["8.1", "8.10"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+Phase 8 built one single agent from first principles and assembled it into a six-layer
+blueprint. Phase 9 does not build anything: it is a breadth-first map of the frameworks,
+cloud platforms, and interoperability protocols people actually reach for to implement that
+blueprint, so you know what exists before Phase 12 teaches frameworks and protocols in
+implementation depth, and before Phase 14 and Phase 15 take cloud platforms further. Every
+chapter in this phase follows the same short shape and stops at the same depth on purpose,
+pointing onward rather than teaching you to build with anything named here.
+
+## High-Level Explanation
+
+This phase exists because the tooling layer sitting on top of Chapter 8.10's blueprint moves
+fast enough that a survey written even a year ago would already misname half its subjects.
+Three concrete examples from this ecosystem's last nine months make the point better than an
+abstract warning would: OpenAI's Assistants API, the interface many existing agent
+integrations were built against, reached its full shutdown on August 26, 2026, with OpenAI's
+own migration guide naming the Responses API, paired with its Conversations API for state,
+as the successor, not a wholesale move to the separate Agents SDK that runs on top of it. The
+Linux Foundation formed a new, vendor-neutral Agentic
+AI Foundation in December 2025 specifically to govern Anthropic's Model Context Protocol
+alongside Block's goose framework and OpenAI's AGENTS.md specification, with Amazon, Google,
+Microsoft, and OpenAI all joining as founding members of a foundation hosting a protocol none
+of them originally wrote. Google's Agent2Agent protocol, announced as a Google project in
+2025, has since joined that same neutral foundation alongside Model Context Protocol rather
+than remaining a single vendor's standard. A phase covering this ground has to be rewritten
+on a cadence that matches the ecosystem, not the curriculum's publishing schedule, which is
+the specific reason this phase is scoped narrowly and kept separate from the deeper chapters
+downstream of it: narrowing what has to be re-verified each time keeps that maintenance
+tractable.
+
+The rest of this phase sorts everything it covers into three categories, and naming them
+precisely now saves each later chapter from re-explaining the distinction. A framework is a
+library or SDK a developer writes code against: LangGraph, CrewAI, and OpenAI's Agents SDK are
+each a set of importable functions and classes, not a service running somewhere. A platform is
+a hosted, managed product a cloud vendor operates for you, AWS Bedrock Agents or Azure AI
+Foundry Agent Service, where the vendor's own infrastructure, identity system, and billing
+sit underneath whatever you build. A protocol is neither of those: it is a wire-format
+specification, Model Context Protocol or Agent2Agent, that lets independently built agents
+and tools interoperate regardless of which framework or platform produced them, the same role
+HTTP plays between web browsers and servers that were never coded against each other directly.
+None of the three replaces Chapter 8.10's six-layer blueprint; a framework gives you code to
+wire those six layers together faster, a platform gives you a hosted place to run the result,
+and a protocol lets the result talk to agents built entirely outside your own stack. Choosing
+among them, which the rest of this phase helps with, is a question of how you build and
+deploy Chapter 8.10's blueprint, not a different blueprint to learn.
+
+That framing is also why every chapter in this phase is short by design. Chapter 9.2 surveys
+frameworks, 9.3 surveys platforms, 9.4 surveys protocols, and 9.5 through 9.7 help you compare
+and choose across all three, but none of them will show you a line of working code or a wiring
+diagram for a specific product. For frameworks and protocols, that depth is one hop away, in
+Phase 12's implementation-level chapters. For platforms, it takes two hops: Phase 14 first
+gives each major cloud vendor's agentic offering its own dedicated survey chapter, still
+breadth-first, and Phase 15 is where an actual platform decision gets deep-dive, enterprise
+treatment. Read this phase to get oriented and to decide which chapter to open next, not to
+come away able to build with anything it names.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Framework', 'Platform', 'Protocol']}
+  rows={[
+    {aspect: 'What you actually interact with', values: ['A library or SDK you import and write code against', 'A hosted console, API, and managed runtime a vendor operates', 'A wire-format specification other systems implement'], decisive: true},
+    {aspect: 'Who controls its roadmap', values: ['An open-source maintainer or a vendor-backed SDK team', 'The cloud vendor operating the service', 'A standards body or foundation with multiple member organizations'] },
+    {aspect: 'Where it runs', values: ['Wherever you deploy your own code', "The vendor's own infrastructure", "Anywhere either side of a connection implements the spec"] },
+    {aspect: 'Representative example', values: ['LangGraph, CrewAI, OpenAI Agents SDK', 'AWS Bedrock Agents, Azure AI Foundry Agent Service', 'Model Context Protocol, Agent2Agent'] },
+    {aspect: 'What switching costs you', values: ['A rewrite of your orchestration code', "A migration off the vendor's managed infrastructure and tooling", 'Nothing, if both sides still implement the same spec'], decisive: true},
+  ]}
+  caption="Three different layers of the same ecosystem, not three competing choices; a single project often uses a framework running on a platform that speaks a protocol to the outside world."
+/>
+
+## Where to Go Deeper
+
+- **This phase, next:** [9.2 Orchestration Frameworks at a Glance](./9-2-orchestration-frameworks-at-a-glance.mdx), [9.3 Cloud-Native Agent Builders at a Glance](./9-3-cloud-native-agent-builders-at-a-glance.mdx), and [9.4 Protocol Layer at a Glance](./9-4-protocol-layer-at-a-glance-mcp-and-a2a-in-one-page.mdx) survey each of the three categories introduced above in turn.
+- **The blueprint these tools implement:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx), for the six-layer blueprint a framework, platform, or protocol is helping you build, run, or connect.
+- **Implementation depth:** Phase 12 (Agentic AI Tooling, Frameworks & Protocols) goes straight to implementation depth for frameworks and protocols. For platforms, Phase 14 (Hyperscaler AI & Agentic Platforms) gives each major cloud vendor its own breadth-first survey chapter first, and Phase 15 (Enterprise Agentic AI: Governance, Security, Evaluation & Operations) is where an actual platform decision gets deep-dive treatment.
