@@ -1,0 +1,101 @@
+---
+title: "Open-Source vs. Managed/Proprietary Frameworks: High-Level Trade-offs"
+sidebar_label: "9.5 Open-Source vs. Managed/Proprietary"
+phase: 9
+chapter: "9.5"
+lms_presentation: "9.5-Open-Source-vs-Managed-Proprietary-Trade-offs-Slides.pptx"
+sidebar_position: 5
+prerequisites: ["9.4"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+Every framework and platform named in 9.2 and 9.3 sits somewhere on two separate axes that
+get conflated far too often: whether its code is open source, and whether someone else
+operates it for you. This chapter names those two axes and the concrete trade-offs that follow
+from where a given choice lands on each: cost model, customization ceiling, and switching cost.
+Neither axis has a universal right answer; 9.6 turns these same dimensions into an actual
+decision framework for picking a starting point.
+
+## High-Level Explanation
+
+"Open source" and "managed" are frequently treated as two ends of one spectrum, but they are
+actually independent questions. LangGraph and CrewAI's core frameworks are open source and
+self-hosted by default: the code is MIT-licensed, and you run it on your own infrastructure.
+LangChain also sells LangSmith Deployment, renamed from LangGraph Platform in October 2025,
+the same open orchestration logic wrapped in a managed deployment service, open source and
+managed at once. Amazon Bedrock AgentCore and Google's Gemini Enterprise Agent Platform sit at
+a third position, proprietary and managed: their internals are not published, and the vendor
+operates the runtime. This phase's examples do not include the fourth combination, proprietary
+code you host yourself, which is rarer in this ecosystem and closer to traditional on-premises
+enterprise software licensing than to anything covered so far. A fifth pattern cuts across the
+open-source-versus-proprietary axis rather than filling in a missing cell: CrewAI AMP is a
+proprietary, managed control plane sold around CrewAI's own open-source core, the
+textbook shape of what the software industry calls an open-core business model, "a business
+model for the monetization of open-source software to which a for-profit company provides
+significant development support." Knowing whether a paid layer sits beside an open core, rather
+than assuming a product is simply "open source" or "proprietary," matters more than the label
+alone.
+
+The cost model follows directly from where a product sits on these two axes. Self-hosted open
+source carries no license fee, but its real cost is the infrastructure and the engineering time
+needed to run, upgrade, and secure it yourself, a cost that is easy to underestimate because it
+never appears on an invoice. A managed or proprietary platform instead bills by usage, API
+calls, or agent-runtime hours, trading a predictable line item for a cost that scales with how
+much the system actually gets used. An open-core commercial layer, LangSmith and LangSmith
+Deployment, or CrewAI AMP, charges specifically for observability, governance, and support
+built around the free core, not for the orchestration logic itself, which stays open and free
+either way.
+
+Control and lock-in cut the other direction. Running an open-source framework yourself gives
+full control over upgrade timing, data residency, and customization, at the cost of owning the
+maintenance burden that a managed platform would otherwise absorb. A managed platform trades
+that control for reduced operational burden, but it can raise the cost of leaving, the dynamic
+generically called vendor lock-in, "when someone is essentially forced to continue using a
+product or service regardless of quality, because switching away from that product or service
+is not practical." A milder version of the same switching-cost dynamic shows up even within
+one vendor's own product line: AWS's own guidance on moving off Amazon Bedrock Agents Classic
+onto Bedrock AgentCore describes two distinct migration paths rather than a drop-in swap, work
+a team only takes on because the alternative, staying on a maintenance-mode product
+indefinitely, is its own cost. Lock-in is not exclusive to proprietary platforms; a team that
+has written extensive code against one open-source framework's specific abstractions faces its
+own switching cost. The difference is that the underlying code and data usually remain the
+team's own to move, which a fully managed proprietary service does not always guarantee in the
+same way.
+
+None of this adds up to a universal winner, because the deciding factors are specific to a
+team rather than to a product. A small team with limited operations capacity may prefer a
+managed platform's higher recurring cost over the burden of running infrastructure itself.
+Compliance or data-residency requirements can force self-hosting regardless of cost. And how
+fast a team needs a working agent matters on its own terms: AWS frames its AgentCore harness,
+a config-based path that declares a model, tools, and instructions rather than wiring a graph
+by hand, as the option to reach for "unless you have a specific reason to own the loop
+yourself," which is itself a trade-off between speed and control rather than a claim that one
+approach is simply better.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Self-Hosted Open Source', 'Managed or Proprietary Platform']}
+  rows={[
+    {aspect: 'License and code visibility', values: ['Open source; code is inspectable and modifiable (LangGraph, CrewAI cores)', 'Fully or partly proprietary; internals not published (Bedrock AgentCore, Gemini Enterprise Agent Platform)'], decisive: true},
+    {aspect: 'Who operates it', values: ['You, on your own infrastructure or cloud account', "The vendor, on its own infrastructure"] },
+    {aspect: 'Cost model', values: ['Infrastructure and engineering time; any commercial layer on top is optional', 'Usage-based billing that scales with agent-runtime hours or API calls'] },
+    {aspect: 'Customization ceiling', values: ['Full, limited only by your own engineering effort', "Limited to what the vendor's configuration surface exposes"] },
+    {aspect: 'Switching cost', values: ["Lower for the code itself, though you may have built against one framework's specific abstractions", 'Higher; migrating off a managed platform can require a dedicated migration path rather than a drop-in swap'], decisive: true},
+  ]}
+  caption="Neither column is a verdict; which trade-offs matter most depends on a team's operations capacity, compliance requirements, and how fast it needs to ship."
+/>
+
+## Where to Go Deeper
+
+- **Next in this phase:** [9.6 How to Pick a Starting Framework for Your First Project](./9-6-how-to-pick-a-starting-framework-for-your-first-project.mdx), which turns these dimensions into an actual decision framework.
+- **The specific products this trade-off applies to:** [9.2 Orchestration Frameworks at a Glance](./9-2-orchestration-frameworks-at-a-glance.mdx) and [9.3 Cloud-Native Agent Builders at a Glance](./9-3-cloud-native-agent-builders-at-a-glance.mdx).
+- **Implementation depth:** Phase 12 for frameworks and protocols; Phase 14 then Phase 15 for platforms, where an actual platform decision, including its cost and lock-in trade-offs, gets deep-dive, enterprise treatment.
+- **What this trade-off is choosing how to build:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)

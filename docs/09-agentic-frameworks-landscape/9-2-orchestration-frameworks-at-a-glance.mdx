@@ -31,7 +31,8 @@ edges by hand, which is more upfront work than a framework that infers the flow 
 buys the same graph structure for a single agent, a multi-agent system, or a hierarchical one
 without switching frameworks. The library itself is MIT-licensed and fully open source. LangChain
 also sells its own commercial layer around it, LangSmith for observability and evaluation, and
-LangGraph Platform for managed deployment, the same open-core-plus-paid-layer shape CrewAI uses.
+LangSmith Deployment, renamed from LangGraph Platform in October 2025, for managed deployment,
+the same open-core-plus-paid-layer shape CrewAI uses.
 
 CrewAI takes the opposite starting point: instead of a graph you draw, you assign agents
 roles and goals and let "role-based agents separate and simplify agent orchestration," with
@@ -72,7 +73,7 @@ predecessor, and it is MIT-licensed and open source like the other three.
   rows={[
     {aspect: 'Backing organization', values: ['LangChain', 'CrewAI Inc.', 'Microsoft', 'OpenAI'], decisive: true},
     {aspect: 'Orchestration model', values: ['An explicit graph of nodes and edges you wire by hand', 'Role-based "crews" the runtime coordinates for you', "A merged lineage: AutoGen's simple abstractions plus Semantic Kernel's enterprise features, with graph-based workflows added", 'Three primitives (agents, handoffs, guardrails) plus a separate sessions feature'] },
-    {aspect: 'License and commercial layer', values: ['MIT core, plus paid LangSmith and LangGraph Platform', 'MIT core, plus a separate paid AMP Suite control plane', 'MIT, fully open source, no separate paid tier', 'MIT, fully open source, no separate paid tier'] },
+    {aspect: 'License and commercial layer', values: ['MIT core, plus paid LangSmith and LangSmith Deployment', 'MIT core, plus a separate paid CrewAI AMP control plane', 'MIT, fully open source, no separate paid tier', 'MIT, fully open source, no separate paid tier'] },
     {aspect: 'Lineage', values: ['New project, not a successor to anything', 'New project, not a successor to anything', 'Successor to and merger of AutoGen and Semantic Kernel', 'Successor to Swarm, an earlier openly experimental project'] },
     {aspect: 'What it optimizes for', values: ['Maximum control over a complex or unusual control flow', 'Fast setup for a team-of-specialists mental model', 'Enterprise features carried over from Semantic Kernel, with AutoGen-style simplicity', 'The shortest path from zero to a working agent'], decisive: true},
   ]}

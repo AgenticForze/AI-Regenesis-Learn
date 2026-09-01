@@ -20,9 +20,9 @@ draft one. Check the [Recently Added](/docs) page for what has shipped so far.
 - [9.2 Orchestration Frameworks at a Glance](./9-2-orchestration-frameworks-at-a-glance.mdx)
 - [9.3 Cloud-Native Agent Builders at a Glance](./9-3-cloud-native-agent-builders-at-a-glance.mdx)
 - [9.4 Protocol Layer at a Glance: MCP and A2A in One Page](./9-4-protocol-layer-at-a-glance-mcp-and-a2a-in-one-page.mdx)
+- [9.5 Open-Source vs. Managed/Proprietary Frameworks: High-Level Trade-offs](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx)
 
 ## Planned chapters
 
-- 9.5 Open-Source vs. Managed/Proprietary Frameworks — HL Trade-offs
 - 9.6 How to Pick a Starting Framework for Your First Project
 - 9.7 Landscape Comparison Table
