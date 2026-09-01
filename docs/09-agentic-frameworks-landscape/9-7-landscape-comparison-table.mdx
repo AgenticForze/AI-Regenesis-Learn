@@ -1,0 +1,81 @@
+---
+title: "Landscape Comparison Table"
+sidebar_label: "9.7 Landscape Comparison Table"
+sidebar_position: 7
+phase: 9
+chapter: "9.7"
+lms_presentation: "9.7-Landscape-Comparison-Table-Slides.pptx"
+prerequisites: ["9.6"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+This closing chapter does not introduce anything new: it collects every framework, platform,
+and protocol named across 9.2, 9.3, and 9.4 into one reference table, organized by the same
+three categories 9.1 opened this phase with. Read it as the page to bookmark and return to,
+not as another argument alongside 9.5's trade-offs or 9.6's decision framework. Phase 9 ends
+here; Phase 12, Phase 14, and Phase 15 are where actual implementation depth begins.
+
+## High-Level Explanation
+
+Phase 9 built up in a deliberate order. 9.1 set up three categories, framework, platform, and
+protocol, and explained why each needs its own survey. 9.2, 9.3, and 9.4 then filled each
+category in with the specific products this ecosystem actually uses today. 9.5 named the two
+independent axes, open source versus proprietary code, and self-hosted versus managed
+operation, that cut across frameworks and platforms, and 9.6 turned those axes, along with
+model and multi-agent commitments, into four questions for picking a starting point. This
+chapter is the one place all of it sits side by side.
+
+The full roll call: four frameworks, LangGraph and CrewAI from LangChain and CrewAI Inc.
+respectively, Microsoft Agent Framework, and OpenAI's Agents SDK, each a library you import
+rather than a service someone else runs. Three platforms, Amazon Bedrock AgentCore, Microsoft
+Foundry Agent Service, and Gemini Enterprise Agent Platform, one from each major hyperscaler,
+each a hosted product the vendor operates for you. Two protocols, the Model Context Protocol
+and Agent2Agent, wire-format specifications rather than something either side of a connection
+imports or hosts, now governed by the same vendor-neutral foundation despite starting inside
+two different companies.
+
+Many of those nine names carry a second story: how recently they changed. Two of the four
+frameworks added a distinct paid commercial layer atop their open core, CrewAI AMP and
+LangSmith Deployment, the latter renamed from LangGraph Platform in October 2025. All three
+platforms either renamed or newly launched within roughly the last 12 months: the general
+availability of Amazon Bedrock AgentCore, the rebrand to Microsoft Foundry Agent Service, and
+the launch of Gemini Enterprise Agent Platform. Both protocols left single-vendor control for
+foundation governance too, though on different timelines: MCP moved from Anthropic to the
+Agentic AI Foundation within that same window, while A2A left Google for the Linux Foundation
+earlier, in mid-2025, before later joining that same Agentic AI Foundation alongside MCP. That
+pattern of frequent change, more than any single product on the list, is the caution 9.1 opened
+this phase with: this layer of the ecosystem is still consolidating, and a name learned today
+is worth re-checking before it is repeated in production.
+
+None of this table replaces the judgment 9.5 and 9.6 already walked through; it is a reference
+for what exists, not a new case for what to pick. With this chapter, Phase 9's breadth-first map
+is complete. Phase 12 takes frameworks and protocols to implementation depth, Phase 14 gives
+each hyperscaler platform its own dedicated survey chapter, and Phase 15 is where an actual
+platform decision gets deep-dive, enterprise treatment.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Frameworks (9.2)', 'Platforms (9.3)', 'Protocols (9.4)']}
+  rows={[
+    {aspect: 'Every option named in this phase', values: ['LangGraph, CrewAI, Microsoft Agent Framework, OpenAI Agents SDK', 'Amazon Bedrock AgentCore, Microsoft Foundry Agent Service, Gemini Enterprise Agent Platform', 'Model Context Protocol, Agent2Agent'], decisive: true},
+    {aspect: 'Who governs it today', values: ['An open-source maintainer or a vendor-backed SDK team: LangChain, CrewAI Inc., Microsoft, and OpenAI', 'The operating cloud vendor: AWS, Microsoft, or Google Cloud', "The Linux Foundation's Agentic AI Foundation, for both protocols"] },
+    {aspect: 'What changed in roughly the last 12 months', values: ['A new paid commercial layer on two of the four; only LangSmith Deployment carries a date here, renamed from LangGraph Platform in October 2025', 'All three: AgentCore reached general availability, Foundry Agent Service was renamed, and Gemini Enterprise Agent Platform launched', "MCP joined the Agentic AI Foundation in that window; A2A joined too, after an earlier 2025 move to the Linux Foundation"] },
+    {aspect: "Where 9.5's open-source and managed axes apply", values: ['Directly: each framework is open source and self-hosted by default, with an optional managed layer on two of the four', "Not the same way: a platform already sits at the proprietary, managed corner of 9.5's grid rather than spanning a range", 'Not applicable: a specification is neither open-source code you run nor a service someone else operates'] },
+    {aspect: 'First implementation-depth chapter', values: ['Phase 12, chapters 12.2 through 12.5', 'Phase 14 for a vendor survey, Phase 15 for an actual decision', 'Phase 12, chapters 12.6 and 12.7'], decisive: true},
+  ]}
+  caption="One reference table for everything this phase named; the trade-offs behind these choices live in 9.5 and 9.6, not here."
+/>
+
+## Where to Go Deeper
+
+- **This phase's own trade-offs and decision framework:** [9.5 Open-Source vs. Managed/Proprietary Frameworks](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx) and [9.6 How to Pick a Starting Framework for Your First Project](./9-6-how-to-pick-a-starting-framework-for-your-first-project.mdx).
+- **Implementation depth:** Phase 12 (Agentic AI Tooling, Frameworks & Protocols) for frameworks and protocols; Phase 14 (Hyperscaler AI & Agentic Platforms) for a dedicated survey of each vendor's platform; Phase 15 (Enterprise Agentic AI: Governance, Security, Evaluation & Operations) for an actual platform decision.
+- **What every option in this table is helping you build:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)
