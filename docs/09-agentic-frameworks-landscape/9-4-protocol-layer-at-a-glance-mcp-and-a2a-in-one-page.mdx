@@ -1,0 +1,86 @@
+---
+title: "Protocol Layer at a Glance: MCP and A2A in One Page"
+sidebar_label: "9.4 Protocol Layer at a Glance"
+phase: 9
+chapter: "9.4"
+lms_presentation: "9.4-Protocol-Layer-at-a-Glance-Slides.pptx"
+sidebar_position: 4
+prerequisites: ["9.3"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+Two protocols dominate this layer, and they solve different problems rather than competing
+for the same job. The Model Context Protocol (MCP) connects one AI application to the tools
+and data it needs, an agent-to-tool problem. Agent2Agent (A2A) connects independently built
+agents to each other, an agent-to-agent problem. Both started under a single vendor,
+Anthropic for MCP and Google for A2A, and both now sit under the same vendor-neutral
+foundation. This chapter names them and how they divide the work; Phase 12 is where you learn
+to implement either one.
+
+## High-Level Explanation
+
+Anthropic released the Model Context Protocol in November 2024. MCP's own documentation now
+describes it as "an open-source standard for connecting AI applications to external systems,"
+reaching for a physical analogy to explain why that matters: "think of MCP like a USB-C port
+for AI applications. Just as USB-C provides a standardized way to connect electronic devices,
+MCP provides a standardized way to connect AI applications to external systems." Its architecture
+follows a client-server pattern: an MCP host, an AI application such as Claude Desktop or
+Visual Studio Code, creates one MCP client for each MCP server it connects to, and each server
+exposes tools, resources, and prompts over a JSON-RPC-based data layer. On December 9, 2025,
+Anthropic donated the protocol to a new, vendor-neutral home: "Anthropic is donating the Model
+Context Protocol to the Linux Foundation's new Agentic AI Foundation, where it will join goose
+by Block and AGENTS.md by OpenAI as founding projects," while stating plainly that "the Model
+Context Protocol's governance model will remain unchanged: the project's maintainers will
+continue to prioritize community input and transparent decision-making."
+
+Google announced Agent2Agent in April 2025 at Google Cloud Next, describing it as "an open
+standard for seamless communication and collaboration between AI agents," aimed squarely at a
+problem MCP does not solve: letting agents built on different frameworks, by different
+vendors, work together without sharing their internal systems. Google donated A2A to the Linux
+Foundation as its own standalone project on June 23, 2025, with the Linux Foundation's
+executive director framing the move in terms of neutrality rather than features: "by joining
+the Linux Foundation, A2A is ensuring the long-term neutrality, collaboration and governance
+that will unlock the next era of agent-to-agent powered productivity." A2A has since joined
+the same Agentic AI Foundation that now governs MCP, and its day-to-day governance runs
+through a Technical Steering Committee with representatives from AWS, Cisco, Google, IBM
+Research, Microsoft, Salesforce, SAP, and ServiceNow. Official SDKs exist in Python,
+JavaScript, Java, C#/.NET, Golang, and Rust.
+
+The two protocols are best understood as complementary layers rather than rivals: MCP is the
+vertical connection between one agent and the tools or data underneath it, while A2A is the
+horizontal connection between one agent and another agent standing beside it. A single system
+commonly uses both at once, an agent that calls its own tools through MCP servers while also
+delegating part of a task to a peer agent over A2A. That both protocols now sit inside the same
+Agentic AI Foundation, despite starting as one vendor's internal project apiece, is itself a
+sign of where this layer of the ecosystem is heading: toward shared, foundation-governed
+standards that no single company controls, rather than toward competing, vendor-locked wire
+formats.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['Model Context Protocol (MCP)', 'Agent2Agent (A2A)']}
+  rows={[
+    {aspect: 'Originating organization', values: ['Anthropic, released November 2024', 'Google, announced April 2025'], decisive: true},
+    {aspect: 'What it connects', values: ['One AI application to the tools, data, and prompts it needs (agent-to-tool)', 'Independently built agents to each other across frameworks and vendors (agent-to-agent)'] },
+    {aspect: 'Current governance', values: ["Linux Foundation's Agentic AI Foundation, donated by Anthropic on December 9, 2025", 'Linux Foundation (donated June 23, 2025), now also under the Agentic AI Foundation; a Technical Steering Committee spanning AWS, Cisco, Google, IBM Research, Microsoft, Salesforce, SAP, and ServiceNow'] },
+    {aspect: 'Core architecture', values: ['Client-server: an MCP host runs one client per server, exchanging tools, resources, and prompts over JSON-RPC', 'Peer-to-peer agent messaging, with official SDKs in Python, JavaScript, Java, C#/.NET, Golang, and Rust'] },
+    {aspect: 'What it optimizes for', values: ['Giving one agent a standard way to reach many tools and data sources', 'Letting agents built on different stacks collaborate without sharing internal systems'], decisive: true},
+  ]}
+  caption="MCP and A2A solve different problems and are increasingly treated as complementary layers of the same stack rather than rivals, especially now that both sit under the same neutral foundation."
+/>
+
+## Where to Go Deeper
+
+- **Continuing from here:** [9.5 Open-Source vs. Managed/Proprietary Frameworks](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx) and [9.6 How to Pick a Starting Framework for Your First Project](./9-6-how-to-pick-a-starting-framework-for-your-first-project.mdx), which help you choose among everything this phase has covered.
+- **Implementation depth:** Phase 12's protocol deep-dives cover MCP's architecture in Chapter
+  12.6 and A2A alongside the wider interoperability landscape in 12.7.
+- **The governance pattern this phase keeps returning to:** [9.1's Agentic AI Foundation entry](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx), for how a foundation formed around one protocol came to govern a second one from a different vendor.
+- **What any of these protocols is connecting:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)
