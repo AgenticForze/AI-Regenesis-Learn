@@ -1,0 +1,90 @@
+---
+title: "Orchestration Frameworks at a Glance"
+sidebar_label: "9.2 Orchestration Frameworks at a Glance"
+phase: 9
+chapter: "9.2"
+sidebar_position: 2
+prerequisites: ["9.1"]
+tags: ["hl-survey"]
+---
+
+import ComparisonTable from '@site/src/components/ComparisonTable';
+
+<p className="regai-flight-level">Chapter {frontMatter.chapter} · Phase {frontMatter.phase} · HL Survey</p>
+
+## TL;DR
+
+Four orchestration frameworks account for most of the code developers actually import to
+build agents today: LangGraph, CrewAI, Microsoft Agent Framework, and OpenAI's Agents SDK.
+Each is a library, not a hosted service, and each takes a different position on how much
+control-flow structure to impose: an explicit graph, a set of role-based "crews," or a small
+number of composable primitives. This chapter names them and how they differ; Phase 12 is
+where you learn to actually build with any of them.
+
+## High-Level Explanation
+
+LangGraph, built and maintained by LangChain, describes itself as "an agent runtime and
+low-level orchestration framework" rather than a higher-level agent-building shortcut. Its
+distinguishing idea is making control flow an explicit graph: a developer wires nodes and
+edges by hand, which is more upfront work than a framework that infers the flow for you, but
+buys the same graph structure for a single agent, a multi-agent system, or a hierarchical one
+without switching frameworks. The library itself is MIT-licensed and fully open source. LangChain
+also sells its own commercial layer around it, LangSmith for observability and evaluation, and
+LangGraph Platform for managed deployment, the same open-core-plus-paid-layer shape CrewAI uses.
+
+CrewAI takes the opposite starting point: instead of a graph you draw, you assign agents
+roles and goals and let "role-based agents separate and simplify agent orchestration," with
+the framework's own runtime deciding how those roles hand work to each other. The core
+framework is MIT-licensed and open source, but CrewAI Inc. also sells a distinct commercial
+layer on top of it, a "control plane" the company describes as adding "managed deployment,
+observability, governance, security, and enterprise support" for organizations that want more
+than the free tier's baseline monitoring. That two-tier structure, an open core plus a paid
+operational layer, is CrewAI's most distinctive trait among the four.
+
+Microsoft's entry is not one framework but a fresh merger of two older ones. AutoGen,
+Microsoft Research's conversable multi-agent framework, and Semantic Kernel, Microsoft's
+enterprise-oriented kernel-and-plugin framework, have been combined into a single MIT-licensed
+project called Microsoft Agent Framework, built, Microsoft states, by "the same teams" behind
+both predecessors. Microsoft's own framing is direct about what each side contributed: Agent
+Framework "combines AutoGen's simple agent abstractions with Semantic Kernel's enterprise
+features, session-based state management, type safety, middleware, telemetry, and adds
+graph-based workflows for explicit multi-agent orchestration." AutoGen itself has not
+disappeared, but a reader who encounters it should know its status: its own maintainers state
+that "AutoGen will still be maintained: it has a stable API and will continue to receive
+critical bug fixes and security patches, but we will not be adding significant new features to
+it," which makes it a maintenance-mode project rather than a discontinued or a currently
+recommended one.
+
+OpenAI's Agents SDK is the newest and most deliberately minimal of the four, built to "build
+agentic AI apps in a lightweight, easy-to-use package with very few abstractions." Where
+LangGraph exposes a graph and CrewAI exposes roles, OpenAI's SDK exposes three primitives,
+agents (models equipped with instructions and tools), handoffs (agents that can delegate to
+other agents), and guardrails (input and output validation), plus a separate sessions feature
+for persistent memory across turns. OpenAI positions it explicitly as "a production-ready upgrade of our
+previous experimentation for agents, Swarm," the project's own earlier, openly experimental
+predecessor, and it is MIT-licensed and open source like the other three.
+
+## Comparison Table
+
+<ComparisonTable
+  columns={['LangGraph', 'CrewAI', 'Microsoft Agent Framework', 'OpenAI Agents SDK']}
+  rows={[
+    {aspect: 'Backing organization', values: ['LangChain', 'CrewAI Inc.', 'Microsoft', 'OpenAI'], decisive: true},
+    {aspect: 'Orchestration model', values: ['An explicit graph of nodes and edges you wire by hand', 'Role-based "crews" the runtime coordinates for you', "A merged lineage: AutoGen's simple abstractions plus Semantic Kernel's enterprise features, with graph-based workflows added", 'Three primitives (agents, handoffs, guardrails) plus a separate sessions feature'] },
+    {aspect: 'License and commercial layer', values: ['MIT core, plus paid LangSmith and LangGraph Platform', 'MIT core, plus a separate paid AMP Suite control plane', 'MIT, fully open source, no separate paid tier', 'MIT, fully open source, no separate paid tier'] },
+    {aspect: 'Lineage', values: ['New project, not a successor to anything', 'New project, not a successor to anything', 'Successor to and merger of AutoGen and Semantic Kernel', 'Successor to Swarm, an earlier openly experimental project'] },
+    {aspect: 'What it optimizes for', values: ['Maximum control over a complex or unusual control flow', 'Fast setup for a team-of-specialists mental model', 'Enterprise features carried over from Semantic Kernel, with AutoGen-style simplicity', 'The shortest path from zero to a working agent'], decisive: true},
+  ]}
+  caption="All four are open-source libraries you import, not hosted platforms; LangChain and CrewAI each sell a separate paid layer around their open-source core, while Microsoft and OpenAI ship theirs with no such tier."
+/>
+
+## Where to Go Deeper
+
+- **Implementation depth:** Phase 12's framework deep-dives cover each of these in working
+  code: LangChain and LangGraph in Chapter 12.2, CrewAI in 12.3, and OpenAI's Agents SDK in
+  12.5. Chapter 12.4 was planned as an AutoGen and Semantic Kernel deep-dive before the two
+  merged into Microsoft Agent Framework; expect that chapter to cover the merged framework
+  directly rather than the two predecessors separately by the time it is written.
+- **Choosing among them:** [9.5 Open-Source vs. Managed/Proprietary Frameworks](./9-5-open-source-vs-managed-proprietary-frameworks-hl-trade-offs.mdx) and [9.6 How to Pick a Starting Framework for Your First Project](./9-6-how-to-pick-a-starting-framework-for-your-first-project.mdx).
+- **What any of these frameworks is actually wiring together:** [Chapter 8.10, Single-Agent Reference Architecture Blueprint](../08-agents-foundations/8-10-single-agent-reference-architecture-blueprint.mdx).
+- **Back to orientation:** [9.1 Why an Ecosystem Landscape Chapter?](./9-1-why-an-ecosystem-landscape-chapter-how-to-read-this-phase.mdx)
